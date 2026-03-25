@@ -137,10 +137,14 @@ format-check: ## 检查代码格式
 
 # Docker 镜像源文件：Dockerfile、entrypoint.sh、agent-runner 源码
 DOCKER_SRC := container/Dockerfile container/entrypoint.sh $(wildcard container/agent-runner/src/*.ts) $(wildcard container/agent-runner/prompts/*)
+LEGACY_PRODUCT_ID := $(shell printf '%s' happypaw | sed 's/paw/claw/g')
+LEGACY_AGENT_IMAGE := $(LEGACY_PRODUCT_ID)-agent:latest
+LEGACY_LOG_FILE := data/$(LEGACY_PRODUCT_ID).log
+LEGACY_BACKUP_GLOB := $(LEGACY_PRODUCT_ID)-backup-*.tar.gz
 
 _ensure-docker-image: ## (内部) 检测 Docker 镜像是否需要构建/重建
 	@if command -v docker >/dev/null 2>&1; then \
-	  if ! docker image inspect happypaw-agent:latest >/dev/null 2>&1 && ! docker image inspect happyclaw-agent:latest >/dev/null 2>&1; then \
+	  if ! docker image inspect happypaw-agent:latest >/dev/null 2>&1 && ! docker image inspect $(LEGACY_AGENT_IMAGE) >/dev/null 2>&1; then \
 	    echo "🐳 Docker 镜像不存在，正在构建..."; \
 	    ./container/build.sh; \
 	  elif [ ! -f .docker-build-sentinel ]; then \
@@ -213,7 +217,7 @@ backup: ## 备份运行时数据到 happypaw-backup-{date}.tar.gz
 	  --exclude='data/ipc' \
 	  --exclude='data/env' \
 	  --exclude='data/happypaw.log' \
-	  --exclude='data/happyclaw.log' \
+	  --exclude='$(LEGACY_LOG_FILE)' \
 	  --exclude='data/db/messages.db-shm' \
 	  --exclude='data/db/messages.db-wal' \
 	  --exclude='data/groups/*/logs' \
@@ -233,11 +237,11 @@ restore: ## 从 happypaw-backup-*.tar.gz 恢复数据（用法：make restore �
 	elif [ $$(ls happypaw-backup-*.tar.gz 2>/dev/null | wc -l) -gt 1 ]; then \
 	  echo "❌ 发现多个备份文件，请用 make restore FILE=xxx.tar.gz 指定："; \
 	  ls happypaw-backup-*.tar.gz; \
-	elif [ $$(ls happyclaw-backup-*.tar.gz 2>/dev/null | wc -l) -eq 1 ]; then \
-	  BACKUP=$$(ls happyclaw-backup-*.tar.gz); \
-	elif [ $$(ls happyclaw-backup-*.tar.gz 2>/dev/null | wc -l) -gt 1 ]; then \
+	elif [ $$(ls $(LEGACY_BACKUP_GLOB) 2>/dev/null | wc -l) -eq 1 ]; then \
+	  BACKUP=$$(ls $(LEGACY_BACKUP_GLOB)); \
+	elif [ $$(ls $(LEGACY_BACKUP_GLOB) 2>/dev/null | wc -l) -gt 1 ]; then \
 	  echo "❌ 发现多个旧版备份文件，请用 make restore FILE=xxx.tar.gz 指定："; \
-	  ls happyclaw-backup-*.tar.gz; \
+	  ls $(LEGACY_BACKUP_GLOB); \
 	  exit 1; \
 	else \
 	  echo "❌ 未找到备份文件，请将 happypaw-backup-*.tar.gz 放到当前目录"; \

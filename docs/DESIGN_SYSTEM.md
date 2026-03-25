@@ -1,10 +1,10 @@
 ---
 name: design-system
-description: HappyClaw Design System — typography, color tokens, component patterns, and styling rules. Applies when creating or modifying UI components, styling chat bubbles, cards, streaming displays, or any visual element in the web frontend.
+description: HappyPaw Design System — typography, color tokens, component patterns, and styling rules. Applies when creating or modifying UI components, styling chat bubbles, cards, streaming displays, or any visual element in the web frontend.
 user-invocable: false
 ---
 
-# HappyClaw Design System
+# HappyPaw Design System
 
 暖色调 AI 聊天界面设计规范，适配群聊 IM 场景的卡片式布局。
 

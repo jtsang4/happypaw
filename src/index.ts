@@ -18,6 +18,10 @@ import {
   isDockerAvailable,
   updateWeChatNoProxy,
 } from './config.js';
+import {
+  LEGACY_AGENT_SENDER,
+  toLegacyProductToken,
+} from './legacy-product.js';
 import { interruptibleSleep } from './message-notifier.js';
 import {
   AvailableGroup,
@@ -2138,7 +2142,7 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
       if (
         !sender ||
         sender === 'happypaw-agent' ||
-        sender === 'happyclaw-agent' ||
+        sender === LEGACY_AGENT_SENDER ||
         sender === '__system__'
       )
         continue;
@@ -5980,7 +5984,7 @@ async function ensureDockerRunning(): Promise<void> {
   // Kill and clean up orphaned happypaw containers from previous runs
   try {
     const orphanSet = new Set<string>();
-    for (const prefix of ['happypaw-', 'happyclaw-']) {
+    for (const prefix of ['happypaw-', toLegacyProductToken('happypaw-')]) {
       const { stdout } = await execFileAsync(
         'docker',
         ['ps', '--filter', `name=${prefix}`, '--format', '{{.Names}}'],

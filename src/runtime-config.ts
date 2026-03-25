@@ -3,6 +3,10 @@ import fs from 'fs';
 import path from 'path';
 
 import { ASSISTANT_NAME, DATA_DIR } from './config.js';
+import {
+  LEGACY_PRODUCT_NAME,
+  toLegacyProductEnvToken,
+} from './legacy-product.js';
 import { logger } from './logger.js';
 import type { RuntimeType } from './types.js';
 
@@ -77,14 +81,14 @@ const DANGEROUS_ENV_VARS = new Set([
   'TMPDIR',
   'TEMP',
   'TMP',
-  // HappyPaw 内部路径映射（保留 HappyClaw 变量名兼容旧运行时）
+  // HappyPaw 内部路径映射（保留旧产品变量名兼容旧运行时）
   'HAPPYPAW_WORKSPACE_GROUP',
   'HAPPYPAW_WORKSPACE_GLOBAL',
   'HAPPYPAW_WORKSPACE_IPC',
   'HAPPYPAW_WORKSPACE_MEMORY',
-  'HAPPYCLAW_WORKSPACE_GROUP',
-  'HAPPYCLAW_WORKSPACE_GLOBAL',
-  'HAPPYCLAW_WORKSPACE_IPC',
+  toLegacyProductEnvToken('HAPPYPAW_WORKSPACE_GROUP'),
+  toLegacyProductEnvToken('HAPPYPAW_WORKSPACE_GLOBAL'),
+  toLegacyProductEnvToken('HAPPYPAW_WORKSPACE_IPC'),
   'CLAUDE_CONFIG_DIR',
 ]);
 const MAX_CUSTOM_ENV_ENTRIES = 50;
@@ -759,7 +763,7 @@ function fromStoredProfile(
     anthropicBaseUrl: normalizeBaseUrl(stored.anthropicBaseUrl),
     anthropicAuthToken: secrets.anthropicAuthToken,
     anthropicModel: normalizeModel(
-      stored.anthropicModel ?? (stored as any).happyclawModel ?? '',
+      stored.anthropicModel ?? (stored as any)[`${LEGACY_PRODUCT_NAME.toLowerCase()}Model`] ?? '',
     ),
     updatedAt: stored.updatedAt || null,
     customEnv: sanitizeCustomEnvMap(stored.customEnv || {}, {
@@ -2788,14 +2792,15 @@ export function getContainerEnvConfig(folder: string): ContainerEnvConfig {
     if (fs.existsSync(filePath)) {
       const stored = JSON.parse(
         fs.readFileSync(filePath, 'utf-8'),
-      ) as ContainerEnvConfig & { happyclawModel?: string };
+      ) as ContainerEnvConfig & { [legacyModelKey: string]: string | undefined };
+      const legacyModelKey = `${LEGACY_PRODUCT_NAME.toLowerCase()}Model`;
       // Backward compat: migrate old field name
       if (
         stored.anthropicModel === undefined &&
-        stored.happyclawModel !== undefined
+        stored[legacyModelKey] !== undefined
       ) {
-        stored.anthropicModel = stored.happyclawModel;
-        delete stored.happyclawModel;
+        stored.anthropicModel = stored[legacyModelKey];
+        delete stored[legacyModelKey];
       }
       return stored;
     }

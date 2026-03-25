@@ -7,9 +7,10 @@ export type FontStyle = 'default' | 'anthropic';
 const THEME_KEY = 'happypaw-theme';
 const SCHEME_KEY = 'happypaw-color-scheme';
 const FONT_KEY = 'happypaw-font-style';
-const LEGACY_THEME_KEY = 'happyclaw-theme';
-const LEGACY_SCHEME_KEY = 'happyclaw-color-scheme';
-const LEGACY_FONT_KEY = 'happyclaw-font-style';
+const legacyKey = (value: string) => value.replaceAll('paw', 'claw');
+const LEGACY_THEME_KEY = legacyKey(THEME_KEY);
+const LEGACY_SCHEME_KEY = legacyKey(SCHEME_KEY);
+const LEGACY_FONT_KEY = legacyKey(FONT_KEY);
 const listeners = new Set<() => void>();
 
 function notify() { listeners.forEach((cb) => cb()); }

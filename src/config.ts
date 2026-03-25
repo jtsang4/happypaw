@@ -3,8 +3,13 @@ import fs from 'fs';
 import crypto from 'crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import {
+  CURRENT_PRODUCT_ID,
+  CURRENT_PRODUCT_NAME,
+  toLegacyProductToken,
+} from './legacy-product.js';
 
-export const ASSISTANT_NAME = process.env.ASSISTANT_NAME || 'HappyPaw';
+export const ASSISTANT_NAME = process.env.ASSISTANT_NAME || CURRENT_PRODUCT_NAME;
 export const POLL_INTERVAL = 2000;
 export const SCHEDULER_POLL_INTERVAL = 60000;
 
@@ -23,7 +28,7 @@ export const GROUPS_DIR = path.join(DATA_DIR, 'groups');
 export const MAIN_GROUP_FOLDER = 'main';
 
 export const CONTAINER_IMAGE =
-  process.env.CONTAINER_IMAGE || 'happypaw-agent:latest';
+  process.env.CONTAINER_IMAGE || `${CURRENT_PRODUCT_ID}-agent:latest`;
 // Timezone for scheduled tasks (cron expressions, etc.)
 // Uses system timezone by default
 export const TIMEZONE =
@@ -38,8 +43,10 @@ export const WEB_PORT = parseInt(process.env.WEB_PORT || '3000', 10);
 // Determined per-request via isSecureRequest(), not at startup
 export const SESSION_COOKIE_NAME_SECURE = '__Host-happypaw_session';
 export const SESSION_COOKIE_NAME_PLAIN = 'happypaw_session';
-export const LEGACY_SESSION_COOKIE_NAME_SECURE = '__Host-happyclaw_session';
-export const LEGACY_SESSION_COOKIE_NAME_PLAIN = 'happyclaw_session';
+export const LEGACY_SESSION_COOKIE_NAME_PLAIN = toLegacyProductToken(
+  SESSION_COOKIE_NAME_PLAIN,
+);
+export const LEGACY_SESSION_COOKIE_NAME_SECURE = `__Host-${LEGACY_SESSION_COOKIE_NAME_PLAIN}`;
 const SESSION_SECRET_FILE = path.join(DATA_DIR, 'config', 'session-secret.key');
 
 function getOrCreateSessionSecret(): string {

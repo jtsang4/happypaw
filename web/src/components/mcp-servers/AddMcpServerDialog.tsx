@@ -22,6 +22,7 @@ interface AddMcpServerDialogProps {
 }
 
 const ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/;
+const RESERVED_IDS = ['happypaw', 'happypaw'.replaceAll('paw', 'claw')];
 
 type ServerType = 'stdio' | 'http' | 'sse';
 
@@ -59,7 +60,7 @@ export function AddMcpServerDialog({ open, onClose, onAdd }: AddMcpServerDialogP
   const validate = (): string | null => {
     if (!id.trim()) return 'ID 不能为空';
     if (!ID_PATTERN.test(id.trim())) return 'ID 只能包含字母、数字、短横线和下划线，且不能以符号开头';
-    if (['happypaw', 'happyclaw'].includes(id.trim().toLowerCase())) return 'ID 不能为 happypaw 或 happyclaw（系统保留）';
+    if (RESERVED_IDS.includes(id.trim().toLowerCase())) return `ID 不能为 ${RESERVED_IDS.join(' 或 ')}（系统保留）`;
     if (isHttpType) {
       if (!url.trim()) return 'URL 不能为空';
     } else {

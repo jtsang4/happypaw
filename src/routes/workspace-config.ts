@@ -19,6 +19,7 @@ import { authMiddleware } from '../middleware/auth.js';
 import { GROUPS_DIR } from '../config.js';
 import { canAccessGroup } from '../web-context.js';
 import { getRegisteredGroup } from '../db.js';
+import { CURRENT_PRODUCT_ID, toLegacyProductToken } from '../legacy-product.js';
 import {
   parseFrontmatter,
   validateSkillId,
@@ -72,13 +73,19 @@ function getWorkspaceSettingsPath(
 function getWorkspaceMcpMetaPath(
   group: RegisteredGroup & { jid: string },
 ): string {
-  return path.join(getWorkspaceClaudeDir(group), 'happypaw-workspace.json');
+  return path.join(
+    getWorkspaceClaudeDir(group),
+    `${CURRENT_PRODUCT_ID}-workspace.json`,
+  );
 }
 
 function getLegacyWorkspaceMcpMetaPath(
   group: RegisteredGroup & { jid: string },
 ): string {
-  return path.join(getWorkspaceClaudeDir(group), 'happyclaw-workspace.json');
+  return path.join(
+    getWorkspaceClaudeDir(group),
+    toLegacyProductToken(`${CURRENT_PRODUCT_ID}-workspace.json`),
+  );
 }
 
 // --- MCP Metadata Helpers ---

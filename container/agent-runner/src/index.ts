@@ -16,7 +16,13 @@
 
 import fs from 'fs';
 import path from 'path';
-import { query, HookCallback, PreCompactHookInput, createSdkMcpServer } from '@anthropic-ai/claude-agent-sdk';
+import {
+  query,
+  HookCallback,
+  PreCompactHookInput,
+  createSdkMcpServer,
+  type McpServerConfig,
+} from '@anthropic-ai/claude-agent-sdk';
 import { detectImageMimeTypeFromBase64Strict } from './image-detector.js';
 import { getChannelFromJid } from './channel-prefixes.js';
 
@@ -35,6 +41,10 @@ import { sanitizeFilename, generateFallbackName } from './utils.js';
 import { StreamEventProcessor } from './stream-processor.js';
 import { PREDEFINED_AGENTS } from './agent-definitions.js';
 import { createMcpTools } from './mcp-tools.js';
+import {
+  CURRENT_PRODUCT_ID,
+  LEGACY_PRODUCT_ID,
+} from './legacy-product.js';
 
 // 路径解析：优先读取环境变量，降级到容器内默认路径（保持向后兼容）
 const WORKSPACE_GROUP =
@@ -79,16 +89,16 @@ const DEFAULT_ALLOWED_TOOLS = [
   'TodoWrite', 'ToolSearch', 'Skill',
   'NotebookEdit',
   'mcp__happypaw__*',
-  'mcp__happyclaw__*',
+  `mcp__${LEGACY_PRODUCT_ID}__*`,
 ];
 
 const MEMORY_FLUSH_ALLOWED_TOOLS = [
   'mcp__happypaw__memory_search',
   'mcp__happypaw__memory_get',
   'mcp__happypaw__memory_append',
-  'mcp__happyclaw__memory_search',
-  'mcp__happyclaw__memory_get',
-  'mcp__happyclaw__memory_append',
+  `mcp__${LEGACY_PRODUCT_ID}__memory_search`,
+  `mcp__${LEGACY_PRODUCT_ID}__memory_get`,
+  `mcp__${LEGACY_PRODUCT_ID}__memory_append`,
   'Read',  // 读取全局 CLAUDE.md 当前内容
   'Edit',  // 编辑全局 CLAUDE.md（永久记忆）
 ];
@@ -108,13 +118,13 @@ const MEMORY_FLUSH_DISALLOWED_TOOLS = [
   'mcp__happypaw__resume_task',
   'mcp__happypaw__cancel_task',
   'mcp__happypaw__register_group',
-  'mcp__happyclaw__send_message',
-  'mcp__happyclaw__schedule_task',
-  'mcp__happyclaw__list_tasks',
-  'mcp__happyclaw__pause_task',
-  'mcp__happyclaw__resume_task',
-  'mcp__happyclaw__cancel_task',
-  'mcp__happyclaw__register_group',
+  `mcp__${LEGACY_PRODUCT_ID}__send_message`,
+  `mcp__${LEGACY_PRODUCT_ID}__schedule_task`,
+  `mcp__${LEGACY_PRODUCT_ID}__list_tasks`,
+  `mcp__${LEGACY_PRODUCT_ID}__pause_task`,
+  `mcp__${LEGACY_PRODUCT_ID}__resume_task`,
+  `mcp__${LEGACY_PRODUCT_ID}__cancel_task`,
+  `mcp__${LEGACY_PRODUCT_ID}__register_group`,
 ];
 
 const IMAGE_MAX_DIMENSION = 8000; // Anthropic API 限制
@@ -918,7 +928,7 @@ function buildMemoryRecallPrompt(isHome: boolean, isAdminHome: boolean): string 
 }
 
 /** 从 settings.json 读取用户配置的 MCP servers（stdio/http/sse 类型） */
-function loadUserMcpServers(): Record<string, unknown> {
+function loadUserMcpServers(): Record<string, McpServerConfig> {
   const configDir = process.env.CLAUDE_CONFIG_DIR
     || path.join(process.env.HOME || '/home/node', '.claude');
   const settingsFile = path.join(configDir, 'settings.json');
@@ -1241,8 +1251,8 @@ async function runQuery(
       includePartialMessages: true,
       mcpServers: {
         ...loadUserMcpServers(),     // 用户配置的 MCP（stdio/http/sse），SDK 原生支持
-        happypaw: mcpServerConfig,   // 内置 SDK MCP 放最后，确保不被同名覆盖
-        happyclaw: mcpServerConfig,  // 兼容旧命名，确保已有配置不失效
+        [CURRENT_PRODUCT_ID]: mcpServerConfig,  // 内置 SDK MCP 放最后，确保不被同名覆盖
+        [LEGACY_PRODUCT_ID]: mcpServerConfig,   // 兼容旧命名，确保已有配置不失效
       },
       hooks: {
         PreCompact: [{ hooks: [createPreCompactHook(isHome, isAdminHome, {

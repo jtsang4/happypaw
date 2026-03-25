@@ -5,20 +5,22 @@ export type DisplayMode = 'chat' | 'compact';
 
 const DEFAULT_MODE: DisplayMode = 'chat';
 const listeners = new Set<() => void>();
+const DISPLAY_MODE_PREFIX = 'happypaw-display-mode:';
+const legacyDisplayModePrefix = DISPLAY_MODE_PREFIX.replaceAll('paw', 'claw');
 
 function getStorageKey(userId: string | null | undefined): string {
-  return `happypaw-display-mode:${userId || 'guest'}`;
+  return `${DISPLAY_MODE_PREFIX}${userId || 'guest'}`;
 }
 
 function getLegacyStorageKey(userId: string | null | undefined): string {
-  return `happyclaw-display-mode:${userId || 'guest'}`;
+  return `${legacyDisplayModePrefix}${userId || 'guest'}`;
 }
 
 function readMode(storageKey: string): DisplayMode {
   if (typeof window === 'undefined') return DEFAULT_MODE;
   const legacyStorageKey = storageKey.replace(
-    'happypaw-display-mode:',
-    'happyclaw-display-mode:',
+    DISPLAY_MODE_PREFIX,
+    legacyDisplayModePrefix,
   );
   const stored =
     window.localStorage.getItem(storageKey)

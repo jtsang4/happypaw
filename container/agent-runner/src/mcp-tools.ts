@@ -1,5 +1,5 @@
 /**
- * MCP Tool Definitions for HappyClaw Agent Runner.
+ * MCP Tool Definitions for HappyPaw Agent Runner.
  *
  * Uses SDK's `tool()` helper to define in-process MCP tools.
  * These tools communicate with the host process via IPC files.
@@ -147,7 +147,7 @@ function parseMemoryFileReference(fileRef: string): {
 }
 
 /**
- * Create all HappyClaw MCP tool definitions for in-process SDK MCP server.
+ * Create all HappyPaw MCP tool definitions for in-process SDK MCP server.
  */
 export function createMcpTools(ctx: McpContext): SdkMcpToolDefinition<any>[] {
   const MESSAGES_DIR = path.join(ctx.workspaceIpc, 'messages');
