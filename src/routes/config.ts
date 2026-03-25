@@ -233,11 +233,21 @@ configRoutes.put(
     }
 
     try {
-      const saved = saveCodexProviderConfig({
-        openaiBaseUrl: validation.data.openaiBaseUrl ?? '',
-        openaiModel: validation.data.openaiModel ?? '',
-      });
-      return c.json(toPublicCodexProviderConfig(saved, 'runtime'));
+      const patch: { openaiBaseUrl?: string; openaiModel?: string } = {};
+      if (
+        Object.prototype.hasOwnProperty.call(validation.data, 'openaiBaseUrl')
+      ) {
+        patch.openaiBaseUrl = validation.data.openaiBaseUrl;
+      }
+      if (
+        Object.prototype.hasOwnProperty.call(validation.data, 'openaiModel')
+      ) {
+        patch.openaiModel = validation.data.openaiModel;
+      }
+
+      saveCodexProviderConfig(patch);
+      const { config, source } = getCodexProviderConfigWithSource();
+      return c.json(toPublicCodexProviderConfig(config, source));
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Failed to save Codex config';
@@ -262,8 +272,9 @@ configRoutes.put(
     }
 
     try {
-      const saved = saveCodexProviderSecrets(validation.data);
-      return c.json(toPublicCodexProviderConfig(saved, 'runtime'));
+      saveCodexProviderSecrets(validation.data);
+      const { config, source } = getCodexProviderConfigWithSource();
+      return c.json(toPublicCodexProviderConfig(config, source));
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Failed to save Codex secrets';

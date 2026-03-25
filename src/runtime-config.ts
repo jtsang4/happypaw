@@ -1960,6 +1960,27 @@ function buildCodexConfig(
   };
 }
 
+function hasCodexConfigValues(config: CodexProviderConfig | null): boolean {
+  return !!(
+    config &&
+    (config.openaiBaseUrl || config.openaiApiKey || config.openaiModel)
+  );
+}
+
+function mergeCodexConfigWithFallback(
+  runtime: CodexProviderConfig | null,
+  fallback: CodexProviderConfig,
+): CodexProviderConfig {
+  return buildCodexConfig(
+    {
+      openaiBaseUrl: runtime?.openaiBaseUrl || fallback.openaiBaseUrl,
+      openaiApiKey: runtime?.openaiApiKey || fallback.openaiApiKey,
+      openaiModel: runtime?.openaiModel || fallback.openaiModel,
+    },
+    runtime?.updatedAt ?? fallback.updatedAt ?? null,
+  );
+}
+
 function readStoredCodexConfig(): CodexProviderConfig | null {
   if (!fs.existsSync(CODEX_CONFIG_FILE)) return null;
   const content = fs.readFileSync(CODEX_CONFIG_FILE, 'utf-8');
@@ -1997,13 +2018,42 @@ function defaultsCodexFromEnv(): CodexProviderConfig {
   }
 }
 
+function writeStoredCodexConfig(config: CodexProviderConfig): void {
+  if (!hasCodexConfigValues(config)) {
+    if (fs.existsSync(CODEX_CONFIG_FILE)) {
+      fs.unlinkSync(CODEX_CONFIG_FILE);
+    }
+    return;
+  }
+
+  const payload: StoredCodexProviderConfigV1 = {
+    version: 1,
+    openaiBaseUrl: config.openaiBaseUrl,
+    openaiModel: config.openaiModel,
+    updatedAt: config.updatedAt || new Date().toISOString(),
+    secret: encryptCodexSecret({ openaiApiKey: config.openaiApiKey }),
+  };
+
+  fs.mkdirSync(CLAUDE_CONFIG_DIR, { recursive: true });
+  const tmp = `${CODEX_CONFIG_FILE}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(payload, null, 2) + '\n', 'utf-8');
+  fs.renameSync(tmp, CODEX_CONFIG_FILE);
+}
+
 export function getCodexProviderConfigWithSource(): {
   config: CodexProviderConfig;
   source: CodexConfigSource;
 } {
+  const fromEnv = defaultsCodexFromEnv();
+
   try {
     const stored = readStoredCodexConfig();
-    if (stored) return { config: stored, source: 'runtime' };
+    if (hasCodexConfigValues(stored)) {
+      return {
+        config: mergeCodexConfigWithFallback(stored, fromEnv),
+        source: 'runtime',
+      };
+    }
   } catch (err) {
     logger.warn(
       { err },
@@ -2011,7 +2061,6 @@ export function getCodexProviderConfigWithSource(): {
     );
   }
 
-  const fromEnv = defaultsCodexFromEnv();
   if (fromEnv.openaiBaseUrl || fromEnv.openaiApiKey || fromEnv.openaiModel) {
     return { config: fromEnv, source: 'env' };
   }
@@ -2026,69 +2075,49 @@ export function getCodexProviderConfig(): CodexProviderConfig {
 export function saveCodexProviderConfig(
   next: Partial<Pick<CodexProviderConfig, 'openaiBaseUrl' | 'openaiModel'>>,
 ): CodexProviderConfig {
-  const existing = readStoredCodexConfig() ?? defaultsCodexFromEnv();
-  const normalized = buildCodexConfig(
+  const existingRuntime = readStoredCodexConfig();
+  const persisted = buildCodexConfig(
     {
       openaiBaseUrl:
         next.openaiBaseUrl !== undefined
-          ? next.openaiBaseUrl
-          : existing.openaiBaseUrl,
-      openaiApiKey: existing.openaiApiKey,
+          ? next.openaiBaseUrl.trim()
+            ? next.openaiBaseUrl
+            : (existingRuntime?.openaiBaseUrl ?? '')
+          : (existingRuntime?.openaiBaseUrl ?? ''),
+      openaiApiKey: existingRuntime?.openaiApiKey ?? '',
       openaiModel:
         next.openaiModel !== undefined
-          ? next.openaiModel
-          : existing.openaiModel,
+          ? next.openaiModel.trim()
+            ? next.openaiModel
+            : (existingRuntime?.openaiModel ?? '')
+          : (existingRuntime?.openaiModel ?? ''),
     },
     new Date().toISOString(),
   );
-
-  const payload: StoredCodexProviderConfigV1 = {
-    version: 1,
-    openaiBaseUrl: normalized.openaiBaseUrl,
-    openaiModel: normalized.openaiModel,
-    updatedAt: normalized.updatedAt || new Date().toISOString(),
-    secret: encryptCodexSecret({ openaiApiKey: normalized.openaiApiKey }),
-  };
-
-  fs.mkdirSync(CLAUDE_CONFIG_DIR, { recursive: true });
-  const tmp = `${CODEX_CONFIG_FILE}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(payload, null, 2) + '\n', 'utf-8');
-  fs.renameSync(tmp, CODEX_CONFIG_FILE);
-  return normalized;
+  writeStoredCodexConfig(persisted);
+  return mergeCodexConfigWithFallback(persisted, defaultsCodexFromEnv());
 }
 
 export function saveCodexProviderSecrets(patch: {
   openaiApiKey?: string;
   clearOpenaiApiKey?: boolean;
 }): CodexProviderConfig {
-  const existing = readStoredCodexConfig() ?? defaultsCodexFromEnv();
-  const normalized = buildCodexConfig(
+  const existingRuntime = readStoredCodexConfig();
+  const persisted = buildCodexConfig(
     {
-      openaiBaseUrl: existing.openaiBaseUrl,
+      openaiBaseUrl: existingRuntime?.openaiBaseUrl ?? '',
       openaiApiKey:
         typeof patch.openaiApiKey === 'string'
           ? patch.openaiApiKey
           : patch.clearOpenaiApiKey
             ? ''
-            : existing.openaiApiKey,
-      openaiModel: existing.openaiModel,
+            : (existingRuntime?.openaiApiKey ?? ''),
+      openaiModel: existingRuntime?.openaiModel ?? '',
     },
     new Date().toISOString(),
   );
-
-  const payload: StoredCodexProviderConfigV1 = {
-    version: 1,
-    openaiBaseUrl: normalized.openaiBaseUrl,
-    openaiModel: normalized.openaiModel,
-    updatedAt: normalized.updatedAt || new Date().toISOString(),
-    secret: encryptCodexSecret({ openaiApiKey: normalized.openaiApiKey }),
-  };
-
-  fs.mkdirSync(CLAUDE_CONFIG_DIR, { recursive: true });
-  const tmp = `${CODEX_CONFIG_FILE}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(payload, null, 2) + '\n', 'utf-8');
-  fs.renameSync(tmp, CODEX_CONFIG_FILE);
-  return normalized;
+  writeStoredCodexConfig(persisted);
+  return mergeCodexConfigWithFallback(persisted, defaultsCodexFromEnv());
 }
 
 export function toPublicCodexProviderConfig(
