@@ -29,6 +29,10 @@ import {
 import { DirectoryBrowser } from '../shared/DirectoryBrowser';
 import { useChatStore } from '../../stores/chat';
 import { useAuthStore } from '../../stores/auth';
+import {
+  buildCreateFlowOptions,
+  type RuntimeOverrideSelection,
+} from './create-flow-options';
 
 interface CreateContainerDialogProps {
   open: boolean;
@@ -45,7 +49,7 @@ export function CreateContainerDialog({
   const [loading, setLoading] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [executionMode, setExecutionMode] = useState<'container' | 'host'>('container');
-  const [runtime, setRuntime] = useState<'claude_sdk' | 'codex_app_server'>('claude_sdk');
+  const [runtime, setRuntime] = useState<RuntimeOverrideSelection>('__default__');
   const [customCwd, setCustomCwd] = useState('');
   const [initMode, setInitMode] = useState<'empty' | 'local' | 'git'>('empty');
   const [initSourcePath, setInitSourcePath] = useState('');
@@ -58,7 +62,7 @@ export function CreateContainerDialog({
     setName('');
     setAdvancedOpen(false);
     setExecutionMode('container');
-    setRuntime('claude_sdk');
+    setRuntime('__default__');
     setCustomCwd('');
     setInitMode('empty');
     setInitSourcePath('');
@@ -76,19 +80,15 @@ export function CreateContainerDialog({
 
     setLoading(true);
     try {
-      const options: Record<string, string> = {};
-      if (executionMode === 'host') {
-        options.execution_mode = 'host';
-        if (customCwd.trim()) options.custom_cwd = customCwd.trim();
-      } else {
-        if (initMode === 'local' && initSourcePath.trim()) {
-          options.init_source_path = initSourcePath.trim();
-        } else if (initMode === 'git' && initGitUrl.trim()) {
-          options.init_git_url = initGitUrl.trim();
-        }
-      }
-      options.runtime = runtime;
-      const created = await createFlow(trimmed, Object.keys(options).length ? options : undefined);
+      const options = buildCreateFlowOptions({
+        executionMode,
+        runtimeSelection: runtime,
+        customCwd,
+        initMode,
+        initSourcePath,
+        initGitUrl,
+      });
+      const created = await createFlow(trimmed, options);
       if (created) {
         onCreated(created.jid, created.folder);
         handleClose();
@@ -139,18 +139,19 @@ export function CreateContainerDialog({
                   <label className="block text-sm font-medium mb-2">运行时</label>
                   <Select
                     value={runtime}
-                    onValueChange={(value: 'claude_sdk' | 'codex_app_server') => setRuntime(value)}
+                    onValueChange={(value: RuntimeOverrideSelection) => setRuntime(value)}
                   >
                     <SelectTrigger className="w-full h-10">
                       <SelectValue placeholder="选择运行时" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="__default__">继承系统默认</SelectItem>
                       <SelectItem value="claude_sdk">Claude</SelectItem>
                       <SelectItem value="codex_app_server">Codex</SelectItem>
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground mt-1">
-                    运行时与 Docker / 宿主机执行模式独立保存，后续可在群组中单独覆盖。
+                    默认继承系统运行时；仅在这里显式选择时才会写入群组级覆盖，且与 Docker / 宿主机执行模式独立保存。
                   </p>
                 </div>
 

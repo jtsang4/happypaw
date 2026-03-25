@@ -717,6 +717,10 @@ groupRoutes.patch('/:jid', authMiddleware, async (c) => {
     runtime,
     execution_mode,
   } = validation.data;
+  const hasRuntimeField = Object.prototype.hasOwnProperty.call(
+    validation.data,
+    'runtime',
+  );
   const name = rawName ? normalizeGroupName(rawName) : undefined;
 
   // 至少需要提供一个字段
@@ -724,7 +728,7 @@ groupRoutes.patch('/:jid', authMiddleware, async (c) => {
     !name &&
     is_pinned === undefined &&
     activation_mode === undefined &&
-    runtime === undefined &&
+    !hasRuntimeField &&
     execution_mode === undefined
   ) {
     return c.json({ error: 'No fields to update' }, 400);
@@ -751,7 +755,7 @@ groupRoutes.patch('/:jid', authMiddleware, async (c) => {
     is_pinned !== undefined &&
     !name &&
     activation_mode === undefined &&
-    runtime === undefined &&
+    !hasRuntimeField &&
     execution_mode === undefined;
   if (isPinOnly) {
     if (
@@ -798,7 +802,7 @@ groupRoutes.patch('/:jid', authMiddleware, async (c) => {
   if (
     name ||
     activation_mode !== undefined ||
-    runtime !== undefined ||
+    hasRuntimeField ||
     execution_mode !== undefined
   ) {
     const updated: RegisteredGroup = {
@@ -810,8 +814,7 @@ groupRoutes.patch('/:jid', authMiddleware, async (c) => {
         execution_mode !== undefined
           ? (execution_mode as ExecutionMode)
           : existing.executionMode,
-      runtime:
-        runtime !== undefined ? (runtime ?? undefined) : existing.runtime,
+      runtime: hasRuntimeField ? (runtime ?? undefined) : existing.runtime,
       customCwd: existing.customCwd,
       initSourcePath: existing.initSourcePath,
       initGitUrl: existing.initGitUrl,
