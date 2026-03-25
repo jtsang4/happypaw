@@ -13,6 +13,7 @@ export interface GroupInfo {
   lastMessage?: string;
   lastMessageTime?: string;
   runtime?: 'claude_sdk' | 'codex_app_server';
+  effective_runtime?: 'claude_sdk' | 'codex_app_server';
   execution_mode?: 'container' | 'host';
   custom_cwd?: string;
   created_by?: string;

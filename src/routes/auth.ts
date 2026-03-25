@@ -34,6 +34,7 @@ import {
   getRegistrationConfig,
   getClaudeProviderConfig,
   getEnabledProviders,
+  getCodexProviderConfigWithSource,
   getFeishuProviderConfigWithSource,
   getAppearanceConfig,
 } from '../runtime-config.js';
@@ -183,12 +184,17 @@ function buildSetupStatus() {
     );
     return hasOfficial || hasThirdParty;
   });
+  const { config: codexConfig } = getCodexProviderConfigWithSource();
+  const codexConfigured = !!codexConfig.openaiApiKey.trim();
   const { source: feishuSource } = getFeishuProviderConfigWithSource();
   const feishuConfigured = feishuSource !== 'none';
+  const providerConfigured = claudeConfigured || codexConfigured;
 
   return {
-    needsSetup: !claudeConfigured,
+    needsSetup: !providerConfigured,
+    providerConfigured,
     claudeConfigured,
+    codexConfigured,
     feishuConfigured,
   };
 }

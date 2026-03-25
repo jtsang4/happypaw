@@ -9,7 +9,7 @@ import { api } from '../../api/client';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import type { SystemSettings } from './types';
+import type { CodexConfigPublic, SystemSettings } from './types';
 import { getErrorMessage } from './types';
 
 interface FieldConfig {
@@ -132,7 +132,13 @@ export function SystemSettingsSection() {
   const { hasPermission } = useAuthStore();
 
   const [settings, setSettings] = useState<SystemSettings | null>(null);
+  const [codexConfig, setCodexConfig] = useState<CodexConfigPublic | null>(null);
   const [displayValues, setDisplayValues] = useState<Record<string, number>>({});
+  const [codexBaseUrl, setCodexBaseUrl] = useState('');
+  const [codexBaseUrlTouched, setCodexBaseUrlTouched] = useState(false);
+  const [codexModel, setCodexModel] = useState('');
+  const [codexApiKey, setCodexApiKey] = useState('');
+  const [clearCodexApiKey, setClearCodexApiKey] = useState(false);
   const [billingEnabled, setBillingEnabled] = useState(false);
   const [billingMinStartBalanceUsd, setBillingMinStartBalanceUsd] = useState(0.01);
   const [billingCurrency, setBillingCurrency] = useState('USD');
@@ -150,8 +156,17 @@ export function SystemSettingsSection() {
     (async () => {
       setLoading(true);
       try {
-        const data = await api.get<SystemSettings>('/api/config/system');
+        const [data, codex] = await Promise.all([
+          api.get<SystemSettings>('/api/config/system'),
+          api.get<CodexConfigPublic>('/api/config/codex'),
+        ]);
         setSettings(data);
+        setCodexConfig(codex);
+        setCodexBaseUrl('');
+        setCodexBaseUrlTouched(false);
+        setCodexModel(codex.openaiModel || '');
+        setCodexApiKey('');
+        setClearCodexApiKey(false);
         const display: Record<string, number> = {};
         for (const f of fields) {
           display[f.key] = f.toDisplay(data[f.key] as number);
@@ -199,7 +214,11 @@ export function SystemSettingsSection() {
   const handleSave = async () => {
     setSaving(true);
     try {
+      if (!settings) {
+        throw new Error('系统参数尚未加载完成');
+      }
       const payload: Partial<SystemSettings> = {
+        defaultRuntime: settings.defaultRuntime,
         billingEnabled,
         billingMode: 'wallet_first',
         billingMinStartBalanceUsd,
@@ -212,13 +231,32 @@ export function SystemSettingsSection() {
           (payload as Record<string, number>)[f.key] = f.toStored(val);
         }
       }
-      const data = await api.put<SystemSettings>('/api/config/system', payload);
+      const [data, latestCodex, latestCodexSecrets] = await Promise.all([
+        api.put<SystemSettings>('/api/config/system', payload),
+        api.put<CodexConfigPublic>('/api/config/codex', {
+          ...(codexBaseUrlTouched ? { openaiBaseUrl: codexBaseUrl.trim() } : {}),
+          openaiModel: codexModel.trim(),
+        }),
+        (codexApiKey.trim() || clearCodexApiKey)
+          ? api.put<CodexConfigPublic>('/api/config/codex/secrets', {
+              ...(codexApiKey.trim() ? { openaiApiKey: codexApiKey.trim() } : {}),
+              ...(clearCodexApiKey ? { clearOpenaiApiKey: true } : {}),
+            })
+          : Promise.resolve<CodexConfigPublic | null>(null),
+      ]);
       setSettings(data);
+      const resolvedCodexConfig = latestCodexSecrets ?? latestCodex;
+      setCodexConfig(resolvedCodexConfig);
       const display: Record<string, number> = {};
       for (const f of fields) {
         display[f.key] = f.toDisplay(data[f.key] as number);
       }
       setDisplayValues(display);
+      setCodexBaseUrl('');
+      setCodexBaseUrlTouched(false);
+      setCodexModel(resolvedCodexConfig.openaiModel ?? codexModel.trim());
+      setCodexApiKey('');
+      setClearCodexApiKey(false);
       setBillingEnabled(data.billingEnabled ?? false);
       setBillingMinStartBalanceUsd(data.billingMinStartBalanceUsd ?? 0.01);
       setBillingCurrency(data.billingCurrency ?? 'USD');
@@ -252,6 +290,133 @@ export function SystemSettingsSection() {
       <p className="text-sm text-muted-foreground">
         调整容器运行参数和安全限制。修改后无需重启，新参数对后续创建的容器/进程立即生效。
       </p>
+
+      <div className="space-y-5 rounded-xl border border-border p-4">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">默认运行时</h3>
+          <p className="text-xs text-muted-foreground mt-1">
+            运行时选择独立于 Docker / 宿主机执行模式；群组可单独覆盖默认值。
+          </p>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={() =>
+              setSettings((prev) =>
+                prev ? { ...prev, defaultRuntime: 'claude_sdk' } : prev,
+              )
+            }
+            className={`rounded-lg border px-4 py-3 text-left transition-colors ${
+              settings.defaultRuntime === 'claude_sdk'
+                ? 'border-primary bg-primary/5'
+                : 'border-border hover:bg-muted'
+            }`}
+          >
+            <div className="text-sm font-medium text-foreground">Claude</div>
+            <div className="text-xs text-muted-foreground mt-1">
+              使用现有 Claude SDK / 提供商池配置。
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              setSettings((prev) =>
+                prev ? { ...prev, defaultRuntime: 'codex_app_server' } : prev,
+              )
+            }
+            className={`rounded-lg border px-4 py-3 text-left transition-colors ${
+              settings.defaultRuntime === 'codex_app_server'
+                ? 'border-primary bg-primary/5'
+                : 'border-border hover:bg-muted'
+            }`}
+          >
+            <div className="text-sm font-medium text-foreground">Codex</div>
+            <div className="text-xs text-muted-foreground mt-1">
+              使用 Codex app-server，且不会修改执行模式。
+            </div>
+          </button>
+        </div>
+      </div>
+
+      <div className="space-y-5 rounded-xl border border-border p-4">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">Codex 默认配置</h3>
+          <p className="text-xs text-muted-foreground mt-1">
+            Base URL 与 API Key 在接口和 UI 中始终以脱敏形式显示。
+          </p>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <Label className="mb-1">当前 Base URL</Label>
+            <div className="rounded-md border border-border px-3 py-2 text-sm text-muted-foreground">
+              {codexConfig?.hasOpenaiBaseUrl
+                ? (codexConfig.openaiBaseUrlMasked ?? '已配置')
+                : '未配置'}
+            </div>
+          </div>
+          <div>
+            <Label className="mb-1">当前 API Key</Label>
+            <div className="rounded-md border border-border px-3 py-2 text-sm text-muted-foreground">
+              {codexConfig?.hasOpenaiApiKey
+                ? (codexConfig.openaiApiKeyMasked ?? '已配置')
+                : '未配置'}
+            </div>
+          </div>
+          <div>
+            <Label className="mb-1">OpenAI Base URL</Label>
+            <Input
+              type="text"
+              value={codexBaseUrl}
+              onChange={(e) => {
+                setCodexBaseUrl(e.target.value);
+                setCodexBaseUrlTouched(true);
+              }}
+              placeholder="留空表示清空运行时 Base URL"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              保存后仅展示脱敏域名，不回显完整地址。
+            </p>
+          </div>
+          <div>
+            <Label className="mb-1">OpenAI Model</Label>
+            <Input
+              type="text"
+              value={codexModel}
+              onChange={(e) => setCodexModel(e.target.value)}
+              placeholder="例如 gpt-4.1 / codex-mini-latest"
+            />
+          </div>
+          <div>
+            <Label className="mb-1">更新 API Key</Label>
+            <Input
+              type="password"
+              value={codexApiKey}
+              onChange={(e) => {
+                setCodexApiKey(e.target.value);
+                if (e.target.value.trim()) setClearCodexApiKey(false);
+              }}
+              placeholder="留空则保持当前密钥"
+            />
+          </div>
+          <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+            <div>
+              <div className="text-sm font-medium text-foreground">清空当前 API Key</div>
+              <div className="text-xs text-muted-foreground mt-1">
+                仅在不填写新 Key 时勾选。
+              </div>
+            </div>
+            <Switch
+              checked={clearCodexApiKey}
+              onCheckedChange={(checked) => {
+                setClearCodexApiKey(checked);
+                if (checked) setCodexApiKey('');
+              }}
+              aria-label="清空 Codex API Key"
+            />
+          </div>
+        </div>
+      </div>
 
       <div className="space-y-5">
         {fields.map((f) => (

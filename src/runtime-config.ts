@@ -195,7 +195,8 @@ export interface CodexProviderConfig {
 }
 
 export interface CodexProviderPublicConfig {
-  openaiBaseUrl: string;
+  hasOpenaiBaseUrl: boolean;
+  openaiBaseUrlMasked: string | null;
   openaiModel: string;
   updatedAt: string | null;
   hasOpenaiApiKey: boolean;
@@ -1924,6 +1925,27 @@ function maskSecret(value: string): string | null {
   return `${value.slice(0, 3)}${'*'.repeat(Math.max(value.length - 7, 4))}${value.slice(-4)}`;
 }
 
+function maskBaseUrl(value: string): string | null {
+  if (!value) return null;
+
+  try {
+    const parsed = new URL(value);
+    const hostname = parsed.hostname;
+    const maskedHost =
+      hostname.length <= 4
+        ? '*'.repeat(Math.max(hostname.length, 2))
+        : `${hostname.slice(0, 2)}***${hostname.slice(-2)}`;
+    const port = parsed.port ? `:${parsed.port}` : '';
+    const hasPath = parsed.pathname && parsed.pathname !== '/';
+    return `${parsed.protocol}//${maskedHost}${port}${hasPath ? '/***' : ''}`;
+  } catch {
+    if (value.length <= 8) {
+      return `${'*'.repeat(Math.max(value.length - 2, 1))}${value.slice(-2)}`;
+    }
+    return `${value.slice(0, 3)}${'*'.repeat(Math.max(value.length - 7, 4))}${value.slice(-4)}`;
+  }
+}
+
 function buildCodexConfig(
   input: Omit<CodexProviderConfig, 'updatedAt'>,
   updatedAt: string | null,
@@ -2000,14 +2022,18 @@ export function getCodexProviderConfig(): CodexProviderConfig {
 }
 
 export function saveCodexProviderConfig(
-  next: Pick<CodexProviderConfig, 'openaiBaseUrl' | 'openaiModel'>,
+  next: Partial<Pick<CodexProviderConfig, 'openaiBaseUrl' | 'openaiModel'>>,
 ): CodexProviderConfig {
-  const existing = readStoredCodexConfig();
+  const existing = readStoredCodexConfig() ?? defaultsCodexFromEnv();
   const normalized = buildCodexConfig(
     {
-      openaiBaseUrl: next.openaiBaseUrl,
-      openaiApiKey: existing?.openaiApiKey ?? '',
-      openaiModel: next.openaiModel,
+      openaiBaseUrl:
+        next.openaiBaseUrl !== undefined
+          ? next.openaiBaseUrl
+          : existing.openaiBaseUrl,
+      openaiApiKey: existing.openaiApiKey,
+      openaiModel:
+        next.openaiModel !== undefined ? next.openaiModel : existing.openaiModel,
     },
     new Date().toISOString(),
   );
@@ -2066,7 +2092,8 @@ export function toPublicCodexProviderConfig(
   source: CodexConfigSource,
 ): CodexProviderPublicConfig {
   return {
-    openaiBaseUrl: config.openaiBaseUrl,
+    hasOpenaiBaseUrl: !!config.openaiBaseUrl,
+    openaiBaseUrlMasked: maskBaseUrl(config.openaiBaseUrl),
     openaiModel: config.openaiModel,
     updatedAt: config.updatedAt,
     hasOpenaiApiKey: !!config.openaiApiKey,

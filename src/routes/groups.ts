@@ -58,6 +58,7 @@ import {
   pinGroup,
   unpinGroup,
 } from '../db.js';
+import { getSystemSettings } from '../runtime-config.js';
 import { logger } from '../logger.js';
 import {
   getContainerEnvConfig,
@@ -161,10 +162,12 @@ interface GroupPayloadItem {
   pinned_at?: string;
   activation_mode?: 'auto' | 'always' | 'when_mentioned' | 'disabled';
   runtime?: RuntimeType;
+  effective_runtime?: RuntimeType;
 }
 
 function buildGroupsPayload(user: AuthUser): Record<string, GroupPayloadItem> {
   const groups = getAllRegisteredGroups();
+  const defaultRuntime = getSystemSettings().defaultRuntime;
   const chats = new Map(getAllChats().map((chat) => [chat.jid, chat]));
   const isAdmin = hasHostExecutionPermission(user);
   const homeFolders = new Set(
@@ -262,6 +265,7 @@ function buildGroupsPayload(user: AuthUser): Record<string, GroupPayloadItem> {
         group.added_at,
       execution_mode: group.executionMode || 'container',
       runtime: group.runtime,
+      effective_runtime: group.runtime ?? defaultRuntime,
       custom_cwd: isAdmin ? group.customCwd : undefined,
       is_home: isHome || undefined,
       is_my_home: (isHome && group.created_by === user.id) || undefined,
@@ -673,6 +677,7 @@ groupRoutes.post('/', authMiddleware, async (c) => {
       added_at: group.added_at,
       execution_mode: group.executionMode || 'container',
       runtime: group.runtime,
+      effective_runtime: group.runtime ?? getSystemSettings().defaultRuntime,
       custom_cwd: hasHostExecutionPermission(authUser)
         ? group.customCwd
         : undefined,
@@ -805,7 +810,7 @@ groupRoutes.patch('/:jid', authMiddleware, async (c) => {
         execution_mode !== undefined
           ? (execution_mode as ExecutionMode)
           : existing.executionMode,
-      runtime: runtime !== undefined ? runtime : existing.runtime,
+      runtime: runtime !== undefined ? (runtime ?? undefined) : existing.runtime,
       customCwd: existing.customCwd,
       initSourcePath: existing.initSourcePath,
       initGitUrl: existing.initGitUrl,

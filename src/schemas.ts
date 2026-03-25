@@ -191,7 +191,7 @@ export const GroupPatchSchema = z.object({
   activation_mode: z
     .enum(['auto', 'always', 'when_mentioned', 'disabled'])
     .optional(),
-  runtime: z.enum(['claude_sdk', 'codex_app_server']).optional(),
+  runtime: z.enum(['claude_sdk', 'codex_app_server']).nullable().optional(),
   execution_mode: z.enum(['container', 'host']).optional(),
 });
 

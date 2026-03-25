@@ -7,6 +7,7 @@ import {
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { api } from '../../api/client';
 import type {
+  CodexConfigPublic,
   ProviderWithHealth,
   ProvidersListResponse,
   BalancingConfig,
@@ -24,6 +25,7 @@ interface ClaudeProviderSectionProps {
 
 export function ClaudeProviderSection({ setNotice, setError }: ClaudeProviderSectionProps) {
   const [providers, setProviders] = useState<ProviderWithHealth[]>([]);
+  const [codexConfig, setCodexConfig] = useState<CodexConfigPublic | null>(null);
   const [balancing, setBalancing] = useState<BalancingConfig>({
     strategy: 'round-robin',
     unhealthyThreshold: 3,
@@ -83,10 +85,14 @@ export function ClaudeProviderSection({ setNotice, setError }: ClaudeProviderSec
   // ─── 加载提供商列表 ──────────────────────────────────────────
   const loadProviders = useCallback(async () => {
     try {
-      const data = await api.get<ProvidersListResponse>('/api/config/claude/providers');
+      const [data, codex] = await Promise.all([
+        api.get<ProvidersListResponse>('/api/config/claude/providers'),
+        api.get<CodexConfigPublic>('/api/config/codex'),
+      ]);
       setProviders(data.providers);
       setBalancing(data.balancing);
       setEnabledCount(data.enabledCount);
+      setCodexConfig(codex);
     } catch (err) {
       setError(getErrorMessage(err, '加载提供商列表失败'));
     } finally {
@@ -244,6 +250,48 @@ export function ClaudeProviderSection({ setNotice, setError }: ClaudeProviderSec
 
   return (
     <div className="space-y-4">
+      {codexConfig && (
+        <div className="rounded-xl border border-border px-4 py-3 space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-medium text-foreground">Codex 运行时配置</div>
+              <div className="text-xs text-muted-foreground">
+                使用系统默认运行时选择为 Codex 时生效，密钥和 Base URL 仅显示脱敏信息。
+              </div>
+            </div>
+          </div>
+          <div className="grid gap-2 text-xs text-muted-foreground md:grid-cols-2">
+            <div>
+              <span className="font-medium text-foreground">Base URL：</span>
+              {codexConfig.hasOpenaiBaseUrl
+                ? (codexConfig.openaiBaseUrlMasked ?? '已配置')
+                : '未配置'}
+            </div>
+            <div>
+              <span className="font-medium text-foreground">API Key：</span>
+              {codexConfig.hasOpenaiApiKey
+                ? (codexConfig.openaiApiKeyMasked ?? '已配置')
+                : '未配置'}
+            </div>
+            <div>
+              <span className="font-medium text-foreground">模型：</span>
+              {codexConfig.openaiModel || '未配置'}
+            </div>
+            <div>
+              <span className="font-medium text-foreground">来源：</span>
+              {codexConfig.source === 'runtime'
+                ? '运行时配置'
+                : codexConfig.source === 'env'
+                  ? '环境变量'
+                  : '未配置'}
+            </div>
+          </div>
+          <div className="text-xs text-muted-foreground">
+            如需修改 Codex 默认配置，请前往“系统参数”页签。
+          </div>
+        </div>
+      )}
+
       {/* 提供商列表 */}
       <ProviderList
         providers={providers}

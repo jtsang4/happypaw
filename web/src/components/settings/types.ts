@@ -110,12 +110,21 @@ export interface SystemSettings {
 export type SettingsTab = 'claude' | 'registration' | 'appearance' | 'system' | 'profile' | 'my-channels' | 'security' | 'groups' | 'memory' | 'skills' | 'mcp-servers' | 'agent-definitions' | 'users' | 'about' | 'bindings';
 
 export interface CodexConfigPublic {
-  openaiBaseUrl: string;
+  hasOpenaiBaseUrl: boolean;
+  openaiBaseUrlMasked: string | null;
   openaiModel: string;
   updatedAt: string | null;
   hasOpenaiApiKey: boolean;
   openaiApiKeyMasked: string | null;
   source: 'runtime' | 'env' | 'none';
+}
+
+export interface SetupStatus {
+  needsSetup: boolean;
+  providerConfigured: boolean;
+  claudeConfigured: boolean;
+  codexConfigured: boolean;
+  feishuConfigured: boolean;
 }
 
 export function getErrorMessage(err: unknown, fallback: string): string {

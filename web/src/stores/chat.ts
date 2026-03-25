@@ -190,8 +190,9 @@ interface ChatState {
   resetSession: (jid: string, agentId?: string) => Promise<boolean>;
   clearHistory: (jid: string) => Promise<boolean>;
   deleteMessage: (jid: string, messageId: string) => Promise<boolean>;
-  createFlow: (name: string, options?: { execution_mode?: 'container' | 'host'; custom_cwd?: string; init_source_path?: string; init_git_url?: string }) => Promise<{ jid: string; folder: string } | null>;
+  createFlow: (name: string, options?: { execution_mode?: 'container' | 'host'; runtime?: 'claude_sdk' | 'codex_app_server'; custom_cwd?: string; init_source_path?: string; init_git_url?: string }) => Promise<{ jid: string; folder: string } | null>;
   renameFlow: (jid: string, name: string) => Promise<void>;
+  updateFlowRuntime: (jid: string, runtime: 'claude_sdk' | 'codex_app_server' | null) => Promise<void>;
   togglePin: (jid: string) => Promise<void>;
   deleteFlow: (jid: string) => Promise<void>;
   handleStreamEvent: (chatJid: string, event: StreamEvent, agentId?: string) => void;
@@ -1089,10 +1090,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  createFlow: async (name: string, options?: { execution_mode?: 'container' | 'host'; custom_cwd?: string; init_source_path?: string; init_git_url?: string }) => {
+  createFlow: async (name: string, options?: { execution_mode?: 'container' | 'host'; runtime?: 'claude_sdk' | 'codex_app_server'; custom_cwd?: string; init_source_path?: string; init_git_url?: string }) => {
     try {
       const body: Record<string, string> = { name };
       if (options?.execution_mode) body.execution_mode = options.execution_mode;
+      if (options?.runtime) body.runtime = options.runtime;
       if (options?.custom_cwd) body.custom_cwd = options.custom_cwd;
       if (options?.init_source_path) body.init_source_path = options.init_source_path;
       if (options?.init_git_url) body.init_git_url = options.init_git_url;
@@ -1136,6 +1138,31 @@ export const useChatStore = create<ChatState>((set, get) => ({
       });
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err) });
+    }
+  },
+
+  updateFlowRuntime: async (jid: string, runtime: 'claude_sdk' | 'codex_app_server' | null) => {
+    try {
+      await api.patch<{ success: boolean }>(`/api/groups/${encodeURIComponent(jid)}`, { runtime });
+      set((s) => {
+        const group = s.groups[jid];
+        if (!group) return s;
+        return {
+          groups: {
+            ...s.groups,
+            [jid]: {
+              ...group,
+              runtime: runtime ?? undefined,
+              effective_runtime: runtime ?? group.effective_runtime,
+            },
+          },
+          error: null,
+        };
+      });
+      await get().loadGroups();
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : String(err) });
+      throw err;
     }
   },
 

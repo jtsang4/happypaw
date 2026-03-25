@@ -19,6 +19,13 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { DirectoryBrowser } from '../shared/DirectoryBrowser';
 import { useChatStore } from '../../stores/chat';
 import { useAuthStore } from '../../stores/auth';
@@ -38,6 +45,7 @@ export function CreateContainerDialog({
   const [loading, setLoading] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [executionMode, setExecutionMode] = useState<'container' | 'host'>('container');
+  const [runtime, setRuntime] = useState<'claude_sdk' | 'codex_app_server'>('claude_sdk');
   const [customCwd, setCustomCwd] = useState('');
   const [initMode, setInitMode] = useState<'empty' | 'local' | 'git'>('empty');
   const [initSourcePath, setInitSourcePath] = useState('');
@@ -50,6 +58,7 @@ export function CreateContainerDialog({
     setName('');
     setAdvancedOpen(false);
     setExecutionMode('container');
+    setRuntime('claude_sdk');
     setCustomCwd('');
     setInitMode('empty');
     setInitSourcePath('');
@@ -78,6 +87,7 @@ export function CreateContainerDialog({
           options.init_git_url = initGitUrl.trim();
         }
       }
+      options.runtime = runtime;
       const created = await createFlow(trimmed, Object.keys(options).length ? options : undefined);
       if (created) {
         onCreated(created.jid, created.folder);
@@ -126,6 +136,25 @@ export function CreateContainerDialog({
               <div className="px-3 pb-3 space-y-3 border-t">
                 {/* Execution mode */}
                 <div className="pt-3">
+                  <label className="block text-sm font-medium mb-2">运行时</label>
+                  <Select
+                    value={runtime}
+                    onValueChange={(value: 'claude_sdk' | 'codex_app_server') => setRuntime(value)}
+                  >
+                    <SelectTrigger className="w-full h-10">
+                      <SelectValue placeholder="选择运行时" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="claude_sdk">Claude</SelectItem>
+                      <SelectItem value="codex_app_server">Codex</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    运行时与 Docker / 宿主机执行模式独立保存，后续可在群组中单独覆盖。
+                  </p>
+                </div>
+
+                <div className="pt-1">
                   <label className="block text-sm font-medium mb-2">执行模式</label>
                   <div className="space-y-2">
                     <label className="flex items-start gap-3 p-2 rounded-lg border cursor-pointer hover:bg-accent/50 transition-colors">

@@ -4,15 +4,24 @@ import { useNavigate } from 'react-router-dom';
 
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { api } from '../api/client';
 import type {
   UnifiedProviderPublic,
   EnvRow,
+  CodexConfigPublic,
 } from '../components/settings/types';
 import { getErrorMessage } from '../components/settings/types';
 import { useAuthStore } from '../stores/auth';
 
 type ProviderMode = 'official' | 'third_party';
+type RuntimeSelection = 'claude_sdk' | 'codex_app_server';
 
 const RESERVED_ENV_KEYS = new Set([
   'ANTHROPIC_BASE_URL',
@@ -50,6 +59,7 @@ export function SetupProvidersPage() {
   const { user, setupStatus, checkAuth, initialized } = useAuthStore();
 
   const [providerMode, setProviderMode] = useState<ProviderMode>('official');
+  const [runtimeSelection, setRuntimeSelection] = useState<RuntimeSelection>('claude_sdk');
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -77,6 +87,12 @@ export function SetupProvidersPage() {
   const [model, setModel] = useState('');
   const [customEnvRows, setCustomEnvRows] = useState<EnvRow[]>([]);
 
+  // Codex mode
+  const [codexBaseUrl, setCodexBaseUrl] = useState('');
+  const [codexApiKey, setCodexApiKey] = useState('');
+  const [codexModel, setCodexModel] = useState('');
+  const [existingCodexConfig, setExistingCodexConfig] = useState<CodexConfigPublic | null>(null);
+
   useEffect(() => {
     if (user === null && initialized === true) {
       navigate('/login', { replace: true });
@@ -87,9 +103,21 @@ export function SetupProvidersPage() {
 
   useEffect(() => {
     if (setupStatus && !setupStatus.needsSetup) {
-      navigate('/settings?tab=claude', { replace: true });
+      navigate('/settings?tab=system', { replace: true });
     }
   }, [setupStatus, navigate]);
+
+  useEffect(() => {
+    void api
+      .get<CodexConfigPublic>('/api/config/codex')
+      .then((config) => {
+        setExistingCodexConfig(config);
+        if (config.openaiModel) setCodexModel(config.openaiModel);
+      })
+      .catch(() => {
+        setExistingCodexConfig(null);
+      });
+  }, []);
 
   const addCustomEnvRow = () => setCustomEnvRows((rows) => [...rows, { key: '', value: '' }]);
   const removeCustomEnvRow = (idx: number) =>
@@ -148,23 +176,28 @@ export function SetupProvidersPage() {
     }
 
     let customEnv: Record<string, string> = {};
-    if (providerMode === 'third_party') {
-      if (!baseUrl.trim()) {
-        setError('第三方渠道必须填写 ANTHROPIC_BASE_URL');
+    if (runtimeSelection === 'claude_sdk') {
+      if (providerMode === 'third_party') {
+        if (!baseUrl.trim()) {
+          setError('第三方渠道必须填写 ANTHROPIC_BASE_URL');
+          return;
+        }
+        if (!authToken.trim()) {
+          setError('第三方渠道必须填写 ANTHROPIC_AUTH_TOKEN');
+          return;
+        }
+        const envResult = buildCustomEnv(customEnvRows);
+        if (envResult.error) {
+          setError(envResult.error);
+          return;
+        }
+        customEnv = envResult.customEnv;
+      } else if (!officialToken.trim() && !apiKey.trim() && !oauthDone) {
+        setError('官方渠道请通过一键登录、填写 API Key 或手动填写 setup-token / .credentials.json');
         return;
       }
-      if (!authToken.trim()) {
-        setError('第三方渠道必须填写 ANTHROPIC_AUTH_TOKEN');
-        return;
-      }
-      const envResult = buildCustomEnv(customEnvRows);
-      if (envResult.error) {
-        setError(envResult.error);
-        return;
-      }
-      customEnv = envResult.customEnv;
-    } else if (!officialToken.trim() && !apiKey.trim() && !oauthDone) {
-      setError('官方渠道请通过一键登录、填写 API Key 或手动填写 setup-token / .credentials.json');
+    } else if (!codexApiKey.trim() && !existingCodexConfig?.hasOpenaiApiKey) {
+      setError('Codex 运行时至少需要填写 API Key');
       return;
     }
 
@@ -177,68 +210,84 @@ export function SetupProvidersPage() {
         await api.put('/api/config/user-im/feishu', payload);
       }
 
-      if (providerMode === 'official') {
-        if (oauthDone) {
-          // OAuth already created the provider via callback — nothing to do
-        } else if (apiKey.trim()) {
-          // API Key mode — create official provider
-          await api.post('/api/config/claude/providers', {
-            name: '官方 Claude (API Key)',
-            type: 'official',
-            anthropicApiKey: apiKey.trim(),
-            enabled: true,
-          });
-        } else {
-          // Setup token or .credentials.json
-          const trimmed = officialToken.trim();
-          let created = false;
-          if (trimmed.startsWith('{')) {
-            try {
-              const parsed = JSON.parse(trimmed) as Record<string, unknown>;
-              const oauth = parsed.claudeAiOauth as Record<string, unknown> | undefined;
-              if (oauth?.accessToken && oauth?.refreshToken) {
-                created = true;
-                await api.post('/api/config/claude/providers', {
-                  name: '官方 Claude (OAuth)',
-                  type: 'official',
-                  claudeOAuthCredentials: {
-                    accessToken: oauth.accessToken,
-                    refreshToken: oauth.refreshToken,
-                    expiresAt: oauth.expiresAt
-                      ? new Date(oauth.expiresAt as string).getTime()
-                      : Date.now() + 8 * 60 * 60 * 1000,
-                    scopes: Array.isArray(oauth.scopes) ? oauth.scopes : [],
-                  },
-                  enabled: true,
-                });
-              }
-            } catch {
-              // Not valid JSON, treat as setup-token
-            }
-          }
-
-          if (!created) {
+      if (runtimeSelection === 'claude_sdk') {
+        if (providerMode === 'official') {
+          if (oauthDone) {
+            // OAuth already created the provider via callback — nothing to do
+          } else if (apiKey.trim()) {
             await api.post('/api/config/claude/providers', {
-              name: '官方 Claude (Setup Token)',
+              name: '官方 Claude (API Key)',
               type: 'official',
-              claudeCodeOauthToken: trimmed,
+              anthropicApiKey: apiKey.trim(),
               enabled: true,
             });
+          } else {
+            const trimmed = officialToken.trim();
+            let created = false;
+            if (trimmed.startsWith('{')) {
+              try {
+                const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+                const oauth = parsed.claudeAiOauth as Record<string, unknown> | undefined;
+                if (oauth?.accessToken && oauth?.refreshToken) {
+                  created = true;
+                  await api.post('/api/config/claude/providers', {
+                    name: '官方 Claude (OAuth)',
+                    type: 'official',
+                    claudeOAuthCredentials: {
+                      accessToken: oauth.accessToken,
+                      refreshToken: oauth.refreshToken,
+                      expiresAt: oauth.expiresAt
+                        ? new Date(oauth.expiresAt as string).getTime()
+                        : Date.now() + 8 * 60 * 60 * 1000,
+                      scopes: Array.isArray(oauth.scopes) ? oauth.scopes : [],
+                    },
+                    enabled: true,
+                  });
+                }
+              } catch {
+                // Not valid JSON, treat as setup-token
+              }
+            }
+
+            if (!created) {
+              await api.post('/api/config/claude/providers', {
+                name: '官方 Claude (Setup Token)',
+                type: 'official',
+                claudeCodeOauthToken: trimmed,
+                enabled: true,
+              });
+            }
           }
+        } else {
+          await api.post<UnifiedProviderPublic>(
+            '/api/config/claude/providers',
+            {
+              name: '默认第三方',
+              type: 'third_party',
+              anthropicBaseUrl: baseUrl.trim(),
+              anthropicAuthToken: authToken.trim(),
+              anthropicModel: model.trim(),
+              customEnv,
+              enabled: true,
+            },
+          );
         }
       } else {
-        await api.post<UnifiedProviderPublic>(
-          '/api/config/claude/providers',
-          {
-            name: '默认第三方',
-            type: 'third_party',
-            anthropicBaseUrl: baseUrl.trim(),
-            anthropicAuthToken: authToken.trim(),
-            anthropicModel: model.trim(),
-            customEnv,
-            enabled: true,
-          },
-        );
+        const codexPayload: Record<string, string> = {
+          openaiModel: codexModel.trim(),
+        };
+        if (codexBaseUrl.trim()) {
+          codexPayload.openaiBaseUrl = codexBaseUrl.trim();
+        }
+        await api.put('/api/config/codex', codexPayload);
+        if (codexApiKey.trim()) {
+          await api.put('/api/config/codex/secrets', {
+            openaiApiKey: codexApiKey.trim(),
+          });
+        }
+        await api.put('/api/config/system', {
+          defaultRuntime: 'codex_app_server',
+        });
       }
 
       await checkAuth();
@@ -248,7 +297,7 @@ export function SetupProvidersPage() {
         setError('配置已保存但验证未通过，请检查填写的配置是否正确');
         return;
       }
-      navigate('/settings?tab=claude', { replace: true });
+      navigate('/settings?tab=system', { replace: true });
     } catch (err) {
       setError(getErrorMessage(err, '保存初始化配置失败'));
     } finally {
@@ -303,32 +352,54 @@ export function SetupProvidersPage() {
         <section className="bg-card rounded-xl border border-border shadow-sm p-5">
           <div className="flex items-center gap-2 mb-3">
             <KeyRound className="w-4 h-4 text-primary" />
-            <h2 className="text-base font-semibold text-foreground">Claude Code 配置（二选一）</h2>
+            <h2 className="text-base font-semibold text-foreground">AI 运行时配置</h2>
           </div>
 
-          <div className="inline-flex rounded-lg border border-border p-1 bg-muted mb-4">
-            <button
-              type="button"
-              onClick={() => setProviderMode('official')}
-              className={`px-3 py-1.5 text-sm rounded-md transition-colors cursor-pointer ${
-                providerMode === 'official' ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground'
-              }`}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-foreground mb-1">默认运行时</label>
+            <Select
+              value={runtimeSelection}
+              onValueChange={(value: RuntimeSelection) => setRuntimeSelection(value)}
             >
-              官方渠道
-            </button>
-            <button
-              type="button"
-              onClick={() => setProviderMode('third_party')}
-              className={`px-3 py-1.5 text-sm rounded-md transition-colors cursor-pointer ${
-                providerMode === 'third_party' ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground'
-              }`}
-            >
-              第三方渠道
-            </button>
+              <SelectTrigger className="w-full h-10">
+                <SelectValue placeholder="选择默认运行时" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="claude_sdk">Claude</SelectItem>
+                <SelectItem value="codex_app_server">Codex</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">
+              运行时选择与执行模式独立保存，后续每个工作区都可以覆盖。
+            </p>
           </div>
 
-          {providerMode === 'official' ? (
-            <div className="space-y-4">
+          {runtimeSelection === 'claude_sdk' && (
+            <div className="inline-flex rounded-lg border border-border p-1 bg-muted mb-4">
+              <button
+                type="button"
+                onClick={() => setProviderMode('official')}
+                className={`px-3 py-1.5 text-sm rounded-md transition-colors cursor-pointer ${
+                  providerMode === 'official' ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground'
+                }`}
+              >
+                官方渠道
+              </button>
+              <button
+                type="button"
+                onClick={() => setProviderMode('third_party')}
+                className={`px-3 py-1.5 text-sm rounded-md transition-colors cursor-pointer ${
+                  providerMode === 'third_party' ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground'
+                }`}
+              >
+                第三方渠道
+              </button>
+            </div>
+          )}
+
+          {runtimeSelection === 'claude_sdk' ? (
+            providerMode === 'official' ? (
+              <div className="space-y-4">
               {/* Official auth tabs */}
               <div className="inline-flex rounded-lg border border-border p-1 bg-muted">
                 <button
@@ -477,9 +548,9 @@ export function SetupProvidersPage() {
                   </div>
                 </>
               )}
-            </div>
-          ) : (
-            <div className="space-y-4">
+              </div>
+            ) : (
+              <div className="space-y-4">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Server className="w-4 h-4 text-primary" />
                 第三方渠道会写入系统全局默认环境变量。必填项为 ANTHROPIC_BASE_URL 和 ANTHROPIC_AUTH_TOKEN。
@@ -567,6 +638,61 @@ export function SetupProvidersPage() {
                   </div>
                 )}
               </div>
+              </div>
+            )
+          ) : (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-border bg-muted p-3 text-sm text-foreground">
+                <div className="font-medium mb-2">Codex app-server</div>
+                <ol className="list-decimal ml-5 space-y-1 text-xs text-muted-foreground">
+                  <li>可仅配置 Codex 而不填写任何 Claude 凭据。</li>
+                  <li>API Key 会通过单独密钥接口保存，并在页面中始终脱敏显示。</li>
+                  <li>如果需要自定义网关，请填写 Base URL；留空则使用默认环境路径。</li>
+                </ol>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">OpenAI Base URL（可选）</label>
+                  <Input
+                    type="text"
+                    value={codexBaseUrl}
+                    onChange={(e) => setCodexBaseUrl(e.target.value)}
+                    placeholder="https://api.openai.com/v1"
+                  />
+                  {existingCodexConfig?.hasOpenaiBaseUrl && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      当前已配置：{existingCodexConfig.openaiBaseUrlMasked}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">OpenAI Model（可选）</label>
+                  <Input
+                    type="text"
+                    value={codexModel}
+                    onChange={(e) => setCodexModel(e.target.value)}
+                    placeholder="例如 gpt-4.1 / codex-mini-latest"
+                    className="font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">OpenAI API Key（{existingCodexConfig?.hasOpenaiApiKey ? '可留空保持现状' : '必填'}）</label>
+                  <Input
+                    type="password"
+                    value={codexApiKey}
+                    onChange={(e) => setCodexApiKey(e.target.value)}
+                    placeholder="输入 Codex / OpenAI 兼容 API Key"
+                  />
+                  {existingCodexConfig?.hasOpenaiApiKey && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      当前已配置：{existingCodexConfig.openaiApiKeyMasked}
+                    </p>
+                  )}
+                </div>
+              </div>
             </div>
           )}
         </section>
@@ -574,7 +700,7 @@ export function SetupProvidersPage() {
         <div className="bg-card rounded-xl border border-border shadow-sm p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div className="text-sm text-muted-foreground flex items-start gap-2">
             <ShieldCheck className="w-4 h-4 text-primary mt-0.5 shrink-0" />
-            当前页保存的数据会作为系统全局默认配置，后续可在后台设置页继续修改。
+            当前页保存的数据会作为系统全局默认配置，后续可在后台“AI 提供商 / 系统参数”继续修改。
           </div>
           <Button onClick={handleFinish} disabled={saving} className="min-w-64">
             {saving && <Loader2 className="size-4 animate-spin" />}

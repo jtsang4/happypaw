@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { api, apiFetch } from '../api/client';
+import type { SetupStatus } from '../components/settings/types';
 
 export type Permission =
   | 'manage_system_config'
@@ -37,12 +38,6 @@ export interface AppearanceConfig {
   aiName: string;
   aiAvatarEmoji: string;
   aiAvatarColor: string;
-}
-
-export interface SetupStatus {
-  needsSetup: boolean;
-  claudeConfigured: boolean;
-  feishuConfigured: boolean;
 }
 
 interface AuthState {
