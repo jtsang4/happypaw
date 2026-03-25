@@ -11,6 +11,7 @@ const result = spawnSync(
   'rg',
   [
     '-n',
+    '--hidden',
     pattern,
     '.',
     '--glob',
