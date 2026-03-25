@@ -1,0 +1,28 @@
+#!/bin/bash
+# Build the HappyPaw agent container image
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+IMAGE_NAME="happypaw-agent"
+TAG="${1:-latest}"
+
+echo "Building HappyPaw agent container image..."
+echo "Image: ${IMAGE_NAME}:${TAG}"
+
+# Build with Docker (CACHEBUST ensures claude-code is always latest)
+# --progress=plain ensures clean line-based output for piped log capture (WebSocket streaming)
+docker build --progress=plain --build-arg CACHEBUST="$(date +%s)" -t "${IMAGE_NAME}:${TAG}" .
+
+echo ""
+echo "Build complete!"
+echo "Image: ${IMAGE_NAME}:${TAG}"
+
+# Touch sentinel so Makefile can detect stale image
+touch "$SCRIPT_DIR/../.docker-build-sentinel"
+
+echo ""
+echo "Test with:"
+echo "  echo '{\"prompt\":\"What is 2+2?\",\"groupFolder\":\"test\",\"chatJid\":\"test@g.us\",\"isMain\":false}' | docker run -i ${IMAGE_NAME}:${TAG}"

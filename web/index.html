@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" sizes="192x192" href="%BASE_URL%icons/icon-192.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#0d9488" />
+
+    <!-- PWA iOS Support -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="HappyPaw" />
+    <link rel="apple-touch-icon" href="%BASE_URL%icons/apple-touch-icon-180.png" />
+
+    <!-- iOS PWA 优化：保留自动识别控制（页面缩放已允许） -->
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="format-detection" content="email=no" />
+
+    <!-- Inter Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+    <title>HappyPaw</title>
+  </head>
+  <body>
+    <script>(function(){var d=document.documentElement,s=localStorage.getItem('happypaw-theme');if(s===null)s=localStorage.getItem('happyclaw-theme');if(s==='dark'||(s!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches))d.classList.add('dark');var c=localStorage.getItem('happypaw-color-scheme');if(c===null)c=localStorage.getItem('happyclaw-color-scheme');if(c==='orange')d.classList.add('theme-orange');if(c==='neutral')d.classList.add('theme-neutral');var f=localStorage.getItem('happypaw-font-style');if(f===null)f=localStorage.getItem('happyclaw-font-style');if(f==='anthropic')d.classList.add('font-anthropic');})();</script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
