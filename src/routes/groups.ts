@@ -7,7 +7,12 @@ import {
   GroupMemberAddSchema,
   ContainerEnvSchema,
 } from '../schemas.js';
-import type { AuthUser, RegisteredGroup, ExecutionMode } from '../types.js';
+import type {
+  AuthUser,
+  RegisteredGroup,
+  ExecutionMode,
+  RuntimeType,
+} from '../types.js';
 import { checkGroupLimit } from '../billing.js';
 import { DATA_DIR, GROUPS_DIR, isDockerAvailable } from '../config.js';
 import {
@@ -155,6 +160,7 @@ interface GroupPayloadItem {
   member_count?: number;
   pinned_at?: string;
   activation_mode?: 'auto' | 'always' | 'when_mentioned' | 'disabled';
+  runtime?: RuntimeType;
 }
 
 function buildGroupsPayload(user: AuthUser): Record<string, GroupPayloadItem> {
@@ -255,6 +261,7 @@ function buildGroupsPayload(user: AuthUser): Record<string, GroupPayloadItem> {
         chats.get(jid)?.last_message_time ||
         group.added_at,
       execution_mode: group.executionMode || 'container',
+      runtime: group.runtime,
       custom_cwd: isAdmin ? group.customCwd : undefined,
       is_home: isHome || undefined,
       is_my_home: (isHome && group.created_by === user.id) || undefined,
@@ -379,6 +386,7 @@ groupRoutes.post('/', authMiddleware, async (c) => {
   const executionMode =
     validation.data.execution_mode ||
     ((await isDockerAvailable()) ? 'container' : 'host');
+  const runtime = validation.data.runtime;
   const customCwd = validation.data.custom_cwd; // Schema already trims and converts empty to undefined
   const initSourcePath = validation.data.init_source_path;
   const initGitUrl = validation.data.init_git_url;
@@ -596,6 +604,7 @@ groupRoutes.post('/', authMiddleware, async (c) => {
     folder,
     added_at: now,
     executionMode: executionMode as ExecutionMode,
+    runtime,
     customCwd: executionMode === 'host' ? customCwd : undefined,
     initSourcePath: executionMode !== 'host' ? initSourcePath : undefined,
     initGitUrl: executionMode !== 'host' ? initGitUrl : undefined,
@@ -663,6 +672,7 @@ groupRoutes.post('/', authMiddleware, async (c) => {
       folder: group.folder,
       added_at: group.added_at,
       execution_mode: group.executionMode || 'container',
+      runtime: group.runtime,
       custom_cwd: hasHostExecutionPermission(authUser)
         ? group.customCwd
         : undefined,
@@ -699,6 +709,7 @@ groupRoutes.patch('/:jid', authMiddleware, async (c) => {
     name: rawName,
     is_pinned,
     activation_mode,
+    runtime,
     execution_mode,
   } = validation.data;
   const name = rawName ? normalizeGroupName(rawName) : undefined;
@@ -708,6 +719,7 @@ groupRoutes.patch('/:jid', authMiddleware, async (c) => {
     !name &&
     is_pinned === undefined &&
     activation_mode === undefined &&
+    runtime === undefined &&
     execution_mode === undefined
   ) {
     return c.json({ error: 'No fields to update' }, 400);
@@ -734,6 +746,7 @@ groupRoutes.patch('/:jid', authMiddleware, async (c) => {
     is_pinned !== undefined &&
     !name &&
     activation_mode === undefined &&
+    runtime === undefined &&
     execution_mode === undefined;
   if (isPinOnly) {
     if (
@@ -777,7 +790,12 @@ groupRoutes.patch('/:jid', authMiddleware, async (c) => {
   }
 
   // Update registered group if name, activation_mode, or execution_mode changed
-  if (name || activation_mode !== undefined || execution_mode !== undefined) {
+  if (
+    name ||
+    activation_mode !== undefined ||
+    runtime !== undefined ||
+    execution_mode !== undefined
+  ) {
     const updated: RegisteredGroup = {
       name: name || existing.name,
       folder: existing.folder,
@@ -787,6 +805,7 @@ groupRoutes.patch('/:jid', authMiddleware, async (c) => {
         execution_mode !== undefined
           ? (execution_mode as ExecutionMode)
           : existing.executionMode,
+      runtime: runtime !== undefined ? runtime : existing.runtime,
       customCwd: existing.customCwd,
       initSourcePath: existing.initSourcePath,
       initGitUrl: existing.initGitUrl,

@@ -4,6 +4,7 @@ import path from 'path';
 
 import { ASSISTANT_NAME, DATA_DIR } from './config.js';
 import { logger } from './logger.js';
+import type { RuntimeType } from './types.js';
 
 const MAX_FIELD_LENGTH = 2000;
 const CURRENT_CONFIG_VERSION = 3;
@@ -30,6 +31,7 @@ const TELEGRAM_CONFIG_FILE = path.join(
   CLAUDE_CONFIG_DIR,
   'telegram-provider.json',
 );
+const CODEX_CONFIG_FILE = path.join(CLAUDE_CONFIG_DIR, 'codex-provider.json');
 const ENV_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const RESERVED_CLAUDE_ENV_KEYS = new Set([
   'CLAUDE_CODE_OAUTH_TOKEN',
@@ -179,6 +181,24 @@ export interface TelegramProviderPublicConfig {
   source: TelegramConfigSource;
 }
 
+export type CodexConfigSource = 'runtime' | 'env' | 'none';
+
+export interface CodexProviderConfig {
+  openaiBaseUrl: string;
+  openaiApiKey: string;
+  openaiModel: string;
+  updatedAt: string | null;
+}
+
+export interface CodexProviderPublicConfig {
+  openaiBaseUrl: string;
+  openaiModel: string;
+  updatedAt: string | null;
+  hasOpenaiApiKey: boolean;
+  openaiApiKeyMasked: string | null;
+  source: CodexConfigSource;
+}
+
 interface SecretPayload {
   anthropicAuthToken: string;
   anthropicApiKey: string;
@@ -200,6 +220,10 @@ interface TelegramSecretPayload {
   botToken: string;
 }
 
+interface CodexSecretPayload {
+  openaiApiKey: string;
+}
+
 interface StoredFeishuProviderConfigV1 {
   version: 1;
   appId: string;
@@ -212,6 +236,14 @@ interface StoredTelegramProviderConfigV1 {
   version: 1;
   proxyUrl?: string;
   enabled?: boolean;
+  updatedAt: string;
+  secret: EncryptedSecrets;
+}
+
+interface StoredCodexProviderConfigV1 {
+  version: 1;
+  openaiBaseUrl: string;
+  openaiModel: string;
   updatedAt: string;
   secret: EncryptedSecrets;
 }
@@ -398,6 +430,45 @@ function normalizeModel(input: unknown): string {
     throw new Error('Field too long: anthropicModel');
   }
   return value;
+}
+
+function normalizeOpenAIBaseUrl(input: unknown): string {
+  if (typeof input !== 'string') {
+    throw new Error('Invalid field: openaiBaseUrl');
+  }
+  const value = input.trim();
+  if (!value) return '';
+  if (value.length > MAX_FIELD_LENGTH) {
+    throw new Error('Field too long: openaiBaseUrl');
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error('Invalid field: openaiBaseUrl');
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error('Invalid field: openaiBaseUrl');
+  }
+  return value;
+}
+
+function normalizeOpenAIModel(input: unknown): string {
+  if (typeof input !== 'string') {
+    throw new Error('Invalid field: openaiModel');
+  }
+  const value = input.trim();
+  if (!value) return '';
+  if (value.length > 128) {
+    throw new Error('Field too long: openaiModel');
+  }
+  return value;
+}
+
+function normalizeRuntimeType(input: unknown): RuntimeType {
+  if (input === 'claude_sdk' || input === 'codex_app_server') return input;
+  throw new Error('Invalid runtime type');
 }
 
 function normalizeFeishuAppId(input: unknown): string {
@@ -1714,6 +1785,41 @@ function decryptTelegramSecret(
   };
 }
 
+function encryptCodexSecret(payload: CodexSecretPayload): EncryptedSecrets {
+  const key = getOrCreateEncryptionKey();
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+
+  const plaintext = Buffer.from(JSON.stringify(payload), 'utf-8');
+  const encrypted = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+  const tag = cipher.getAuthTag();
+
+  return {
+    iv: iv.toString('base64'),
+    tag: tag.toString('base64'),
+    data: encrypted.toString('base64'),
+  };
+}
+
+function decryptCodexSecret(secrets: EncryptedSecrets): CodexSecretPayload {
+  const key = getOrCreateEncryptionKey();
+  const iv = Buffer.from(secrets.iv, 'base64');
+  const tag = Buffer.from(secrets.tag, 'base64');
+  const encrypted = Buffer.from(secrets.data, 'base64');
+
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+  decipher.setAuthTag(tag);
+
+  const decrypted = Buffer.concat([
+    decipher.update(encrypted),
+    decipher.final(),
+  ]).toString('utf-8');
+  const parsed = JSON.parse(decrypted) as Record<string, unknown>;
+  return {
+    openaiApiKey: normalizeSecret(parsed.openaiApiKey ?? '', 'openaiApiKey'),
+  };
+}
+
 function readStoredTelegramConfig(): TelegramProviderConfig | null {
   if (!fs.existsSync(TELEGRAM_CONFIG_FILE)) return null;
   const content = fs.readFileSync(TELEGRAM_CONFIG_FILE, 'utf-8');
@@ -1812,6 +1918,157 @@ function maskSecret(value: string): string | null {
   if (value.length <= 8)
     return `${'*'.repeat(Math.max(value.length - 2, 1))}${value.slice(-2)}`;
   return `${value.slice(0, 3)}${'*'.repeat(Math.max(value.length - 7, 4))}${value.slice(-4)}`;
+}
+
+function buildCodexConfig(
+  input: Omit<CodexProviderConfig, 'updatedAt'>,
+  updatedAt: string | null,
+): CodexProviderConfig {
+  return {
+    openaiBaseUrl: normalizeOpenAIBaseUrl(input.openaiBaseUrl),
+    openaiApiKey: normalizeSecret(input.openaiApiKey, 'openaiApiKey'),
+    openaiModel: normalizeOpenAIModel(input.openaiModel),
+    updatedAt,
+  };
+}
+
+function readStoredCodexConfig(): CodexProviderConfig | null {
+  if (!fs.existsSync(CODEX_CONFIG_FILE)) return null;
+  const content = fs.readFileSync(CODEX_CONFIG_FILE, 'utf-8');
+  const parsed = JSON.parse(content) as Record<string, unknown>;
+  if (parsed.version !== 1) return null;
+
+  const stored = parsed as unknown as StoredCodexProviderConfigV1;
+  const secret = decryptCodexSecret(stored.secret);
+  return buildCodexConfig(
+    {
+      openaiBaseUrl: stored.openaiBaseUrl ?? '',
+      openaiApiKey: secret.openaiApiKey,
+      openaiModel: stored.openaiModel ?? '',
+    },
+    stored.updatedAt || null,
+  );
+}
+
+function defaultsCodexFromEnv(): CodexProviderConfig {
+  const raw = {
+    openaiBaseUrl: process.env.OPENAI_BASE_URL || '',
+    openaiApiKey: process.env.OPENAI_API_KEY || '',
+    openaiModel: process.env.OPENAI_MODEL || '',
+  };
+
+  try {
+    return buildCodexConfig(raw, null);
+  } catch {
+    return {
+      openaiBaseUrl: raw.openaiBaseUrl.trim(),
+      openaiApiKey: raw.openaiApiKey.replace(/\s+/g, '').trim(),
+      openaiModel: raw.openaiModel.trim(),
+      updatedAt: null,
+    };
+  }
+}
+
+export function getCodexProviderConfigWithSource(): {
+  config: CodexProviderConfig;
+  source: CodexConfigSource;
+} {
+  try {
+    const stored = readStoredCodexConfig();
+    if (stored) return { config: stored, source: 'runtime' };
+  } catch (err) {
+    logger.warn(
+      { err },
+      'Failed to read runtime Codex config, falling back to env',
+    );
+  }
+
+  const fromEnv = defaultsCodexFromEnv();
+  if (fromEnv.openaiBaseUrl || fromEnv.openaiApiKey || fromEnv.openaiModel) {
+    return { config: fromEnv, source: 'env' };
+  }
+
+  return { config: fromEnv, source: 'none' };
+}
+
+export function getCodexProviderConfig(): CodexProviderConfig {
+  return getCodexProviderConfigWithSource().config;
+}
+
+export function saveCodexProviderConfig(
+  next: Pick<CodexProviderConfig, 'openaiBaseUrl' | 'openaiModel'>,
+): CodexProviderConfig {
+  const existing = readStoredCodexConfig();
+  const normalized = buildCodexConfig(
+    {
+      openaiBaseUrl: next.openaiBaseUrl,
+      openaiApiKey: existing?.openaiApiKey ?? '',
+      openaiModel: next.openaiModel,
+    },
+    new Date().toISOString(),
+  );
+
+  const payload: StoredCodexProviderConfigV1 = {
+    version: 1,
+    openaiBaseUrl: normalized.openaiBaseUrl,
+    openaiModel: normalized.openaiModel,
+    updatedAt: normalized.updatedAt || new Date().toISOString(),
+    secret: encryptCodexSecret({ openaiApiKey: normalized.openaiApiKey }),
+  };
+
+  fs.mkdirSync(CLAUDE_CONFIG_DIR, { recursive: true });
+  const tmp = `${CODEX_CONFIG_FILE}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(payload, null, 2) + '\n', 'utf-8');
+  fs.renameSync(tmp, CODEX_CONFIG_FILE);
+  return normalized;
+}
+
+export function saveCodexProviderSecrets(patch: {
+  openaiApiKey?: string;
+  clearOpenaiApiKey?: boolean;
+}): CodexProviderConfig {
+  const existing = readStoredCodexConfig() ?? defaultsCodexFromEnv();
+  const normalized = buildCodexConfig(
+    {
+      openaiBaseUrl: existing.openaiBaseUrl,
+      openaiApiKey:
+        typeof patch.openaiApiKey === 'string'
+          ? patch.openaiApiKey
+          : patch.clearOpenaiApiKey
+            ? ''
+            : existing.openaiApiKey,
+      openaiModel: existing.openaiModel,
+    },
+    new Date().toISOString(),
+  );
+
+  const payload: StoredCodexProviderConfigV1 = {
+    version: 1,
+    openaiBaseUrl: normalized.openaiBaseUrl,
+    openaiModel: normalized.openaiModel,
+    updatedAt: normalized.updatedAt || new Date().toISOString(),
+    secret: encryptCodexSecret({ openaiApiKey: normalized.openaiApiKey }),
+  };
+
+  fs.mkdirSync(CLAUDE_CONFIG_DIR, { recursive: true });
+  const tmp = `${CODEX_CONFIG_FILE}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(payload, null, 2) + '\n', 'utf-8');
+  fs.renameSync(tmp, CODEX_CONFIG_FILE);
+  return normalized;
+}
+
+export function toPublicCodexProviderConfig(
+  config: CodexProviderConfig,
+  source: CodexConfigSource,
+): CodexProviderPublicConfig {
+  return {
+    openaiBaseUrl: config.openaiBaseUrl,
+    openaiModel: config.openaiModel,
+    updatedAt: config.updatedAt,
+    hasOpenaiApiKey: !!config.openaiApiKey,
+    openaiApiKeyMasked: maskSecret(config.openaiApiKey),
+    source,
+  };
 }
 
 export function toPublicClaudeProviderConfig(
@@ -3360,6 +3617,7 @@ const SYSTEM_SETTINGS_FILE = path.join(
 );
 
 export interface SystemSettings {
+  defaultRuntime: RuntimeType;
   containerTimeout: number;
   idleTimeout: number;
   containerMaxOutputSize: number;
@@ -3381,6 +3639,7 @@ export interface SystemSettings {
 }
 
 const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
+  defaultRuntime: 'claude_sdk',
   containerTimeout: 1800000,
   idleTimeout: 1800000,
   containerMaxOutputSize: 10485760,
@@ -3421,6 +3680,10 @@ function readSystemSettingsFromFile(): SystemSettings | null {
     fs.readFileSync(SYSTEM_SETTINGS_FILE, 'utf-8'),
   ) as Record<string, unknown>;
   return {
+    defaultRuntime:
+      raw.defaultRuntime === 'codex_app_server'
+        ? 'codex_app_server'
+        : DEFAULT_SYSTEM_SETTINGS.defaultRuntime,
     containerTimeout:
       typeof raw.containerTimeout === 'number' && raw.containerTimeout > 0
         ? raw.containerTimeout
@@ -3493,6 +3756,11 @@ function readSystemSettingsFromFile(): SystemSettings | null {
 
 function buildEnvFallbackSettings(): SystemSettings {
   return {
+    defaultRuntime:
+      process.env.DEFAULT_RUNTIME &&
+      ['claude_sdk', 'codex_app_server'].includes(process.env.DEFAULT_RUNTIME)
+        ? normalizeRuntimeType(process.env.DEFAULT_RUNTIME)
+        : DEFAULT_SYSTEM_SETTINGS.defaultRuntime,
     containerTimeout: parseIntEnv(
       process.env.CONTAINER_TIMEOUT,
       DEFAULT_SYSTEM_SETTINGS.containerTimeout,
@@ -3597,6 +3865,8 @@ export function saveSystemSettings(
 ): SystemSettings {
   const existing = getSystemSettings();
   const merged: SystemSettings = { ...existing, ...partial };
+
+  merged.defaultRuntime = normalizeRuntimeType(merged.defaultRuntime);
 
   // Range validation
   if (merged.containerTimeout < 60000) merged.containerTimeout = 60000; // min 1 min

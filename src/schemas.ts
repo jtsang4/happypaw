@@ -115,6 +115,7 @@ export const MessageCreateSchema = z
 
 export const GroupCreateSchema = z.object({
   name: z.string().min(1).max(MAX_GROUP_NAME_LEN),
+  runtime: z.enum(['claude_sdk', 'codex_app_server']).optional(),
   execution_mode: z.enum(['container', 'host']).optional(),
   custom_cwd: z
     .string()
@@ -190,6 +191,7 @@ export const GroupPatchSchema = z.object({
   activation_mode: z
     .enum(['auto', 'always', 'when_mentioned', 'disabled'])
     .optional(),
+  runtime: z.enum(['claude_sdk', 'codex_app_server']).optional(),
   execution_mode: z.enum(['container', 'host']).optional(),
 });
 
@@ -211,6 +213,7 @@ export const RegistrationConfigSchema = z.object({
 });
 
 export const SystemSettingsSchema = z.object({
+  defaultRuntime: z.enum(['claude_sdk', 'codex_app_server']).optional(),
   containerTimeout: z.number().int().min(60000).max(86400000).optional(),
   idleTimeout: z.number().int().min(60000).max(86400000).optional(),
   containerMaxOutputSize: z
@@ -233,6 +236,22 @@ export const SystemSettingsSchema = z.object({
   billingCurrency: z.string().min(1).max(10).optional(),
   billingCurrencyRate: z.number().min(0.0001).max(1000000).optional(),
 });
+
+export const CodexConfigSchema = z.object({
+  openaiBaseUrl: z.string().max(2000).optional(),
+  openaiModel: z.string().max(128).optional(),
+});
+
+export const CodexSecretsSchema = z
+  .object({
+    openaiApiKey: z.string().max(2000).optional(),
+    clearOpenaiApiKey: z.boolean().optional(),
+  })
+  .refine(
+    (data) =>
+      typeof data.openaiApiKey === 'string' || data.clearOpenaiApiKey === true,
+    { message: 'At least one secret field must be provided' },
+  );
 
 export const AppearanceConfigSchema = z.object({
   appName: z.string().max(32).optional(),

@@ -26,6 +26,8 @@ import {
   RegistrationConfigSchema,
   AppearanceConfigSchema,
   SystemSettingsSchema,
+  CodexConfigSchema,
+  CodexSecretsSchema,
   UnifiedProviderCreateSchema,
   UnifiedProviderPatchSchema,
   UnifiedProviderSecretsSchema,
@@ -54,6 +56,10 @@ import {
   getTelegramProviderConfigWithSource,
   toPublicTelegramProviderConfig,
   saveTelegramProviderConfig,
+  getCodexProviderConfigWithSource,
+  toPublicCodexProviderConfig,
+  saveCodexProviderConfig,
+  saveCodexProviderSecrets,
   getRegistrationConfig,
   saveRegistrationConfig,
   getAppearanceConfig,
@@ -201,6 +207,71 @@ configRoutes.get('/claude', authMiddleware, systemConfigMiddleware, (c) => {
     return c.json({ error: 'Failed to load Claude config' }, 500);
   }
 });
+
+configRoutes.get('/codex', authMiddleware, systemConfigMiddleware, (c) => {
+  try {
+    const { config, source } = getCodexProviderConfigWithSource();
+    return c.json(toPublicCodexProviderConfig(config, source));
+  } catch (err) {
+    logger.error({ err }, 'Failed to load Codex config');
+    return c.json({ error: 'Failed to load Codex config' }, 500);
+  }
+});
+
+configRoutes.put(
+  '/codex',
+  authMiddleware,
+  systemConfigMiddleware,
+  async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const validation = CodexConfigSchema.safeParse(body);
+    if (!validation.success) {
+      return c.json(
+        { error: 'Invalid request body', details: validation.error.format() },
+        400,
+      );
+    }
+
+    try {
+      const saved = saveCodexProviderConfig({
+        openaiBaseUrl: validation.data.openaiBaseUrl ?? '',
+        openaiModel: validation.data.openaiModel ?? '',
+      });
+      return c.json(toPublicCodexProviderConfig(saved, 'runtime'));
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Failed to save Codex config';
+      logger.warn({ err }, 'Failed to save Codex config');
+      return c.json({ error: message }, 400);
+    }
+  },
+);
+
+configRoutes.put(
+  '/codex/secrets',
+  authMiddleware,
+  systemConfigMiddleware,
+  async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const validation = CodexSecretsSchema.safeParse(body);
+    if (!validation.success) {
+      return c.json(
+        { error: 'Invalid request body', details: validation.error.format() },
+        400,
+      );
+    }
+
+    try {
+      const saved = saveCodexProviderSecrets(validation.data);
+      return c.json(toPublicCodexProviderConfig(saved, 'runtime'));
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Failed to save Codex secrets';
+      logger.warn({ err }, 'Failed to save Codex secrets');
+      return c.json({ error: message }, 400);
+    }
+  },
+);
 
 // ─── GET /claude/providers — 列出所有供应商 + 健康 + 负载均衡配置 ─────
 configRoutes.get(

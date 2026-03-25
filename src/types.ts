@@ -34,6 +34,7 @@ export interface ContainerConfig {
 }
 
 export type ExecutionMode = 'container' | 'host';
+export type RuntimeType = 'claude_sdk' | 'codex_app_server';
 
 export interface RegisteredGroup {
   name: string;
@@ -41,6 +42,7 @@ export interface RegisteredGroup {
   added_at: string;
   containerConfig?: ContainerConfig;
   executionMode?: ExecutionMode; // 默认 'container'
+  runtime?: RuntimeType; // 可选群组级运行时覆盖，未设置时使用系统默认值
   customCwd?: string; // 宿主机模式的自定义工作目录（绝对路径）
   initSourcePath?: string; // 容器模式下复制来源的宿主机绝对路径
   initGitUrl?: string; // 容器模式下 clone 来源的 Git URL

@@ -88,6 +88,7 @@ export interface SessionInfo {
 }
 
 export interface SystemSettings {
+  defaultRuntime: 'claude_sdk' | 'codex_app_server';
   containerTimeout: number;
   idleTimeout: number;
   containerMaxOutputSize: number;
@@ -107,6 +108,15 @@ export interface SystemSettings {
 }
 
 export type SettingsTab = 'claude' | 'registration' | 'appearance' | 'system' | 'profile' | 'my-channels' | 'security' | 'groups' | 'memory' | 'skills' | 'mcp-servers' | 'agent-definitions' | 'users' | 'about' | 'bindings';
+
+export interface CodexConfigPublic {
+  openaiBaseUrl: string;
+  openaiModel: string;
+  updatedAt: string | null;
+  hasOpenaiApiKey: boolean;
+  openaiApiKeyMasked: string | null;
+  source: 'runtime' | 'env' | 'none';
+}
 
 export function getErrorMessage(err: unknown, fallback: string): string {
   if (typeof err === 'object' && err !== null && 'message' in err) {
