@@ -1,0 +1,18 @@
+{
+  "generator": "codex app-server",
+  "codexCliVersion": "codex-cli 0.116.0",
+  "commands": {
+    "generateTs": "codex app-server generate-ts --out <DIR>",
+    "generateJsonSchema": "codex app-server generate-json-schema --out <DIR>"
+  },
+  "artifacts": {
+    "tsDirectory": "generated/codex-app-server-protocol/ts",
+    "schemaDirectory": "generated/codex-app-server-protocol/schema",
+    "metadataFile": "generated/codex-app-server-protocol/metadata.json",
+    "manifestFile": "generated/codex-app-server-protocol/manifest.json",
+    "tsFileCount": 404,
+    "schemaFileCount": 185,
+    "tsSha256": "68f8840e80010fa1b44538dcdd080609b59f0665f4288789ae4ba6dbf4ff6db7",
+    "schemaSha256": "9b5a33ab8e257359e5f6b5b32294dbc78d5d242fe10eaf37ba65e75b701a68d6"
+  }
+}
