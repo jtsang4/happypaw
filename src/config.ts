@@ -9,7 +9,8 @@ import {
   toLegacyProductToken,
 } from './legacy-product.js';
 
-export const ASSISTANT_NAME = process.env.ASSISTANT_NAME || CURRENT_PRODUCT_NAME;
+export const ASSISTANT_NAME =
+  process.env.ASSISTANT_NAME || CURRENT_PRODUCT_NAME;
 export const POLL_INTERVAL = 2000;
 export const SCHEDULER_POLL_INTERVAL = 60000;
 

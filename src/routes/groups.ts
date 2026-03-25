@@ -810,7 +810,8 @@ groupRoutes.patch('/:jid', authMiddleware, async (c) => {
         execution_mode !== undefined
           ? (execution_mode as ExecutionMode)
           : existing.executionMode,
-      runtime: runtime !== undefined ? (runtime ?? undefined) : existing.runtime,
+      runtime:
+        runtime !== undefined ? (runtime ?? undefined) : existing.runtime,
       customCwd: existing.customCwd,
       initSourcePath: existing.initSourcePath,
       initGitUrl: existing.initGitUrl,

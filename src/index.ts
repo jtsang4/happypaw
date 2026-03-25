@@ -18,10 +18,7 @@ import {
   isDockerAvailable,
   updateWeChatNoProxy,
 } from './config.js';
-import {
-  LEGACY_AGENT_SENDER,
-  toLegacyProductToken,
-} from './legacy-product.js';
+import { LEGACY_AGENT_SENDER, toLegacyProductToken } from './legacy-product.js';
 import { interruptibleSleep } from './message-notifier.js';
 import {
   AvailableGroup,

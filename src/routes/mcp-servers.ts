@@ -136,8 +136,7 @@ mcpServersRoutes.post('/', authMiddleware, async (c) => {
   if (!validateServerId(id)) {
     return c.json(
       {
-        error:
-          `Invalid server ID: must match /^[\\w\\-]+$/ and cannot be "${CURRENT_PRODUCT_ID}" or "${LEGACY_PRODUCT_ID}"`,
+        error: `Invalid server ID: must match /^[\\w\\-]+$/ and cannot be "${CURRENT_PRODUCT_ID}" or "${LEGACY_PRODUCT_ID}"`,
       },
       400,
     );

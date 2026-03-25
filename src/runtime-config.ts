@@ -764,7 +764,9 @@ function fromStoredProfile(
     anthropicBaseUrl: normalizeBaseUrl(stored.anthropicBaseUrl),
     anthropicAuthToken: secrets.anthropicAuthToken,
     anthropicModel: normalizeModel(
-      stored.anthropicModel ?? (stored as any)[`${LEGACY_PRODUCT_NAME.toLowerCase()}Model`] ?? '',
+      stored.anthropicModel ??
+        (stored as any)[`${LEGACY_PRODUCT_NAME.toLowerCase()}Model`] ??
+        '',
     ),
     updatedAt: stored.updatedAt || null,
     customEnv: sanitizeCustomEnvMap(stored.customEnv || {}, {
@@ -2033,7 +2035,9 @@ export function saveCodexProviderConfig(
           : existing.openaiBaseUrl,
       openaiApiKey: existing.openaiApiKey,
       openaiModel:
-        next.openaiModel !== undefined ? next.openaiModel : existing.openaiModel,
+        next.openaiModel !== undefined
+          ? next.openaiModel
+          : existing.openaiModel,
     },
     new Date().toISOString(),
   );
@@ -2819,7 +2823,9 @@ export function getContainerEnvConfig(folder: string): ContainerEnvConfig {
     if (fs.existsSync(filePath)) {
       const stored = JSON.parse(
         fs.readFileSync(filePath, 'utf-8'),
-      ) as ContainerEnvConfig & { [legacyModelKey: string]: string | undefined };
+      ) as ContainerEnvConfig & {
+        [legacyModelKey: string]: string | undefined;
+      };
       const legacyModelKey = `${LEGACY_PRODUCT_NAME.toLowerCase()}Model`;
       // Backward compat: migrate old field name
       if (
