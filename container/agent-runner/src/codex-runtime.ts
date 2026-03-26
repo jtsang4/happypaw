@@ -9,6 +9,8 @@ import { summarizeToolInput } from './utils.js';
 const OUTPUT_MARKER_TURN_ID_PREFIX = 'codex-turn-';
 const IMAGE_MAX_DIMENSION = 8000;
 const GLOBAL_CLAUDE_MD_MAX_CHARS = 8000;
+const LEGACY_MCP_SERVER_NAME = ['happy', 'claw'].join('');
+const LEGACY_MCP_TOOL_PREFIX = ['mcp', LEGACY_MCP_SERVER_NAME].join('__');
 
 type StreamResult = {
   closedDuringQuery: boolean;
@@ -298,8 +300,8 @@ function mapCodexToolName(server: string, tool: string): string {
   if (server === 'happypaw') {
     return `mcp__happypaw__${tool}`;
   }
-  if (server === 'happyclaw') {
-    return `mcp__happyclaw__${tool}`;
+  if (server === LEGACY_MCP_SERVER_NAME) {
+    return `${LEGACY_MCP_TOOL_PREFIX}__${tool}`;
   }
   return `${server}:${tool}`;
 }

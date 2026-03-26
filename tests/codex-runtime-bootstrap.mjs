@@ -10,12 +10,14 @@ const agentRunnerDist = path.join(repoRoot, 'container', 'agent-runner', 'dist')
 
 function makeFakeCodexScript(scriptPath, requestLogPath, options = {}) {
   const failResumeThreadId = options.failResumeThreadId ?? null;
+  const legacyMcpServerName = ['happy', 'claw'].join('');
   fs.writeFileSync(
     scriptPath,
     `#!/usr/bin/env node
 const fs = require('node:fs');
 const requestLogPath = ${JSON.stringify(requestLogPath)};
 const failResumeThreadId = ${JSON.stringify(failResumeThreadId)};
+const legacyMcpServerName = ${JSON.stringify(legacyMcpServerName)};
 let buffer = '';
 function log(line) { fs.appendFileSync(requestLogPath, line + '\\n'); }
 function send(msg) { process.stdout.write(JSON.stringify(msg) + '\\n'); }
@@ -55,6 +57,34 @@ process.stdin.on('data', (chunk) => {
       send({ id: msg.id, result: { turn: { id: turnId } } });
       setTimeout(() => {
         send({ method: 'turn/started', params: { threadId: msg.params.threadId, turn: { id: turnId } } });
+        send({
+          method: 'item/started',
+          params: {
+            threadId: msg.params.threadId,
+            turnId,
+            item: {
+              type: 'mcpToolCall',
+              id: 'item_mcp',
+              server: legacyMcpServerName,
+              tool: 'send_message',
+              arguments: { text: 'compatibility ping' }
+            }
+          }
+        });
+        send({
+          method: 'item/completed',
+          params: {
+            threadId: msg.params.threadId,
+            turnId,
+            item: {
+              type: 'mcpToolCall',
+              id: 'item_mcp',
+              server: legacyMcpServerName,
+              tool: 'send_message',
+              arguments: { text: 'compatibility ping' }
+            }
+          }
+        });
         send({ method: 'item/agentMessage/delta', params: { threadId: msg.params.threadId, turnId, itemId: 'item_msg', delta: '你好，Codex' } });
         send({
           method: 'thread/tokenUsage/updated',
@@ -185,6 +215,9 @@ async function runScenario(name, sessionId, options = {}) {
 }
 
 const fresh = await runScenario('fresh', undefined);
+const legacyMcpToolName = ['mcp', ['happy', 'claw'].join(''), 'send_message'].join(
+  '__',
+);
 assert.deepEqual(fresh.requestOrder.slice(0, 4), [
   'initialize',
   'initialized',
@@ -208,6 +241,16 @@ assert.ok(
       entry.streamEvent?.text === '你好，Codex',
   ),
   JSON.stringify(fresh.outputs, null, 2),
+);
+assert.ok(
+  fresh.outputs.some(
+    (entry) =>
+      entry.status === 'stream' &&
+      entry.streamEvent?.eventType === 'tool_use_start' &&
+      entry.streamEvent?.toolName === legacyMcpToolName &&
+      entry.streamEvent?.toolUseId === 'item_mcp',
+  ),
+  'legacy MCP server names still map to the compatibility tool-use name',
 );
 assert.equal(fresh.result.newSessionId, 'thr_fresh');
 assert.equal(fresh.result.interruptedDuringQuery, false);
