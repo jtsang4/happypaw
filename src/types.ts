@@ -384,6 +384,7 @@ export type WsMessageOut =
           toolUseId: string;
           startTime: number;
           toolInputSummary?: string;
+          toolInput?: Record<string, unknown>;
           parentToolUseId?: string | null;
         }>;
         recentEvents: Array<{

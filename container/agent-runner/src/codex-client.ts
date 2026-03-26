@@ -11,6 +11,12 @@ export interface CodexJsonRpcNotification {
   params?: unknown;
 }
 
+export interface CodexJsonRpcRequest {
+  id: string | number;
+  method: string;
+  params?: unknown;
+}
+
 interface PendingRequest {
   method: string;
   reject: (error: Error) => void;
@@ -30,6 +36,10 @@ export class CodexAppServerClient {
 
   private onNotification: (notification: CodexJsonRpcNotification) => void;
 
+  private onRequest:
+    | ((request: CodexJsonRpcRequest) => Promise<unknown> | unknown)
+    | null;
+
   private readonly log: (message: string) => void;
 
   private nextId = 1;
@@ -42,9 +52,11 @@ export class CodexAppServerClient {
     env?: NodeJS.ProcessEnv;
     log: (message: string) => void;
     onNotification: (notification: CodexJsonRpcNotification) => void;
+    onRequest?: (request: CodexJsonRpcRequest) => Promise<unknown> | unknown;
   }) {
     this.log = options.log;
     this.onNotification = options.onNotification;
+    this.onRequest = options.onRequest ?? null;
     this.proc = spawn('codex', ['app-server'], {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: options.env,
@@ -96,6 +108,12 @@ export class CodexAppServerClient {
     handler: (notification: CodexJsonRpcNotification) => void,
   ): void {
     this.onNotification = handler;
+  }
+
+  setRequestHandler(
+    handler: (request: CodexJsonRpcRequest) => Promise<unknown> | unknown,
+  ): void {
+    this.onRequest = handler;
   }
 
   notify(method: string, params?: unknown): void {
@@ -163,6 +181,18 @@ export class CodexAppServerClient {
   }
 
   private handleMessage(message: Record<string, unknown>): void {
+    if (
+      typeof message.method === 'string' &&
+      (typeof message.id === 'number' || typeof message.id === 'string')
+    ) {
+      this.handleServerRequest({
+        id: message.id,
+        method: message.method,
+        params: message.params,
+      });
+      return;
+    }
+
     if (typeof message.id === 'number') {
       const pending = this.pending.get(message.id);
       if (!pending) return;
@@ -183,5 +213,36 @@ export class CodexAppServerClient {
         params: message.params,
       });
     }
+  }
+
+  private handleServerRequest(request: CodexJsonRpcRequest): void {
+    if (!this.onRequest) {
+      this.writeMessage({
+        id: request.id,
+        error: {
+          code: -32601,
+          message: `No handler registered for ${request.method}`,
+        },
+      });
+      return;
+    }
+
+    Promise.resolve(this.onRequest(request))
+      .then((result) => {
+        this.writeMessage({
+          id: request.id,
+          result: result ?? {},
+        });
+      })
+      .catch((error) => {
+        this.writeMessage({
+          id: request.id,
+          error: {
+            code: -32000,
+            message:
+              error instanceof Error ? error.message : String(error),
+          },
+        });
+      });
   }
 }

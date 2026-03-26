@@ -9,19 +9,31 @@ import { TodoProgressPanel } from './TodoProgressPanel';
 import { ToolActivityCard } from './ToolActivityCard';
 import { useDisplayMode } from '../../hooks/useDisplayMode';
 
-/** Render AskUserQuestion options as a visual card (read-only). */
+/** Render AskUserQuestion options as a visual card. */
 function AskUserQuestionCard({ toolInput }: { toolInput: Record<string, unknown> }) {
   // Support both "question" (string) and "questions" (array) formats
-  const questions: Array<{ question: string; options?: Array<{ value: string; label?: string }> }> = [];
+  const questions: Array<{
+    header?: string;
+    question: string;
+    isSecret?: boolean;
+    options?: Array<{ value?: string; label?: string; description?: string }>;
+  }> = [];
   if (Array.isArray(toolInput.questions)) {
     for (const q of toolInput.questions) {
       if (q && typeof q === 'object' && 'question' in q) {
-        questions.push(q as { question: string; options?: Array<{ value: string; label?: string }> });
+        questions.push(q as {
+          header?: string;
+          question: string;
+          isSecret?: boolean;
+          options?: Array<{ value?: string; label?: string; description?: string }>;
+        });
       }
     }
   } else if (typeof toolInput.question === 'string') {
     questions.push({
       question: toolInput.question,
+      header: typeof toolInput.header === 'string' ? toolInput.header : undefined,
+      isSecret: Boolean(toolInput.isSecret),
       options: Array.isArray(toolInput.options) ? toolInput.options : undefined,
     });
   }
@@ -32,6 +44,11 @@ function AskUserQuestionCard({ toolInput }: { toolInput: Record<string, unknown>
     <div className="mt-2 mb-2 space-y-2">
       {questions.map((q, qi) => (
         <div key={qi} className="rounded-lg border border-brand-200 bg-brand-50/30 p-3">
+          {q.header && (
+            <div className="text-xs font-medium uppercase tracking-wide text-primary/70 mb-1">
+              {q.header}
+            </div>
+          )}
           <div className="text-sm font-medium text-foreground mb-2">{q.question}</div>
           {q.options && q.options.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
@@ -45,8 +62,13 @@ function AskUserQuestionCard({ toolInput }: { toolInput: Record<string, unknown>
               ))}
             </div>
           )}
+          {q.isSecret && (
+            <div className="text-xs text-muted-foreground mt-2">
+              此问题为敏感输入，发送后将作为隐藏答案继续当前流程。
+            </div>
+          )}
           <div className="text-xs text-muted-foreground mt-2">
-            请在 Agent 终端中回复
+            请直接在当前对话中回复，Agent 会在收到答案后继续当前流程。
           </div>
         </div>
       ))}

@@ -1371,6 +1371,7 @@ interface StreamingSnapshotEntry {
     toolUseId: string;
     startTime: number;
     toolInputSummary?: string;
+    toolInput?: Record<string, unknown>;
     parentToolUseId?: string | null;
   }>;
   recentEvents: Array<{
@@ -1455,6 +1456,7 @@ function updateStreamingSnapshot(
           toolUseId: event.toolUseId,
           startTime: Date.now(),
           toolInputSummary: event.toolInputSummary,
+          toolInput: event.toolInput,
           parentToolUseId: event.parentToolUseId,
         });
         pushRecentEvent(snap, {
@@ -1482,6 +1484,7 @@ function updateStreamingSnapshot(
         if (tool) {
           if (event.toolInputSummary)
             tool.toolInputSummary = event.toolInputSummary;
+          if (event.toolInput) tool.toolInput = event.toolInput;
         }
       }
       break;

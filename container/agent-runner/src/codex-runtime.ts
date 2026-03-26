@@ -2,7 +2,11 @@ import fs from 'fs';
 import path from 'path';
 
 import type { ContainerInput, ContainerOutput } from './types.js';
-import { CodexAppServerClient, type CodexJsonRpcNotification } from './codex-client.js';
+import {
+  CodexAppServerClient,
+  type CodexJsonRpcNotification,
+  type CodexJsonRpcRequest,
+} from './codex-client.js';
 import { getChannelFromJid } from './channel-prefixes.js';
 import { summarizeToolInput } from './utils.js';
 
@@ -10,6 +14,7 @@ const OUTPUT_MARKER_TURN_ID_PREFIX = 'codex-turn-';
 const IMAGE_MAX_DIMENSION = 8000;
 const GLOBAL_CLAUDE_MD_MAX_CHARS = 8000;
 const INTERRUPT_SETTLE_TIMEOUT_MS = 5_000;
+const STAGED_IMAGE_DIR_NAME = '.happypaw-input-images';
 const LEGACY_MCP_SERVER_NAME = ['happy', 'claw'].join('');
 const LEGACY_MCP_TOOL_PREFIX = ['mcp', LEGACY_MCP_SERVER_NAME].join('__');
 
@@ -31,6 +36,17 @@ type CodexTodo = {
   id: string;
   content: string;
   status: 'pending' | 'in_progress' | 'completed';
+};
+
+type RequestUserInputPrompt = {
+  requestId: string;
+  itemId: string;
+  questionId: string;
+  header: string;
+  question: string;
+  options: Array<{ label: string; description?: string }>;
+  isOther: boolean;
+  isSecret: boolean;
 };
 
 type ReasoningItemState = {
@@ -206,6 +222,7 @@ function buildUserInput(
   images: Array<{ data: string; mimeType?: string }> | undefined,
   detectImageMimeTypeFromBase64Strict: (data: string) => string | undefined,
   log: (message: string) => void,
+  stagedImagePaths?: string[],
 ): {
   input: Array<Record<string, unknown>>;
   rejected: string[];
@@ -214,6 +231,20 @@ function buildUserInput(
     ? filterOversizedImages(images, log)
     : { valid: [], rejected: [] };
 
+  const imageInputs = stagedImagePaths
+    ? stagedImagePaths.map((imagePath) => ({
+        type: 'localImage',
+        path: imagePath,
+      }))
+    : filteredImages.valid.map((img) => ({
+        type: 'image',
+        url: `data:${resolveImageMimeType(
+          img,
+          detectImageMimeTypeFromBase64Strict,
+          log,
+        )};base64,${img.data}`,
+      }));
+
   return {
     input: [
       {
@@ -221,17 +252,170 @@ function buildUserInput(
         text: prompt,
         text_elements: [],
       },
-      ...filteredImages.valid.map((img) => ({
-        type: 'image',
-        url: `data:${resolveImageMimeType(
-          img,
-          detectImageMimeTypeFromBase64Strict,
-          log,
-        )};base64,${img.data}`,
-      })),
+      ...imageInputs,
     ],
     rejected: filteredImages.rejected,
   };
+}
+
+function imageExtensionFromMimeType(mimeType: string): string {
+  switch (mimeType) {
+    case 'image/png':
+      return '.png';
+    case 'image/gif':
+      return '.gif';
+    case 'image/webp':
+      return '.webp';
+    default:
+      return '.jpg';
+  }
+}
+
+function stageInputImages(
+  workspaceDir: string,
+  images: Array<{ data: string; mimeType?: string }> | undefined,
+  detectImageMimeTypeFromBase64Strict: (data: string) => string | undefined,
+  log: (message: string) => void,
+): {
+  paths: string[];
+  rejected: string[];
+  cleanup: () => void;
+} {
+  if (!images || images.length === 0) {
+    return { paths: [], rejected: [], cleanup: () => {} };
+  }
+
+  const filtered = filterOversizedImages(images, log);
+  if (filtered.valid.length === 0) {
+    return { paths: [], rejected: filtered.rejected, cleanup: () => {} };
+  }
+
+  const stagingDir = path.join(workspaceDir, STAGED_IMAGE_DIR_NAME);
+  fs.mkdirSync(stagingDir, { recursive: true });
+
+  const stagedPaths: string[] = [];
+  const cleanup = (): void => {
+    for (const stagedPath of stagedPaths) {
+      try {
+        fs.unlinkSync(stagedPath);
+      } catch {
+        /* best effort */
+      }
+    }
+    try {
+      fs.rmSync(stagingDir, { recursive: true, force: true });
+    } catch {
+      /* best effort */
+    }
+  };
+
+  try {
+    filtered.valid.forEach((img, index) => {
+      const mimeType = resolveImageMimeType(
+        img,
+        detectImageMimeTypeFromBase64Strict,
+        log,
+      );
+      const ext = imageExtensionFromMimeType(mimeType);
+      const filename = `turn-${Date.now()}-${process.pid}-${index}${ext}`;
+      const absPath = path.join(stagingDir, filename);
+      fs.writeFileSync(absPath, Buffer.from(img.data, 'base64'));
+      stagedPaths.push(absPath);
+      log(`Staged Codex image input at ${absPath}`);
+    });
+    return { paths: stagedPaths, rejected: filtered.rejected, cleanup };
+  } catch (error) {
+    cleanup();
+    throw error;
+  }
+}
+
+function summarizeRequestUserInputPrompt(prompt: RequestUserInputPrompt): string {
+  const question = prompt.question.trim();
+  if (question) return question;
+  if (prompt.header.trim()) return prompt.header.trim();
+  return '等待用户补充输入';
+}
+
+function buildRequestUserInputPrompts(
+  requestId: string | number,
+  itemId: string,
+  questions: unknown,
+): RequestUserInputPrompt[] {
+  if (!Array.isArray(questions)) return [];
+  const prompts: RequestUserInputPrompt[] = [];
+  for (const question of questions) {
+    if (!question || typeof question !== 'object') continue;
+    const record = question as Record<string, unknown>;
+    const options: Array<{ label: string; description?: string }> = [];
+    if (Array.isArray(record.options)) {
+      for (const option of record.options) {
+        if (!option || typeof option !== 'object') continue;
+        const optionRecord = option as Record<string, unknown>;
+        if (typeof optionRecord.label !== 'string') continue;
+        options.push({
+          label: optionRecord.label,
+          description:
+            typeof optionRecord.description === 'string'
+              ? optionRecord.description
+              : undefined,
+        });
+      }
+    }
+    prompts.push({
+      requestId: String(requestId),
+      itemId,
+      questionId:
+        typeof record.id === 'string' ? record.id : `question-${itemId}`,
+      header: typeof record.header === 'string' ? record.header : '',
+      question: typeof record.question === 'string' ? record.question : '',
+      options,
+      isOther: Boolean(record.isOther),
+      isSecret: Boolean(record.isSecret),
+    });
+  }
+  return prompts;
+}
+
+function buildRequestUserInputToolPayload(
+  prompts: RequestUserInputPrompt[],
+): Record<string, unknown> {
+  return {
+    questions: prompts.map((prompt) => ({
+      id: prompt.questionId,
+      header: prompt.header,
+      question: prompt.question,
+      isOther: prompt.isOther,
+      isSecret: prompt.isSecret,
+      options: prompt.options.map((option) => ({
+        label: option.label,
+        value: option.label,
+        description: option.description,
+      })),
+    })),
+  };
+}
+
+function buildRequestUserInputAnswer(
+  prompts: RequestUserInputPrompt[],
+  message: { text: string; images?: Array<{ data: string; mimeType?: string }> },
+): { answers: Record<string, { answers: string[] }> } {
+  if (message.images && message.images.length > 0) {
+    throw new Error('当前交互提示暂不支持图片回复，请仅发送文本答案。');
+  }
+
+  const answerText = message.text.trim();
+  if (!answerText) {
+    throw new Error('请输入回答内容后再继续。');
+  }
+
+  const singlePrompt =
+    prompts.length === 1
+      ? prompts[0]
+      : prompts.find((prompt) => !prompt.isSecret) ?? prompts[0];
+  const answers: Record<string, { answers: string[] }> = {};
+  answers[singlePrompt.questionId] = { answers: [answerText] };
+  return { answers };
 }
 
 function combineQueuedMessages(
@@ -624,13 +808,20 @@ export async function runCodexRuntime(options: {
     memoryRecall,
   );
 
+  const stagedImages = stageInputImages(
+    deps.WORKSPACE_GROUP,
+    images,
+    detectImageMimeTypeFromBase64Strict,
+    deps.log,
+  );
   const initialInput = buildUserInput(
     prompt,
     images,
     detectImageMimeTypeFromBase64Strict,
     deps.log,
+    stagedImages.paths,
   );
-  for (const reason of initialInput.rejected) {
+  for (const reason of [...stagedImages.rejected, ...initialInput.rejected]) {
     emit({
       status: 'success',
       result: `⚠️ ${reason}`,
@@ -646,6 +837,9 @@ export async function runCodexRuntime(options: {
     },
     log: deps.log,
     onNotification: () => {},
+    onRequest: () => {
+      throw new Error('Unexpected JSON-RPC request before Codex runtime initialized');
+    },
   });
 
   let threadId = currentSessionId;
@@ -680,6 +874,14 @@ export async function runCodexRuntime(options: {
     text: string;
     images?: Array<{ data: string; mimeType?: string }>;
   }> = [];
+  const stagedImageCleanupFns: Array<() => void> = [stagedImages.cleanup];
+  let activeUserInputRequest:
+    | {
+        requestId: string;
+        itemId: string;
+        prompts: RequestUserInputPrompt[];
+      }
+    | undefined;
 
   const emitThinkingDelta = (
     text: string,
@@ -1096,6 +1298,103 @@ export async function runCodexRuntime(options: {
       }
     };
     client.setNotificationHandler(notificationHandler);
+    client.setRequestHandler(async (request: CodexJsonRpcRequest) => {
+      if (request.method !== 'item/tool/requestUserInput') {
+        throw new Error(`Unsupported Codex request: ${request.method}`);
+      }
+
+      const params =
+        request.params && typeof request.params === 'object'
+          ? (request.params as Record<string, unknown>)
+          : {};
+      const requestTurnId =
+        typeof params.turnId === 'string' ? params.turnId : undefined;
+      if (turnId && requestTurnId && requestTurnId !== turnId) {
+        throw new Error('request_user_input turnId did not match active turn');
+      }
+      const itemId =
+        typeof params.itemId === 'string' ? params.itemId : `request-${request.id}`;
+      const prompts = buildRequestUserInputPrompts(
+        request.id,
+        itemId,
+        params.questions,
+      );
+      if (prompts.length === 0) {
+        throw new Error('request_user_input missing questions');
+      }
+
+      activeUserInputRequest = {
+        requestId: String(request.id),
+        itemId,
+        prompts,
+      };
+
+      emit({
+        status: 'stream',
+        result: null,
+        newSessionId: currentSessionId,
+        streamEvent: {
+          eventType: 'tool_use_start',
+          toolName: 'AskUserQuestion',
+          toolUseId: itemId,
+          toolInputSummary: summarizeRequestUserInputPrompt(prompts[0]),
+          toolInput: buildRequestUserInputToolPayload(prompts),
+        },
+      });
+      emit({
+        status: 'stream',
+        result: null,
+        newSessionId: currentSessionId,
+        streamEvent: {
+          eventType: 'tool_progress',
+          toolUseId: itemId,
+          toolInput: buildRequestUserInputToolPayload(prompts),
+        },
+      });
+
+      let promptMessage:
+        | {
+            text: string;
+            images?: Array<{ data: string; mimeType?: string }>;
+          }
+        | undefined;
+      while (!promptMessage) {
+        if (deps.shouldClose()) {
+          activeUserInputRequest = undefined;
+          throw new Error('request_user_input closed before receiving user answer');
+        }
+        if (deps.shouldInterrupt()) {
+          activeUserInputRequest = undefined;
+          throw new Error('request_user_input interrupted before receiving user answer');
+        }
+        const drained = deps.drainIpcInput().messages;
+        if (drained.length > 0) {
+          promptMessage = combineQueuedMessages(drained);
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+
+      if (!promptMessage) {
+        activeUserInputRequest = undefined;
+        throw new Error('request_user_input ended without collecting a reply');
+      }
+      const responsePayload = buildRequestUserInputAnswer(
+        prompts,
+        promptMessage,
+      );
+      emit({
+        status: 'stream',
+        result: null,
+        newSessionId: currentSessionId,
+        streamEvent: {
+          eventType: 'tool_use_end',
+          toolUseId: itemId,
+        },
+      });
+      activeUserInputRequest = undefined;
+      return responsePayload;
+    });
 
     await client.initialize();
 
@@ -1174,6 +1473,7 @@ export async function runCodexRuntime(options: {
       shouldInterrupt: deps.shouldInterrupt,
       shouldDrain: deps.shouldDrain,
       drainIpcInput: emitOutput ? deps.drainIpcInput : undefined,
+      canSteer: () => !activeUserInputRequest,
       isTurnComplete: () => !!turnComplete,
       log: deps.log,
       onInterrupt: async () => {
@@ -1187,13 +1487,24 @@ export async function runCodexRuntime(options: {
           deferredFollowUps.push(message);
           return;
         }
+        const stagedSteerImages = stageInputImages(
+          deps.WORKSPACE_GROUP,
+          message.images,
+          detectImageMimeTypeFromBase64Strict,
+          deps.log,
+        );
+        stagedImageCleanupFns.push(stagedSteerImages.cleanup);
         const steerInput = buildUserInput(
           message.text,
           message.images,
           detectImageMimeTypeFromBase64Strict,
           deps.log,
+          stagedSteerImages.paths,
         );
-        for (const reason of steerInput.rejected) {
+        for (const reason of [
+          ...stagedSteerImages.rejected,
+          ...steerInput.rejected,
+        ]) {
           emit({
             status: 'success',
             result: `⚠️ ${reason}`,
@@ -1279,6 +1590,9 @@ export async function runCodexRuntime(options: {
       followUpInput: combineQueuedMessages(deferredFollowUps),
     };
   } finally {
+    for (const cleanup of stagedImageCleanupFns.splice(0)) {
+      cleanup();
+    }
     await client.close();
   }
 }
@@ -1294,6 +1608,7 @@ async function waitForTurnCompletion(
         images?: Array<{ data: string; mimeType?: string }>;
       }>;
     };
+    canSteer?: () => boolean;
     isTurnComplete: () => boolean;
     onInterrupt: (reason: 'closed' | 'interrupted') => Promise<void>;
     onSteer?: (message: {
@@ -1350,6 +1665,7 @@ async function waitForTurnCompletion(
       !interruptRequested &&
       !drainRequested &&
       options.drainIpcInput &&
+      (options.canSteer?.() ?? true) &&
       options.onSteer
     ) {
       const followUp = combineQueuedMessages(options.drainIpcInput().messages);

@@ -45,6 +45,7 @@ export interface StreamSnapshotData {
     toolUseId: string;
     startTime: number;
     toolInputSummary?: string;
+    toolInput?: Record<string, unknown>;
     parentToolUseId?: string | null;
   }>;
   recentEvents: Array<{
@@ -614,6 +615,7 @@ function applyStreamEvent(
         isNested: event.isNested,
         skillName: event.skillName,
         toolInputSummary: event.toolInputSummary,
+        ...(event.toolInput ? { toolInput: event.toolInput } : {}),
       };
       next.activeTools = existing
         ? prev.activeTools.map(t => (t.toolUseId === toolUseId ? { ...t, ...tool } : t))
@@ -2183,6 +2185,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         toolUseId: t.toolUseId,
         startTime: t.startTime,
         toolInputSummary: t.toolInputSummary,
+        toolInput: t.toolInput,
         parentToolUseId: t.parentToolUseId,
       })),
       recentEvents: (snapshot.recentEvents || []) as StreamingTimelineEvent[],

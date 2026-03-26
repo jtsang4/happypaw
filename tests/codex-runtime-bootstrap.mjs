@@ -34,7 +34,7 @@ process.stdin.on('data', (chunk) => {
     buffer = buffer.slice(idx + 1);
     if (!line) continue;
     const msg = JSON.parse(line);
-    log(msg.method || 'response');
+    log(msg.method ? msg.method + ' ' + JSON.stringify(msg) : 'response ' + JSON.stringify(msg));
     if (msg.method === 'initialize') {
       send({ id: msg.id, result: { userAgent: 'fake-codex', platformFamily: 'unix', platformOs: 'linux' } });
       continue;
@@ -63,6 +63,7 @@ process.stdin.on('data', (chunk) => {
       const interruptItems = Array.isArray(turnConfig.interruptItems)
         ? turnConfig.interruptItems
         : [];
+      const requestUserInput = turnConfig.requestUserInput || null;
       activeTurn = {
         threadId: msg.params.threadId,
         turnId,
@@ -74,6 +75,19 @@ process.stdin.on('data', (chunk) => {
       setTimeout(() => {
         send({ method: 'turn/started', params: { threadId: msg.params.threadId, turn: { id: turnId } } });
         if (turnConfig.deferUntilInterrupt) {
+          return;
+        }
+        if (requestUserInput) {
+          send({
+            id: requestUserInput.id || 'req_user_input',
+            method: 'item/tool/requestUserInput',
+            params: {
+              threadId: msg.params.threadId,
+              turnId,
+              itemId: requestUserInput.itemId || 'item_request_user_input',
+              questions: requestUserInput.questions || [],
+            }
+          });
           return;
         }
         send({
@@ -227,6 +241,9 @@ process.stdin.on('data', (chunk) => {
           if (!activeTurn || activeTurn.turnId !== turnId) {
             return;
           }
+          if (requestUserInput) {
+            return;
+          }
           send({
             method: 'turn/completed',
             params: {
@@ -246,6 +263,30 @@ process.stdin.on('data', (chunk) => {
           activeTurn = null;
         }, completionDelayMs);
       }
+      continue;
+    }
+    if (typeof msg.id !== 'undefined' && !msg.method && activeTurn && turnConfig.requestUserInput) {
+      const answers = msg.result && msg.result.answers ? msg.result.answers : {};
+      const flattened = Object.values(answers)
+        .flatMap((entry) => Array.isArray(entry.answers) ? entry.answers : [])
+        .join(' / ');
+      const responseText = flattened || turnConfig.requestUserInput.fallbackResponse || '已收到答案';
+      send({ method: 'item/agentMessage/delta', params: { threadId: activeTurn.threadId, turnId: activeTurn.turnId, itemId: 'item_msg', delta: responseText } });
+      send({
+        method: 'turn/completed',
+        params: {
+          threadId: activeTurn.threadId,
+          turn: {
+            id: activeTurn.turnId,
+            status: 'completed',
+            items: [
+              { type: 'agentMessage', id: 'item_msg', text: responseText, phase: 'final_answer', memoryCitation: null }
+            ],
+            error: null
+          }
+        }
+      });
+      activeTurn = null;
       continue;
     }
     if (msg.method === 'turn/steer') {
@@ -320,6 +361,15 @@ async function runScenario(name, sessionId, options = {}) {
   makeFakeCodexScript(fakeCodex, requestLogPath, options);
 
   const outputs = [];
+  const detectMime = options.detectImageMimeTypeFromBase64Strict
+    || ((base64Data) => {
+      if (typeof base64Data !== 'string') return undefined;
+      if (base64Data.startsWith('iVBOR')) return 'image/png';
+      if (base64Data.startsWith('/9j/')) return 'image/jpeg';
+      if (base64Data.startsWith('R0lGOD')) return 'image/gif';
+      if (base64Data.startsWith('UklGR')) return 'image/webp';
+      return undefined;
+    });
   process.env.PATH = `${binDir}:${process.env.PATH}`;
   process.env.HOME = homeDir;
   process.env.CODEX_HOME = codeHome;
@@ -345,8 +395,10 @@ async function runScenario(name, sessionId, options = {}) {
       isHome: false,
       isAdminHome: false,
       turnId: 'turn-from-host',
+      images: options.images,
     },
     memoryRecall: 'memory recall prompt',
+    images: options.images,
     deps: {
       WORKSPACE_GLOBAL: globalDir,
       WORKSPACE_GROUP: groupDir,
@@ -368,16 +420,17 @@ async function runScenario(name, sessionId, options = {}) {
       truncateWithHeadTail: (content) => content,
       generateTurnId: () => 'generated-turn-id',
     },
-    detectImageMimeTypeFromBase64Strict: () => undefined,
+    detectImageMimeTypeFromBase64Strict: detectMime,
   });
 
   const requestOrder = fs
     .readFileSync(requestLogPath, 'utf8')
     .trim()
     .split('\n')
-    .filter(Boolean);
+    .filter(Boolean)
+    .map((line) => line.split(' ')[0]);
 
-  return { outputs, requestOrder, result };
+  return { outputs, requestOrder, result, tempRoot };
 }
 
 const fresh = await runScenario('fresh', undefined);
@@ -681,6 +734,99 @@ assert.equal(
   steered.result.closedDuringQuery,
   false,
   'steer keeps the active turn running to normal completion',
+);
+
+const pngFixtureBase64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7Z0FQAAAAASUVORK5CYII=';
+const imageInput = await runScenario('image-input', undefined, {
+  turnConfig: {
+    greetingText: '我看到了上传的图片',
+  },
+  images: [{ data: pngFixtureBase64, mimeType: 'image/png' }],
+});
+const imageStartLine = fs
+  .readFileSync(path.join(imageInput.tempRoot, 'requests.log'), 'utf8')
+  .split('\n')
+  .find((line) => line.startsWith('turn/start '));
+assert.ok(
+  imageStartLine && imageStartLine.includes('"type":"localImage"'),
+  imageStartLine || 'missing turn/start payload log',
+);
+const imagePayload = JSON.parse(imageStartLine.slice('turn/start '.length));
+const stagedPath = imagePayload.params?.input?.find((entry) => entry.type === 'localImage')?.path;
+assert.ok(stagedPath && stagedPath.includes('.happypaw-input-images'), stagedPath);
+assert.ok(
+  !fs.existsSync(stagedPath),
+  'staged local image is cleaned up after the turn finishes',
+);
+assert.ok(
+  imageInput.outputs.some(
+    (entry) =>
+      entry.status === 'success' &&
+      entry.result === '我看到了上传的图片',
+  ),
+  'image-capable turn still completes with the assistant response',
+);
+
+const requestUserInput = await runScenario('request-user-input', undefined, {
+  turnConfig: {
+    requestUserInput: {
+      id: 'req_user_input',
+      itemId: 'item_request_user_input',
+      questions: [
+        {
+          id: 'favorite_pet',
+          header: '补充信息',
+          question: '你最喜欢的宠物是什么？',
+          isOther: true,
+          isSecret: false,
+          options: [
+            { label: '猫', description: '喵喵' },
+            { label: '狗', description: '汪汪' },
+          ],
+        },
+      ],
+    },
+    completionDelayMs: 0,
+  },
+  drainIpcInput: (() => {
+    let reads = 0;
+    return () => {
+      reads += 1;
+      if (reads >= 2) {
+        return { messages: [{ text: '猫' }] };
+      }
+      return { messages: [] };
+    };
+  })(),
+});
+assert.ok(
+  requestUserInput.outputs.some(
+    (entry) =>
+      entry.status === 'stream' &&
+      entry.streamEvent?.eventType === 'tool_use_start' &&
+      entry.streamEvent?.toolName === 'AskUserQuestion' &&
+      entry.streamEvent?.toolUseId === 'item_request_user_input' &&
+      entry.streamEvent?.toolInput?.questions?.[0]?.question === '你最喜欢的宠物是什么？',
+  ),
+  'request_user_input is surfaced as AskUserQuestion with the original prompt payload',
+);
+assert.ok(
+  requestUserInput.outputs.some(
+    (entry) =>
+      entry.status === 'stream' &&
+      entry.streamEvent?.eventType === 'tool_use_end' &&
+      entry.streamEvent?.toolUseId === 'item_request_user_input',
+  ),
+  'request_user_input prompt closes after the answer is provided',
+);
+assert.ok(
+  requestUserInput.outputs.some(
+    (entry) =>
+      entry.status === 'success' &&
+      entry.result === '猫',
+  ),
+  'request_user_input answer resumes the same turn and yields the resumed assistant reply',
 );
 
 const drained = await runScenario('drain', 'thr_drain', {
