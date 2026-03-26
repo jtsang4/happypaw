@@ -43,6 +43,7 @@ import { StreamEventProcessor } from './stream-processor.js';
 import { PREDEFINED_AGENTS } from './agent-definitions.js';
 import { createMcpTools } from './mcp-tools.js';
 import { runCodexRuntime } from './codex-runtime.js';
+import { buildSdkMcpServerEntries } from './sdk-mcp-server-config.js';
 import {
   CURRENT_PRODUCT_ID,
   LEGACY_PRODUCT_ID,
@@ -1084,7 +1085,7 @@ function loadUserMcpServers(): Record<string, McpServerConfig> {
 async function runQuery(
   prompt: string,
   sessionId: string | undefined,
-  mcpServerConfig: ReturnType<typeof createSdkMcpServer>,
+  sdkMcpServers: Record<string, ReturnType<typeof createSdkMcpServer>>,
   containerInput: ContainerInput,
   memoryRecall: string,
   resumeAt?: string,
@@ -1282,8 +1283,7 @@ async function runQuery(
       includePartialMessages: true,
       mcpServers: {
         ...loadUserMcpServers(),     // 用户配置的 MCP（stdio/http/sse），SDK 原生支持
-        [CURRENT_PRODUCT_ID]: mcpServerConfig,  // 内置 SDK MCP 放最后，确保不被同名覆盖
-        [LEGACY_PRODUCT_ID]: mcpServerConfig,   // 兼容旧命名，确保已有配置不失效
+        ...sdkMcpServers,  // 内置 SDK MCP 放最后，确保不被同名覆盖
       },
       hooks: {
         PreCompact: [{ hooks: [createPreCompactHook(isHome, isAdminHome, {
@@ -1646,12 +1646,9 @@ async function main(): Promise<void> {
     workspaceGlobal: WORKSPACE_GLOBAL,
     workspaceMemory: WORKSPACE_MEMORY,
   };
-  const buildMcpServerConfig = () => createSdkMcpServer({
-    name: 'happypaw',
-    version: '1.0.0',
-    tools: createMcpTools(mcpToolsConfig),
-  });
-  let mcpServerConfig = buildMcpServerConfig();
+  const buildMcpServers = () =>
+    buildSdkMcpServerEntries(createMcpTools(mcpToolsConfig));
+  let sdkMcpServers = buildMcpServers();
   const memoryRecallPrompt = buildMemoryRecallPrompt(isHome, isAdminHome);
   fs.mkdirSync(IPC_INPUT_DIR, { recursive: true });
 
@@ -1699,7 +1696,7 @@ async function main(): Promise<void> {
       const queryResult = await runQuery(
         prompt,
         sessionId,
-        mcpServerConfig,
+        sdkMcpServers,
         containerInput,
         memoryRecallPrompt,
         resumeAt,
@@ -1724,7 +1721,7 @@ async function main(): Promise<void> {
         resumeAt = undefined;
         consecutiveCompactions = 0;
         // Rebuild MCP server to avoid "Already connected to a transport" error
-        mcpServerConfig = buildMcpServerConfig();
+        sdkMcpServers = buildMcpServers();
         continue;
       }
 
@@ -1843,7 +1840,7 @@ async function main(): Promise<void> {
         const flushResult = await runQuery(
           flushPrompt,
           sessionId,
-          mcpServerConfig,
+          sdkMcpServers,
           containerInput,
           memoryRecallPrompt,
           resumeAt,
@@ -1895,7 +1892,7 @@ async function main(): Promise<void> {
           const autoContResult = await runQuery(
             autoContinuePrompt,
             sessionId,
-            mcpServerConfig,
+            sdkMcpServers,
             containerInput,
             memoryRecallPrompt,
             resumeAt,
@@ -1925,7 +1922,7 @@ async function main(): Promise<void> {
             sessionId = undefined;
             latestSessionId = undefined;
             resumeAt = undefined;
-            mcpServerConfig = buildMcpServerConfig();
+            sdkMcpServers = buildMcpServers();
             // Fall through to wait for next IPC message with a fresh session.
           }
           if (autoContResult.unrecoverableTranscriptError) {
