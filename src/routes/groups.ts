@@ -81,6 +81,7 @@ import net from 'node:net';
 import { z } from 'zod';
 import { broadcastNewMessage, invalidateAllowedUserCache } from '../web.js';
 import { getStreamingSession } from '../feishu-streaming-card.js';
+import { resolveRuntimeScopePaths } from '../container-runner.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -302,18 +303,20 @@ function removeFlowArtifacts(folder: string): void {
 }
 
 function clearSessionJsonlFiles(folder: string, agentId?: string): void {
-  const claudeDir = agentId
-    ? path.join(DATA_DIR, 'sessions', folder, 'agents', agentId, '.claude')
-    : path.join(DATA_DIR, 'sessions', folder, '.claude');
-  if (!fs.existsSync(claudeDir)) return;
+  const runtimeScope = resolveRuntimeScopePaths(folder, { agentId });
+  const targets = [
+    { dir: runtimeScope.claudeSessionDir, keep: new Set(['settings.json']) },
+    { dir: runtimeScope.codexHomeDir, keep: new Set(['config.toml']) },
+  ];
 
-  // 保留 settings.json，清除所有其他运行时文件和目录
-  const keep = new Set(['settings.json']);
-  const entries = fs.readdirSync(claudeDir);
-  for (const entry of entries) {
-    if (keep.has(entry)) continue;
-    const fullPath = path.join(claudeDir, entry);
-    fs.rmSync(fullPath, { recursive: true, force: true });
+  for (const target of targets) {
+    if (!fs.existsSync(target.dir)) continue;
+
+    for (const entry of fs.readdirSync(target.dir)) {
+      if (target.keep.has(entry)) continue;
+      const fullPath = path.join(target.dir, entry);
+      fs.rmSync(fullPath, { recursive: true, force: true });
+    }
   }
 }
 

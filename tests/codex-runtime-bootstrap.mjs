@@ -8,12 +8,14 @@ import path from 'node:path';
 const repoRoot = '/Users/jtsang/Documents/workspace/github/jtsang4/happypaw';
 const agentRunnerDist = path.join(repoRoot, 'container', 'agent-runner', 'dist');
 
-function makeFakeCodexScript(scriptPath, requestLogPath) {
+function makeFakeCodexScript(scriptPath, requestLogPath, options = {}) {
+  const failResumeThreadId = options.failResumeThreadId ?? null;
   fs.writeFileSync(
     scriptPath,
     `#!/usr/bin/env node
 const fs = require('node:fs');
 const requestLogPath = ${JSON.stringify(requestLogPath)};
+const failResumeThreadId = ${JSON.stringify(failResumeThreadId)};
 let buffer = '';
 function log(line) { fs.appendFileSync(requestLogPath, line + '\\n'); }
 function send(msg) { process.stdout.write(JSON.stringify(msg) + '\\n'); }
@@ -41,40 +43,46 @@ process.stdin.on('data', (chunk) => {
       continue;
     }
     if (msg.method === 'thread/resume') {
+      if (failResumeThreadId && msg.params.threadId === failResumeThreadId) {
+        send({ id: msg.id, error: { code: -32001, message: 'stale thread' } });
+        continue;
+      }
       send({ id: msg.id, result: { thread: { id: msg.params.threadId } } });
       continue;
     }
     if (msg.method === 'turn/start') {
       const turnId = 'turn_bootstrap';
       send({ id: msg.id, result: { turn: { id: turnId } } });
-      send({ method: 'turn/started', params: { threadId: msg.params.threadId, turn: { id: turnId } } });
-      send({ method: 'item/agentMessage/delta', params: { threadId: msg.params.threadId, turnId, itemId: 'item_msg', delta: '你好，Codex' } });
-      send({
-        method: 'thread/tokenUsage/updated',
-        params: {
-          threadId: msg.params.threadId,
-          turnId,
-          tokenUsage: {
-            total: { totalTokens: 15, inputTokens: 10, cachedInputTokens: 2, outputTokens: 5, reasoningOutputTokens: 0 },
-            last: { totalTokens: 15, inputTokens: 10, cachedInputTokens: 2, outputTokens: 5, reasoningOutputTokens: 0 },
-            modelContextWindow: null
+      setTimeout(() => {
+        send({ method: 'turn/started', params: { threadId: msg.params.threadId, turn: { id: turnId } } });
+        send({ method: 'item/agentMessage/delta', params: { threadId: msg.params.threadId, turnId, itemId: 'item_msg', delta: '你好，Codex' } });
+        send({
+          method: 'thread/tokenUsage/updated',
+          params: {
+            threadId: msg.params.threadId,
+            turnId,
+            tokenUsage: {
+              total: { totalTokens: 15, inputTokens: 10, cachedInputTokens: 2, outputTokens: 5, reasoningOutputTokens: 0 },
+              last: { totalTokens: 15, inputTokens: 10, cachedInputTokens: 2, outputTokens: 5, reasoningOutputTokens: 0 },
+              modelContextWindow: null
+            }
           }
-        }
-      });
-      send({
-        method: 'turn/completed',
-        params: {
-          threadId: msg.params.threadId,
-          turn: {
-            id: turnId,
-            status: 'completed',
-            items: [
-              { type: 'agentMessage', id: 'item_msg', text: '你好，Codex', phase: 'final_answer', memoryCitation: null }
-            ],
-            error: null
+        });
+        send({
+          method: 'turn/completed',
+          params: {
+            threadId: msg.params.threadId,
+            turn: {
+              id: turnId,
+              status: 'completed',
+              items: [
+                { type: 'agentMessage', id: 'item_msg', text: '你好，Codex', phase: 'final_answer', memoryCitation: null }
+              ],
+              error: null
+            }
           }
-        }
-      });
+        });
+      }, 0);
       continue;
     }
     if (msg.method === 'turn/interrupt') {
@@ -96,7 +104,7 @@ process.stdin.on('data', (chunk) => {
   fs.chmodSync(scriptPath, 0o755);
 }
 
-async function runScenario(name, sessionId) {
+async function runScenario(name, sessionId, options = {}) {
   const tempRoot = fs.mkdtempSync(
     path.join(os.tmpdir(), `happypaw-codex-runtime-${name}-`),
   );
@@ -117,7 +125,7 @@ async function runScenario(name, sessionId) {
   fs.mkdirSync(codeHome, { recursive: true });
 
   const fakeCodex = path.join(binDir, 'codex');
-  makeFakeCodexScript(fakeCodex, requestLogPath);
+  makeFakeCodexScript(fakeCodex, requestLogPath, options);
 
   const outputs = [];
   process.env.PATH = `${binDir}:${process.env.PATH}`;
@@ -221,5 +229,26 @@ assert.ok(
   'resumed run keeps persisted HappyPaw session mapped to the resumed Codex thread id',
 );
 assert.equal(resumed.result.newSessionId, 'thr_saved');
+
+const resumeFallback = await runScenario('resume-fallback', 'thr_stale', {
+  failResumeThreadId: 'thr_stale',
+});
+assert.deepEqual(resumeFallback.requestOrder.slice(0, 5), [
+  'initialize',
+  'initialized',
+  'thread/resume',
+  'thread/start',
+  'turn/start',
+]);
+assert.ok(
+  resumeFallback.outputs.some(
+    (entry) =>
+      entry.status === 'success' &&
+      entry.result === '你好，Codex' &&
+      entry.newSessionId === 'thr_fresh',
+  ),
+  'failed resume falls back to a fresh thread and keeps the conversation usable',
+);
+assert.equal(resumeFallback.result.newSessionId, 'thr_fresh');
 
 console.log('✅ codex runtime bootstrap checks passed');

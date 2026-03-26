@@ -197,7 +197,9 @@ function assertSchema(
 
   if (missing.length > 0 || forbidden.length > 0) {
     throw new Error(
-      `Incompatible DB schema in table "${tableName}". Missing: [${missing.join(', ')}], forbidden: [${forbidden.join(', ')}]. ` +
+      `Incompatible DB schema in table "${tableName}". Missing: [${missing.join(
+        ', ',
+      )}], forbidden: [${forbidden.join(', ')}]. ` +
         'Please remove data/db/messages.db (or legacy store/messages.db) and restart.',
     );
   }
@@ -2095,7 +2097,10 @@ export function getRuntimeSession(
   if (!row) return undefined;
   return {
     sessionId: row.session_id,
-    runtime: parseRuntimeType(row.runtime, `session ${groupFolder}/${effectiveAgentId}`),
+    runtime: parseRuntimeType(
+      row.runtime,
+      `session ${groupFolder}/${effectiveAgentId}`,
+    ),
   };
 }
 
@@ -2132,10 +2137,10 @@ export function getAllSessions(): Record<string, RuntimeSessionRecord> {
       "SELECT group_folder, session_id, runtime FROM sessions WHERE agent_id = ''",
     )
     .all() as Array<{
-      group_folder: string;
-      session_id: string;
-      runtime: string | null;
-    }>;
+    group_folder: string;
+    session_id: string;
+    runtime: string | null;
+  }>;
   const result: Record<string, RuntimeSessionRecord> = {};
   for (const row of rows) {
     result[row.group_folder] = {
@@ -4577,7 +4582,9 @@ export function adjustUserBalance(
     const nextBalance = currentBalance + amount;
     if (!allowNegative && nextBalance < 0) {
       throw new Error(
-        `Balance cannot be negative: current=${currentBalance.toFixed(2)} next=${nextBalance.toFixed(2)}`,
+        `Balance cannot be negative: current=${currentBalance.toFixed(
+          2,
+        )} next=${nextBalance.toFixed(2)}`,
       );
     }
 

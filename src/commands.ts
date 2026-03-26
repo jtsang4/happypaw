@@ -11,13 +11,13 @@ import {
   storeMessageDirect,
   ensureChatExists,
 } from './db.js';
-import { DATA_DIR } from './config.js';
 import { logger } from './logger.js';
 import type {
   NewMessage,
   MessageCursor,
   RuntimeSessionRecord,
 } from './types.js';
+import { resolveRuntimeScopePaths } from './container-runner.js';
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -31,17 +31,16 @@ export interface CommandDeps {
 // ─── Session file cleanup (mirrors groups.ts clearSessionJsonlFiles) ────
 
 function clearSessionFiles(folder: string, agentId?: string): void {
-  const claudeDir = agentId
-    ? path.join(DATA_DIR, 'sessions', folder, 'agents', agentId, '.claude')
-    : path.join(DATA_DIR, 'sessions', folder, '.claude');
-  const codexDir = agentId
-    ? path.join(DATA_DIR, 'sessions', folder, 'agents', agentId, '.codex')
-    : path.join(DATA_DIR, 'sessions', folder, '.codex');
-  if (!fs.existsSync(claudeDir) && !fs.existsSync(codexDir)) return;
+  const runtimeScope = resolveRuntimeScopePaths(folder, { agentId });
+  if (
+    !fs.existsSync(runtimeScope.claudeSessionDir) &&
+    !fs.existsSync(runtimeScope.codexHomeDir)
+  )
+    return;
 
   const targets = [
-    { dir: claudeDir, keep: new Set(['settings.json']) },
-    { dir: codexDir, keep: new Set(['config.toml']) },
+    { dir: runtimeScope.claudeSessionDir, keep: new Set(['settings.json']) },
+    { dir: runtimeScope.codexHomeDir, keep: new Set(['config.toml']) },
   ];
   for (const target of targets) {
     if (!fs.existsSync(target.dir)) continue;
@@ -73,7 +72,7 @@ export async function executeSessionReset(
 ): Promise<void> {
   if (agentId) {
     // Agent-specific reset: only stop the agent's virtual JID process
-    const virtualJid = `web:${folder}#agent:${agentId}`;
+    const virtualJid = `${chatJid}#agent:${agentId}`;
     await deps.queue.stopGroup(virtualJid, { force: true });
   } else {
     // Main session reset: stop all processes for this folder
@@ -93,7 +92,7 @@ export async function executeSessionReset(
   }
 
   // 4. Insert context_reset divider message into the correct JID
-  const targetJid = agentId ? `web:${folder}#agent:${agentId}` : chatJid;
+  const targetJid = agentId ? `${chatJid}#agent:${agentId}` : chatJid;
   const dividerMessageId = crypto.randomUUID();
   const timestamp = new Date().toISOString();
   ensureChatExists(targetJid);
@@ -120,7 +119,7 @@ export async function executeSessionReset(
   // 5. Advance lastAgentTimestamp so old messages before the reset are not
   //    re-sent to the next fresh agent session.
   if (agentId) {
-    const virtualJid = `web:${folder}#agent:${agentId}`;
+    const virtualJid = `${chatJid}#agent:${agentId}`;
     deps.setLastAgentTimestamp(virtualJid, { timestamp, id: dividerMessageId });
   } else {
     const siblingJids = getJidsByFolder(folder);

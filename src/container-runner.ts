@@ -145,6 +145,71 @@ export interface ContainerOutput {
   finalizationReason?: 'completed' | 'interrupted' | 'error';
 }
 
+interface RuntimeScopePathOptions {
+  agentId?: string;
+  taskRunId?: string;
+}
+
+export interface RuntimeScopePaths {
+  ipcDir: string;
+  claudeSessionDir: string;
+  codexHomeDir: string;
+}
+
+export function resolveRuntimeScopePaths(
+  groupFolder: string,
+  options: RuntimeScopePathOptions = {},
+): RuntimeScopePaths {
+  if (options.agentId) {
+    const agentRoot = path.join(
+      DATA_DIR,
+      'sessions',
+      groupFolder,
+      'agents',
+      options.agentId,
+    );
+    return {
+      ipcDir: path.join(
+        DATA_DIR,
+        'ipc',
+        groupFolder,
+        'agents',
+        options.agentId,
+      ),
+      claudeSessionDir: path.join(agentRoot, '.claude'),
+      codexHomeDir: path.join(agentRoot, '.codex'),
+    };
+  }
+
+  if (options.taskRunId) {
+    const taskRoot = path.join(
+      DATA_DIR,
+      'sessions',
+      groupFolder,
+      'tasks-run',
+      options.taskRunId,
+    );
+    return {
+      ipcDir: path.join(
+        DATA_DIR,
+        'ipc',
+        groupFolder,
+        'tasks-run',
+        options.taskRunId,
+      ),
+      claudeSessionDir: path.join(taskRoot, '.claude'),
+      codexHomeDir: path.join(taskRoot, '.codex'),
+    };
+  }
+
+  const groupRoot = path.join(DATA_DIR, 'sessions', groupFolder);
+  return {
+    ipcDir: path.join(DATA_DIR, 'ipc', groupFolder),
+    claudeSessionDir: path.join(groupRoot, '.claude'),
+    codexHomeDir: path.join(groupRoot, '.codex'),
+  };
+}
+
 interface VolumeMount {
   hostPath: string;
   containerPath: string;
@@ -174,9 +239,10 @@ function getEffectiveRuntime(group: RegisteredGroup): RuntimeType {
   return group.runtime ?? getSystemSettings().defaultRuntime;
 }
 
-function buildCodexBridgeCommand(
-  executionMode: 'container' | 'host',
-): { command: string; args: string[] } {
+function buildCodexBridgeCommand(executionMode: 'container' | 'host'): {
+  command: string;
+  args: string[];
+} {
   const bridgeScript =
     executionMode === 'container'
       ? '/app/codex-mcp-bridge.mjs'
@@ -291,6 +357,10 @@ function buildVolumeMounts(
   const mounts: VolumeMount[] = [];
   const projectRoot = process.cwd();
   const runtime = getEffectiveRuntime(group);
+  const runtimeScopePaths = resolveRuntimeScopePaths(group.folder, {
+    agentId,
+    taskRunId,
+  });
 
   // Per-user global memory directory:
   // Each user gets their own user-global/{userId}/ mounted as /workspace/global
@@ -351,20 +421,9 @@ function buildVolumeMounts(
 
   // Per-group Claude sessions directory (isolated from other groups)
   // Sub-agents get their own session dir under agents/{agentId}/.claude/
-  const groupSessionsDir = agentId
-    ? path.join(
-        DATA_DIR,
-        'sessions',
-        group.folder,
-        'agents',
-        agentId,
-        '.claude',
-      )
-    : path.join(DATA_DIR, 'sessions', group.folder, '.claude');
+  const groupSessionsDir = runtimeScopePaths.claudeSessionDir;
   mkdirForContainer(groupSessionsDir);
-  const groupCodexHomeDir = agentId
-    ? path.join(DATA_DIR, 'sessions', group.folder, 'agents', agentId, '.codex')
-    : path.join(DATA_DIR, 'sessions', group.folder, '.codex');
+  const groupCodexHomeDir = runtimeScopePaths.codexHomeDir;
   const settingsFile = path.join(groupSessionsDir, 'settings.json');
   const mcpServers = ownerId ? loadUserMcpServers(ownerId) : {};
   ensureSettingsJson(settingsFile, mcpServers);
@@ -422,11 +481,7 @@ function buildVolumeMounts(
   // Sub-agents get their own IPC subdirectory under agents/{agentId}/
   // Isolated tasks get their own IPC subdirectory under tasks-run/{taskRunId}/
   // Use 0o777 so container (node/1000) and host (agent/1002) can both read/write.
-  const groupIpcDir = agentId
-    ? path.join(DATA_DIR, 'ipc', group.folder, 'agents', agentId)
-    : taskRunId
-      ? path.join(DATA_DIR, 'ipc', group.folder, 'tasks-run', taskRunId)
-      : path.join(DATA_DIR, 'ipc', group.folder);
+  const groupIpcDir = runtimeScopePaths.ipcDir;
   mkdirForContainer(groupIpcDir);
   // All agents (main + sub/conversation) get agents/ subdir for spawn/message IPC
   // Use chmod 777 so both host (agent/1002) and container (node/1000) can write
@@ -977,11 +1032,11 @@ export async function runHostAgent(
   // 2. 确保目录结构（宿主机模式下限制目录权限）
   // Sub-agents get their own IPC and session directories
   // Isolated tasks get their own IPC subdirectory under tasks-run/{taskRunId}/
-  const groupIpcDir = input.agentId
-    ? path.join(DATA_DIR, 'ipc', group.folder, 'agents', input.agentId)
-    : input.taskRunId
-      ? path.join(DATA_DIR, 'ipc', group.folder, 'tasks-run', input.taskRunId)
-      : path.join(DATA_DIR, 'ipc', group.folder);
+  const runtimeScopePaths = resolveRuntimeScopePaths(group.folder, {
+    agentId: input.agentId,
+    taskRunId: input.taskRunId,
+  });
+  const groupIpcDir = runtimeScopePaths.ipcDir;
   fs.mkdirSync(path.join(groupIpcDir, 'messages'), {
     recursive: true,
     mode: 0o700,
@@ -1000,20 +1055,9 @@ export async function runHostAgent(
     mode: 0o700,
   });
 
-  const groupSessionsDir = input.agentId
-    ? path.join(
-        DATA_DIR,
-        'sessions',
-        group.folder,
-        'agents',
-        input.agentId,
-        '.claude',
-      )
-    : path.join(DATA_DIR, 'sessions', group.folder, '.claude');
+  const groupSessionsDir = runtimeScopePaths.claudeSessionDir;
   fs.mkdirSync(groupSessionsDir, { recursive: true });
-  const groupCodexHomeDir = input.agentId
-    ? path.join(DATA_DIR, 'sessions', group.folder, 'agents', input.agentId, '.codex')
-    : path.join(DATA_DIR, 'sessions', group.folder, '.codex');
+  const groupCodexHomeDir = runtimeScopePaths.codexHomeDir;
   fs.mkdirSync(groupCodexHomeDir, { recursive: true });
 
   // 3. 写入 settings.json（合并模式，不覆盖已有用户配置）

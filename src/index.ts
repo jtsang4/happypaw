@@ -26,6 +26,7 @@ import {
   ContainerOutput,
   runContainerAgent,
   runHostAgent,
+  resolveRuntimeScopePaths,
   writeGroupsSnapshot,
   writeTasksSnapshot,
 } from './container-runner.js';
@@ -864,15 +865,11 @@ function sendBillingDeniedMessage(jid: string, content: string): string {
 }
 
 function getSessionClaudeDir(folder: string, agentId?: string): string {
-  return agentId
-    ? path.join(DATA_DIR, 'sessions', folder, 'agents', agentId, '.claude')
-    : path.join(DATA_DIR, 'sessions', folder, '.claude');
+  return resolveRuntimeScopePaths(folder, { agentId }).claudeSessionDir;
 }
 
 function getSessionCodexDir(folder: string, agentId?: string): string {
-  return agentId
-    ? path.join(DATA_DIR, 'sessions', folder, 'agents', agentId, '.codex')
-    : path.join(DATA_DIR, 'sessions', folder, '.codex');
+  return resolveRuntimeScopePaths(folder, { agentId }).codexHomeDir;
 }
 
 function getEffectiveRuntime(group: RegisteredGroup): RuntimeType {
@@ -898,7 +895,10 @@ async function clearSessionRuntimeFiles(
     try {
       for (const entry of fs.readdirSync(target.dir)) {
         if (target.keep.has(entry)) continue;
-        fs.rmSync(path.join(target.dir, entry), { recursive: true, force: true });
+        fs.rmSync(path.join(target.dir, entry), {
+          recursive: true,
+          force: true,
+        });
       }
     } catch {
       cleared = false;
@@ -987,10 +987,15 @@ async function handleClearCommand(chatJid: string): Promise<string> {
   if (!group) return '未找到当前工作区';
 
   const agentId = group.target_agent_id || undefined;
+  const agentBaseJid = agentId
+    ? (getAgent(agentId)?.chat_jid ?? undefined)
+    : undefined;
   // IM 群绑定工作区主对话时，使用工作区 JID 清除上下文，
   // 确保 divider 插入到工作区消息流（Web 端可见）。
   const effectiveJid =
-    group.target_main_jid && !agentId ? group.target_main_jid : chatJid;
+    group.target_main_jid && !agentId
+      ? group.target_main_jid
+      : agentBaseJid || chatJid;
 
   try {
     await executeSessionReset(
@@ -2411,7 +2416,12 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
   let output:
     | { status: 'success' | 'error' | 'closed'; error?: string }
     | undefined;
-  let activeSessionId = getSession(effectiveGroup.folder) || undefined;
+  const activeMainSession = getRuntimeSession(effectiveGroup.folder);
+  let activeSessionId =
+    activeMainSession &&
+    activeMainSession.runtime === getEffectiveRuntime(effectiveGroup)
+      ? activeMainSession.sessionId
+      : undefined;
   try {
     output = await runAgent(
       effectiveGroup,

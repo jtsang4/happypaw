@@ -2,6 +2,7 @@ import { ChildProcess } from 'child_process';
 import { CronExpressionParser } from 'cron-parser';
 import fs from 'fs';
 import path from 'path';
+import crypto from 'node:crypto';
 
 import {
   DATA_DIR,
@@ -16,6 +17,7 @@ import {
   ContainerOutput,
   runContainerAgent,
   runHostAgent,
+  resolveRuntimeScopePaths,
   writeTasksSnapshot,
 } from './container-runner.js';
 import {
@@ -89,6 +91,10 @@ const runningTaskIds = new Set<string>();
 
 export function getRunningTaskIds(): string[] {
   return [...runningTaskIds];
+}
+
+function createIsolatedTaskRunId(taskId: string): string {
+  return `${taskId}-${crypto.randomUUID()}`;
 }
 
 function computeNextRun(task: ScheduledTask): string | null {
@@ -232,9 +238,12 @@ async function runTask(
 
   // For group context mode, use the group's current session
   const sessions = deps.getSessions();
+  const runtime = group.runtime ?? getSystemSettings().defaultRuntime;
   const sessionId =
     task.context_mode === 'group'
-      ? sessions[task.group_folder]?.sessionId
+      ? sessions[task.group_folder]?.runtime === runtime
+        ? sessions[task.group_folder]?.sessionId
+        : undefined
       : undefined;
 
   // Idle timer: writes _close sentinel after idleTimeout of no output,
@@ -333,15 +342,15 @@ async function runTask(
     runningTaskIds.delete(task.id);
     // Clean up isolated task IPC directory
     if (options?.taskRunId) {
-      const taskRunDir = path.join(
-        DATA_DIR,
-        'ipc',
-        task.group_folder,
-        'tasks-run',
-        options.taskRunId,
-      );
+      const taskRuntimeScope = resolveRuntimeScopePaths(task.group_folder, {
+        taskRunId: options.taskRunId,
+      });
       try {
-        fs.rmSync(taskRunDir, { recursive: true, force: true });
+        fs.rmSync(taskRuntimeScope.ipcDir, { recursive: true, force: true });
+        fs.rmSync(path.dirname(taskRuntimeScope.claudeSessionDir), {
+          recursive: true,
+          force: true,
+        });
       } catch {
         /* ignore */
       }
@@ -593,9 +602,10 @@ export function startSchedulerLoop(deps: SchedulerDependencies): void {
         } else if (currentTask.context_mode === 'isolated') {
           // Isolated tasks use a virtual JID for independent serialization
           const virtualJid = `${targetGroupJid}#task:${currentTask.id}`;
+          const taskRunId = createIsolatedTaskRunId(currentTask.id);
           deps.queue.enqueueTask(virtualJid, currentTask.id, () =>
             runTask(currentTask, deps, targetGroupJid, {
-              taskRunId: currentTask.id,
+              taskRunId,
             }),
           );
         } else {
@@ -644,7 +654,7 @@ export function triggerTaskNow(
   } else {
     const opts: RunTaskOptions = { manualRun: true };
     if (task.context_mode === 'isolated') {
-      opts.taskRunId = task.id;
+      opts.taskRunId = createIsolatedTaskRunId(task.id);
       const virtualJid = `${targetGroupJid}#task:${task.id}`;
       deps.queue.enqueueTask(virtualJid, task.id, () =>
         runTask(task, deps, targetGroupJid, opts),

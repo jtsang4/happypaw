@@ -66,9 +66,10 @@ function readJsonObject(
 ): Record<string, unknown> | null {
   if (!filePath || !fs.existsSync(filePath)) return null;
   try {
-    const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8')) as
-      | Record<string, unknown>
-      | null;
+    const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8')) as Record<
+      string,
+      unknown
+    > | null;
     return parsed && typeof parsed === 'object' ? parsed : null;
   } catch {
     return null;
@@ -88,7 +89,9 @@ function normalizeStringRecord(
 
 function normalizeStringArray(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) return undefined;
-  const values = value.filter((entry): entry is string => typeof entry === 'string');
+  const values = value.filter(
+    (entry): entry is string => typeof entry === 'string',
+  );
   return values.length > 0 ? values : undefined;
 }
 
@@ -97,7 +100,9 @@ export function readCodexMcpServersFromSettings(
 ): Record<string, CodexMcpServerConfig> {
   const settings = readJsonObject(settingsPath);
   const rawServers =
-    (settings?.mcpServers as Record<string, Record<string, unknown>> | undefined) ??
+    (settings?.mcpServers as
+      | Record<string, Record<string, unknown>>
+      | undefined) ??
     (settings?.servers as Record<string, Record<string, unknown>> | undefined);
   if (!rawServers || typeof rawServers !== 'object') {
     return {};
@@ -107,7 +112,11 @@ export function readCodexMcpServersFromSettings(
   for (const [id, rawServer] of Object.entries(
     rawServers as Record<string, Record<string, unknown>>,
   )) {
-    if (isReservedMcpServerId(id) || !rawServer || typeof rawServer !== 'object') {
+    if (
+      isReservedMcpServerId(id) ||
+      !rawServer ||
+      typeof rawServer !== 'object'
+    ) {
       continue;
     }
 
@@ -135,7 +144,9 @@ export function readCodexMcpServersFromSettings(
       normalized.http_headers =
         normalizeStringRecord(server.http_headers) ||
         normalizeStringRecord(server.headers);
-      normalized.env_http_headers = normalizeStringRecord(server.env_http_headers);
+      normalized.env_http_headers = normalizeStringRecord(
+        server.env_http_headers,
+      );
       if (
         typeof server.bearer_token_env_var === 'string' &&
         server.bearer_token_env_var.trim()
@@ -152,7 +163,8 @@ export function readCodexMcpServersFromSettings(
       }
     }
 
-    if (typeof server.enabled === 'boolean') normalized.enabled = server.enabled;
+    if (typeof server.enabled === 'boolean')
+      normalized.enabled = server.enabled;
     if (typeof server.required === 'boolean')
       normalized.required = server.required;
     if (
@@ -292,9 +304,11 @@ export function buildCodexConfigToml(options: {
   return lines.join('\n');
 }
 
-export function prepareCodexHome(
-  options: PrepareCodexHomeOptions,
-): { codexHome: string; configPath: string; configToml: string } {
+export function prepareCodexHome(options: PrepareCodexHomeOptions): {
+  codexHome: string;
+  configPath: string;
+  configToml: string;
+} {
   fs.mkdirSync(options.codexHome, { recursive: true });
   fs.mkdirSync(path.join(options.codexHome, 'sessions'), { recursive: true });
   fs.mkdirSync(path.join(options.codexHome, 'logs'), { recursive: true });
