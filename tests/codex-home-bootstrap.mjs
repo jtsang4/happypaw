@@ -168,8 +168,6 @@ assert.equal(merged[LEGACY_PRODUCT_ID], undefined);
 initDatabase();
 setSession('folder-a', 'thread-123', undefined, 'codex_app_server');
 setSession('folder-a', 'agent-thread-456', 'agent-1', 'codex_app_server');
-setSession('folder-b', 'claude-session-789', undefined, 'claude_sdk');
-
 assert.deepEqual(getRuntimeSession('folder-a'), {
   sessionId: 'thread-123',
   runtime: 'codex_app_server',
@@ -180,7 +178,6 @@ assert.deepEqual(getRuntimeSession('folder-a', 'agent-1'), {
 });
 assert.deepEqual(getAllSessions(), {
   'folder-a': { sessionId: 'thread-123', runtime: 'codex_app_server' },
-  'folder-b': { sessionId: 'claude-session-789', runtime: 'claude_sdk' },
 });
 
 console.log('✅ codex home bootstrap checks passed');

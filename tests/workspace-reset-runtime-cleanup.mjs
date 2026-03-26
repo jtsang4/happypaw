@@ -38,9 +38,7 @@ for (const dir of [
   memoryDir,
   ipcDir,
   envDir,
-  mainScope.claudeSessionDir,
   mainScope.codexHomeDir,
-  agentScope.claudeSessionDir,
   agentScope.codexHomeDir,
 ]) {
   fs.mkdirSync(dir, { recursive: true });
@@ -50,11 +48,6 @@ fs.writeFileSync(path.join(groupDir, 'CLAUDE.md'), 'workspace memory');
 fs.writeFileSync(path.join(memoryDir, '2026-03-26.md'), 'memory');
 fs.writeFileSync(path.join(ipcDir, 'stale.json'), '{}');
 fs.writeFileSync(path.join(envDir, 'env'), 'KEY=value');
-fs.writeFileSync(path.join(mainScope.claudeSessionDir, 'settings.json'), '{}');
-fs.writeFileSync(
-  path.join(mainScope.claudeSessionDir, 'transcript.jsonl'),
-  'main'
-);
 fs.writeFileSync(
   path.join(mainScope.codexHomeDir, 'config.toml'),
   'model = "gpt-5"'
@@ -62,11 +55,6 @@ fs.writeFileSync(
 fs.writeFileSync(
   path.join(mainScope.codexHomeDir, 'thread.json'),
   'main-thread'
-);
-fs.writeFileSync(path.join(agentScope.claudeSessionDir, 'settings.json'), '{}');
-fs.writeFileSync(
-  path.join(agentScope.claudeSessionDir, 'transcript.jsonl'),
-  'agent'
 );
 fs.writeFileSync(
   path.join(agentScope.codexHomeDir, 'config.toml'),
@@ -90,9 +78,7 @@ assert.ok(fs.existsSync(path.join(ipcDir, 'tasks')));
 assert.ok(!fs.existsSync(memoryDir));
 assert.ok(fs.existsSync(envDir));
 assert.ok(fs.existsSync(path.join(envDir, 'env')));
-assert.ok(!fs.existsSync(mainScope.claudeSessionDir));
 assert.ok(!fs.existsSync(mainScope.codexHomeDir));
-assert.ok(!fs.existsSync(agentScope.claudeSessionDir));
 assert.ok(!fs.existsSync(agentScope.codexHomeDir));
 assert.equal(getRuntimeSession('workspace-a'), undefined);
 assert.equal(getRuntimeSession('workspace-a', 'agent-1'), undefined);

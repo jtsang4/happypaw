@@ -472,7 +472,7 @@ function normalizeOpenAIModel(input: unknown): string {
 }
 
 function normalizeRuntimeType(input: unknown): RuntimeType {
-  if (input === 'claude_sdk' || input === 'codex_app_server') return input;
+  if (input === 'codex_app_server') return input;
   throw new Error('Invalid runtime type');
 }
 
@@ -3724,7 +3724,7 @@ export interface SystemSettings {
 }
 
 const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
-  defaultRuntime: 'claude_sdk',
+  defaultRuntime: 'codex_app_server',
   containerTimeout: 1800000,
   idleTimeout: 1800000,
   containerMaxOutputSize: 10485760,
@@ -3843,7 +3843,7 @@ function buildEnvFallbackSettings(): SystemSettings {
   return {
     defaultRuntime:
       process.env.DEFAULT_RUNTIME &&
-      ['claude_sdk', 'codex_app_server'].includes(process.env.DEFAULT_RUNTIME)
+      ['codex_app_server'].includes(process.env.DEFAULT_RUNTIME)
         ? normalizeRuntimeType(process.env.DEFAULT_RUNTIME)
         : DEFAULT_SYSTEM_SETTINGS.defaultRuntime,
     containerTimeout: parseIntEnv(

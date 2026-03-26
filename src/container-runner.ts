@@ -4,7 +4,6 @@
  */
 import {
   ChildProcess,
-  exec,
   execFile,
   execFileSync,
   spawn,
@@ -35,15 +34,12 @@ import {
   getBalancingConfig,
   getCodexProviderConfig,
   getSystemSettings,
-  mergeClaudeEnvConfig,
   resolveProviderById,
   shellQuoteEnvLines,
-  writeCredentialsFile,
 } from './runtime-config.js';
 import { providerPool } from './provider-pool.js';
 import { isApiError } from './agent-output-parser.js';
 import type { ClaudeProviderConfig } from './runtime-config.js';
-import { loadUserMcpServers } from './mcp-utils.js';
 import { RegisteredGroup, RuntimeType, StreamEvent } from './types.js';
 import {
   attachStderrHandler,
@@ -68,10 +64,7 @@ const REQUIRED_SETTINGS_ENV: Record<string, string> = {
 };
 
 /** Read existing settings.json, deep-merge required env keys and mcpServers, write only if changed */
-function ensureSettingsJson(
-  settingsFile: string,
-  mcpServers?: Record<string, Record<string, unknown>>,
-): void {
+function ensureSettingsJson(settingsFile: string): void {
   let existing: Record<string, unknown> = {};
   try {
     if (fs.existsSync(settingsFile)) {
@@ -84,12 +77,6 @@ function ensureSettingsJson(
   const existingEnv = (existing.env as Record<string, string>) || {};
   const mergedEnv = { ...existingEnv, ...REQUIRED_SETTINGS_ENV };
   const merged: Record<string, unknown> = { ...existing, env: mergedEnv };
-
-  // Merge user-configured MCP servers into settings
-  if (mcpServers && Object.keys(mcpServers).length > 0) {
-    const existingMcp = (existing.mcpServers as Record<string, unknown>) || {};
-    merged.mcpServers = { ...existingMcp, ...mcpServers };
-  }
 
   const newContent = JSON.stringify(merged, null, 2) + '\n';
 
@@ -152,7 +139,6 @@ interface RuntimeScopePathOptions {
 
 export interface RuntimeScopePaths {
   ipcDir: string;
-  claudeSessionDir: string;
   codexHomeDir: string;
 }
 
@@ -176,7 +162,6 @@ export function resolveRuntimeScopePaths(
         'agents',
         options.agentId,
       ),
-      claudeSessionDir: path.join(agentRoot, '.claude'),
       codexHomeDir: path.join(agentRoot, '.codex'),
     };
   }
@@ -197,7 +182,6 @@ export function resolveRuntimeScopePaths(
         'tasks-run',
         options.taskRunId,
       ),
-      claudeSessionDir: path.join(taskRoot, '.claude'),
       codexHomeDir: path.join(taskRoot, '.codex'),
     };
   }
@@ -205,7 +189,6 @@ export function resolveRuntimeScopePaths(
   const groupRoot = path.join(DATA_DIR, 'sessions', groupFolder);
   return {
     ipcDir: path.join(DATA_DIR, 'ipc', groupFolder),
-    claudeSessionDir: path.join(groupRoot, '.claude'),
     codexHomeDir: path.join(groupRoot, '.codex'),
   };
 }
@@ -258,13 +241,15 @@ function buildCodexBridgeCommand(executionMode: 'container' | 'host'): {
   };
 }
 
+function getWorkspaceSettingsPath(workspaceRoot: string): string {
+  return path.join(workspaceRoot, '.claude', 'settings.json');
+}
+
 function ensureCodexSessionHome(
   group: RegisteredGroup,
-  sourceWorkspaceDir: string,
   runtimeWorkspaceDir: string,
-  ownerId: string | undefined,
+  workspaceSettingsPath: string,
   codexHomeDir: string,
-  runtime: RuntimeType,
   executionMode: 'container' | 'host',
   bridgeContext: {
     chatJid: string;
@@ -276,22 +261,12 @@ function ensureCodexSessionHome(
     isScheduledTask?: boolean;
   },
 ): void {
-  if (runtime !== 'codex_app_server') return;
-
   const providerConfig = getCodexProviderConfig();
-  const workspaceSettingsPath = path.join(
-    sourceWorkspaceDir,
-    '.claude',
-    'settings.json',
-  );
-  const userSettingsPath = ownerId
-    ? path.join(DATA_DIR, 'mcp-servers', ownerId, 'servers.json')
-    : undefined;
   const bridgeCommand = buildCodexBridgeCommand(executionMode);
   const bridgeEnv: Record<string, string> = {
     HAPPYPAW_CHAT_JID: bridgeContext.chatJid,
     HAPPYPAW_GROUP_FOLDER: group.folder,
-    HAPPYPAW_RUNTIME: runtime,
+    HAPPYPAW_RUNTIME: 'codex_app_server',
     HAPPYPAW_WORKSPACE_GROUP: runtimeWorkspaceDir,
     HAPPYPAW_WORKSPACE_GLOBAL: bridgeContext.workspaceGlobal,
     HAPPYPAW_WORKSPACE_MEMORY: bridgeContext.workspaceMemory,
@@ -304,8 +279,8 @@ function ensureCodexSessionHome(
   if (bridgeContext.isScheduledTask) {
     bridgeEnv.HAPPYPAW_IS_SCHEDULED_TASK = '1';
   }
-  if (ownerId) {
-    bridgeEnv.HAPPYPAW_OWNER_ID = ownerId;
+  if (group.created_by) {
+    bridgeEnv.HAPPYPAW_OWNER_ID = group.created_by;
   }
 
   const options: PrepareCodexHomeOptions = {
@@ -313,7 +288,9 @@ function ensureCodexSessionHome(
     providerConfig,
     writableRoots: [runtimeWorkspaceDir],
     workspaceSettingsPath,
-    userSettingsPath,
+    userSettingsPath: group.created_by
+      ? path.join(DATA_DIR, 'mcp-servers', group.created_by, 'servers.json')
+      : undefined,
     bridge: {
       command: bridgeCommand.command,
       args: bridgeCommand.args,
@@ -366,7 +343,6 @@ function trySelectPoolProvider(
 function buildVolumeMounts(
   group: RegisteredGroup,
   isAdminHome: boolean,
-  mountUserSkills = true,
   agentId?: string,
   ownerHomeFolder?: string,
   taskRunId?: string,
@@ -375,12 +351,12 @@ function buildVolumeMounts(
 ): VolumeMount[] {
   const mounts: VolumeMount[] = [];
   const projectRoot = process.cwd();
-  const runtime = getEffectiveRuntime(group);
   const ownerId = group.created_by;
   const runtimeScopePaths = resolveRuntimeScopePaths(group.folder, {
     agentId,
     taskRunId,
   });
+  const workspaceHostDir = path.join(GROUPS_DIR, group.folder);
   const workspaceGlobalDir = ownerId
     ? path.join(GROUPS_DIR, 'user-global', ownerId)
     : path.join(GROUPS_DIR, 'global');
@@ -414,14 +390,14 @@ function buildVolumeMounts(
 
     // Admin home also gets its group folder as the working directory
     mounts.push({
-      hostPath: path.join(GROUPS_DIR, group.folder),
+      hostPath: workspaceHostDir,
       containerPath: '/workspace/group',
       readonly: false,
     });
   } else {
     // Member home and non-home groups only get their own folder
     mounts.push({
-      hostPath: path.join(GROUPS_DIR, group.folder),
+      hostPath: workspaceHostDir,
       containerPath: '/workspace/group',
       readonly: false,
     });
@@ -439,21 +415,14 @@ function buildVolumeMounts(
     readonly: !group.is_home,
   });
 
-  // Per-group Claude sessions directory (isolated from other groups)
-  // Sub-agents get their own session dir under agents/{agentId}/.claude/
-  const groupSessionsDir = runtimeScopePaths.claudeSessionDir;
-  mkdirForContainer(groupSessionsDir);
   const groupCodexHomeDir = runtimeScopePaths.codexHomeDir;
-  const settingsFile = path.join(groupSessionsDir, 'settings.json');
-  const mcpServers = ownerId ? loadUserMcpServers(ownerId) : {};
-  ensureSettingsJson(settingsFile, mcpServers);
+  mkdirForContainer(groupCodexHomeDir);
+  ensureSettingsJson(getWorkspaceSettingsPath(workspaceHostDir));
   ensureCodexSessionHome(
     group,
-    path.join(GROUPS_DIR, group.folder),
     '/workspace/group',
-    ownerId,
+    '/workspace/group/.claude/settings.json',
     groupCodexHomeDir,
-    runtime,
     'container',
     {
       chatJid: currentChatJid || `web:${group.folder}`,
@@ -467,11 +436,6 @@ function buildVolumeMounts(
   );
 
   mounts.push({
-    hostPath: groupSessionsDir,
-    containerPath: '/home/node/.claude',
-    readonly: false,
-  });
-  mounts.push({
     hostPath: groupCodexHomeDir,
     containerPath: '/home/node/.codex',
     readonly: false,
@@ -480,8 +444,7 @@ function buildVolumeMounts(
   // Skills：以只读卷挂载宿主机目录（由 entrypoint 创建符号链接）
   // 用户的所有 skills 在其所有工作区中全量生效
   const projectSkillsDir = path.join(projectRoot, 'container', 'skills');
-  const userSkillsDir =
-    mountUserSkills && ownerId ? path.join(DATA_DIR, 'skills', ownerId) : null;
+  const userSkillsDir = ownerId ? path.join(DATA_DIR, 'skills', ownerId) : null;
 
   // Ensure user skills directory exists so it can always be mounted.
   // Skills may be installed after the group is created; without pre-creating,
@@ -563,33 +526,6 @@ function buildVolumeMounts(
     });
   }
 
-  // Write .credentials.json for OAuth credentials (session dir is already mounted)
-  const mergedConfig = mergeClaudeEnvConfig(globalConfig, containerOverride);
-  if (mergedConfig.claudeOAuthCredentials) {
-    try {
-      writeCredentialsFile(groupSessionsDir, mergedConfig);
-    } catch (err) {
-      logger.warn(
-        { group: group.name, err },
-        'Failed to write .credentials.json',
-      );
-    }
-  }
-
-  // Mount agent-runner source from host — recompiled on container startup.
-  // Bypasses Docker 镜像构建缓存，确保代码变更生效。
-  const agentRunnerSrc = path.join(
-    projectRoot,
-    'container',
-    'agent-runner',
-    'src',
-  );
-  mounts.push({
-    hostPath: agentRunnerSrc,
-    containerPath: '/app/src',
-    readonly: true,
-  });
-
   // Admin's ~/.claude/ config: mount CLAUDE.md and rules/ into /workspace/
   // so the SDK's directory traversal (cwd → root) discovers them at /workspace/ level.
   // Only for admin-created workspaces (ownerHomeFolder === 'main').
@@ -668,12 +604,9 @@ export async function runContainerAgent(
   try {
     // Determine if this is an admin home container (full privileges)
     const isAdminHome = !!group.is_home && group.folder === 'main';
-    // Per-user skills: always mount if the group has an owner
-    const shouldMountUserSkills = !!group.created_by;
     const mounts = buildVolumeMounts(
       group,
       isAdminHome,
-      shouldMountUserSkills,
       input.agentId,
       ownerHomeFolder,
       input.taskRunId,
@@ -1012,6 +945,7 @@ export async function runHostAgent(
   if (!fs.statSync(groupDir).isDirectory()) {
     return hostModeSetupError(`工作目录不是目录：${groupDir}`);
   }
+  const workspaceHostDir = path.join(GROUPS_DIR, group.folder);
 
   // Runtime allowlist validation for custom CWD (defense-in-depth: web.ts validates at creation,
   // but re-check here in case allowlist was tightened or path was injected via DB)
@@ -1057,8 +991,6 @@ export async function runHostAgent(
   fs.mkdirSync(path.join(DATA_DIR, 'memory', group.folder), {
     recursive: true,
   });
-  const runtime = getEffectiveRuntime(group);
-
   // 2. 确保目录结构（宿主机模式下限制目录权限）
   // Sub-agents get their own IPC and session directories
   // Isolated tasks get their own IPC subdirectory under tasks-run/{taskRunId}/
@@ -1085,25 +1017,16 @@ export async function runHostAgent(
     mode: 0o700,
   });
 
-  const groupSessionsDir = runtimeScopePaths.claudeSessionDir;
-  fs.mkdirSync(groupSessionsDir, { recursive: true });
   const groupCodexHomeDir = runtimeScopePaths.codexHomeDir;
   fs.mkdirSync(groupCodexHomeDir, { recursive: true });
 
-  // 3. 写入 settings.json（合并模式，不覆盖已有用户配置）
-  // Load user's global MCP servers (same logic as Docker mode).
-  const settingsFile = path.join(groupSessionsDir, 'settings.json');
-  const hostMcpServers = group.created_by
-    ? loadUserMcpServers(group.created_by)
-    : {};
-  ensureSettingsJson(settingsFile, hostMcpServers);
+  // 3. 确保工作区 settings.json 存在，并生成隔离的 Codex home
+  ensureSettingsJson(getWorkspaceSettingsPath(groupDir));
   ensureCodexSessionHome(
     group,
     groupDir,
-    groupDir,
-    group.created_by,
+    getWorkspaceSettingsPath(groupDir),
     groupCodexHomeDir,
-    runtime,
     'host',
     {
       chatJid: input.chatJid,
@@ -1119,10 +1042,9 @@ export async function runHostAgent(
   );
 
   // 4. Skills 自动链接到 session 目录
-  // 链接顺序：项目级 → 用户级(覆盖同名项目级)
-  // 用户的所有 skills 在所有工作区中生效
+  // 链接顺序：项目级 → 用户级(覆盖同名项目级)，统一落到工作区 .claude/skills
   try {
-    const skillsDir = path.join(groupSessionsDir, 'skills');
+    const skillsDir = path.join(workspaceHostDir, '.claude', 'skills');
     fs.mkdirSync(skillsDir, { recursive: true });
     // 清空已有符号链接
     for (const entry of fs.readdirSync(skillsDir, { withFileTypes: true })) {
@@ -1195,19 +1117,6 @@ export async function runHostAgent(
       }
     }
 
-    // Write .credentials.json for OAuth credentials
-    const mergedConfig = mergeClaudeEnvConfig(globalConfig, containerOverride);
-    if (mergedConfig.claudeOAuthCredentials) {
-      try {
-        writeCredentialsFile(groupSessionsDir, mergedConfig);
-      } catch (err) {
-        logger.warn(
-          { folder: group.folder, err },
-          'Failed to write .credentials.json for host agent',
-        );
-      }
-    }
-
     // 路径映射（新旧变量名双写，兼容已有运行时/脚本）
     hostEnv['HAPPYPAW_WORKSPACE_GROUP'] = groupDir;
     hostEnv['HAPPYCLAW_WORKSPACE_GROUP'] = groupDir;
@@ -1239,22 +1148,14 @@ export async function runHostAgent(
     );
     hostEnv['HAPPYPAW_WORKSPACE_IPC'] = groupIpcDir;
     hostEnv['HAPPYCLAW_WORKSPACE_IPC'] = groupIpcDir;
-    hostEnv['CLAUDE_CONFIG_DIR'] = groupSessionsDir;
     hostEnv['CODEX_HOME'] = groupCodexHomeDir;
-    // 让 SDK 捕获 CLI 的 stderr 输出，便于排查启动失败
-    hostEnv['DEBUG_CLAUDE_AGENT_SDK'] = '1';
-    // CLI 禁止 root 用户使用 --dangerously-skip-permissions，
-    // 通过 IS_SANDBOX 标记告知 CLI 当前运行在受控环境中以绕过此限制
-    if (typeof process.getuid === 'function' && process.getuid() === 0) {
-      hostEnv['IS_SANDBOX'] = '1';
-    }
 
     // 6. 编译检查
     const projectRoot = process.cwd();
     const agentRunnerRoot = path.join(projectRoot, 'container', 'agent-runner');
     const agentRunnerNodeModules = path.join(agentRunnerRoot, 'node_modules');
     const agentRunnerDist = path.join(agentRunnerRoot, 'dist', 'index.js');
-    const requiredDeps = ['@anthropic-ai/claude-agent-sdk'];
+    const requiredDeps: string[] = [];
     const missingDeps = requiredDeps.filter((dep) => {
       const depJson = path.join(
         agentRunnerNodeModules,

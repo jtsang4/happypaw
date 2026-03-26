@@ -88,10 +88,6 @@ export function ensureAgentDirectories(
   fs.mkdirSync(path.join(agentIpcDir, 'tasks'), { recursive: true });
   fs.mkdirSync(path.join(agentIpcDir, 'agents'), { recursive: true });
   fs.mkdirSync(
-    path.join(DATA_DIR, 'sessions', folder, 'agents', agentId, '.claude'),
-    { recursive: true },
-  );
-  fs.mkdirSync(
     path.join(DATA_DIR, 'sessions', folder, 'agents', agentId, '.codex'),
     { recursive: true },
   );

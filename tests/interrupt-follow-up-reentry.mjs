@@ -14,6 +14,20 @@ function makeFakeCodexScript(scriptPath, requestLogPath) {
     `#!/usr/bin/env node
 const fs = require('node:fs');
 const requestLogPath = ${JSON.stringify(requestLogPath)};
+const requiredBridgeTools = ${JSON.stringify([
+  'cancel_task',
+  'get_context',
+  'list_tasks',
+  'memory_append',
+  'memory_get',
+  'memory_search',
+  'pause_task',
+  'resume_task',
+  'schedule_task',
+  'send_file',
+  'send_image',
+  'send_message',
+])};
 let buffer = '';
 let activeTurn = null;
 
@@ -42,6 +56,29 @@ process.stdin.on('data', (chunk) => {
       continue;
     }
     if (msg.method === 'initialized') {
+      continue;
+    }
+    if (msg.method === 'mcpServerStatus/list') {
+      send({
+        id: msg.id,
+        result: {
+          data: [
+            {
+              name: 'happypaw',
+              authStatus: 'bearerToken',
+              tools: Object.fromEntries(
+                requiredBridgeTools.map((toolName) => [
+                  toolName,
+                  { name: toolName, inputSchema: {} },
+                ]),
+              ),
+              resources: [],
+              resourceTemplates: [],
+            },
+          ],
+          nextCursor: null,
+        },
+      });
       continue;
     }
     if (msg.method === 'thread/start') {

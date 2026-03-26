@@ -347,7 +347,7 @@ async function runTask(
       });
       try {
         fs.rmSync(taskRuntimeScope.ipcDir, { recursive: true, force: true });
-        fs.rmSync(path.dirname(taskRuntimeScope.claudeSessionDir), {
+        fs.rmSync(path.dirname(taskRuntimeScope.codexHomeDir), {
           recursive: true,
           force: true,
         });

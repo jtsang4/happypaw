@@ -115,7 +115,7 @@ export const MessageCreateSchema = z
 
 export const GroupCreateSchema = z.object({
   name: z.string().min(1).max(MAX_GROUP_NAME_LEN),
-  runtime: z.enum(['claude_sdk', 'codex_app_server']).optional(),
+  runtime: z.enum(['codex_app_server']).optional(),
   execution_mode: z.enum(['container', 'host']).optional(),
   custom_cwd: z
     .string()
@@ -191,7 +191,7 @@ export const GroupPatchSchema = z.object({
   activation_mode: z
     .enum(['auto', 'always', 'when_mentioned', 'disabled'])
     .optional(),
-  runtime: z.enum(['claude_sdk', 'codex_app_server']).nullable().optional(),
+  runtime: z.enum(['codex_app_server']).nullable().optional(),
   execution_mode: z.enum(['container', 'host']).optional(),
 });
 
@@ -213,7 +213,7 @@ export const RegistrationConfigSchema = z.object({
 });
 
 export const SystemSettingsSchema = z.object({
-  defaultRuntime: z.enum(['claude_sdk', 'codex_app_server']).optional(),
+  defaultRuntime: z.enum(['codex_app_server']).optional(),
   containerTimeout: z.number().int().min(60000).max(86400000).optional(),
   idleTimeout: z.number().int().min(60000).max(86400000).optional(),
   containerMaxOutputSize: z

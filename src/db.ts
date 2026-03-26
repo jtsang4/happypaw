@@ -2170,7 +2170,7 @@ function parseRuntimeType(
   raw: string | null,
   context: string,
 ): RuntimeType | undefined {
-  if (raw === 'claude_sdk' || raw === 'codex_app_server') return raw;
+  if (raw === 'codex_app_server') return raw;
   if (raw !== null && raw !== '') {
     console.warn(
       `Invalid runtime "${raw}" for ${context}, falling back to system default`,

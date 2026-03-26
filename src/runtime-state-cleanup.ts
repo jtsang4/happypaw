@@ -12,10 +12,10 @@ import type { RuntimeSessionRecord } from './types.js';
 export function clearSessionRuntimeFiles(
   folder: string,
   agentId?: string,
+  taskRunId?: string,
 ): void {
-  const runtimeScope = resolveRuntimeScopePaths(folder, { agentId });
+  const runtimeScope = resolveRuntimeScopePaths(folder, { agentId, taskRunId });
   const targets: Array<{ dir: string; keep: Set<string> }> = [
-    { dir: runtimeScope.claudeSessionDir, keep: new Set(['settings.json']) },
     { dir: runtimeScope.codexHomeDir, keep: new Set(['config.toml']) },
   ];
 
@@ -42,9 +42,6 @@ export function clearSessionRuntimeFiles(
   if (cleared) return;
 
   const volumeArgs: string[] = [];
-  if (fs.existsSync(runtimeScope.claudeSessionDir)) {
-    volumeArgs.push('-v', `${runtimeScope.claudeSessionDir}:/target/claude`);
-  }
   if (fs.existsSync(runtimeScope.codexHomeDir)) {
     volumeArgs.push('-v', `${runtimeScope.codexHomeDir}:/target/codex`);
   }
@@ -61,7 +58,6 @@ export function clearSessionRuntimeFiles(
         'sh',
         '-c',
         [
-          'if [ -d /target/claude ]; then find /target/claude -mindepth 1 -not -name settings.json -exec rm -rf {} + 2>/dev/null; fi',
           'if [ -d /target/codex ]; then find /target/codex -mindepth 1 -not -name config.toml -exec rm -rf {} + 2>/dev/null; fi',
           'exit 0',
         ].join('; '),
@@ -77,10 +73,13 @@ export function clearPersistedRuntimeStateForRecovery(
   sessions: Record<string, RuntimeSessionRecord>,
   folder: string,
   agentId?: string,
+  taskRunId?: string,
 ): void {
-  clearSessionRuntimeFiles(folder, agentId);
-  deleteSession(folder, agentId);
-  if (!agentId) {
+  clearSessionRuntimeFiles(folder, agentId, taskRunId);
+  if (!taskRunId) {
+    deleteSession(folder, agentId);
+  }
+  if (!agentId && !taskRunId) {
     delete sessions[folder];
   }
 }

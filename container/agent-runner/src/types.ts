@@ -12,7 +12,7 @@ export interface ContainerInput {
   prompt: string;
   sessionId?: string;
   turnId?: string;
-  runtime?: 'claude_sdk' | 'codex_app_server';
+  runtime?: 'codex_app_server';
   groupFolder: string;
   chatJid: string;
   /** @deprecated Use isHome + isAdminHome instead. Kept for backward compatibility with older host processes. */

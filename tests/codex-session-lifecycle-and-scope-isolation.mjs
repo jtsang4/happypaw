@@ -40,10 +40,6 @@ const isolatedTaskScopeSecondRun = resolveRuntimeScopePaths('workspace-a', {
 
 assert.equal(mainScope.ipcDir, path.join(dataDir, 'ipc', 'workspace-a'));
 assert.equal(
-  mainScope.claudeSessionDir,
-  path.join(dataDir, 'sessions', 'workspace-a', '.claude')
-);
-assert.equal(
   mainScope.codexHomeDir,
   path.join(dataDir, 'sessions', 'workspace-a', '.codex')
 );
@@ -51,10 +47,6 @@ assert.equal(
 assert.equal(
   agentScope.ipcDir,
   path.join(dataDir, 'ipc', 'workspace-a', 'agents', 'agent-1')
-);
-assert.equal(
-  agentScope.claudeSessionDir,
-  path.join(dataDir, 'sessions', 'workspace-a', 'agents', 'agent-1', '.claude')
 );
 assert.equal(
   agentScope.codexHomeDir,
@@ -66,30 +58,8 @@ assert.equal(
   path.join(dataDir, 'ipc', 'workspace-a', 'tasks-run', 'task-1')
 );
 assert.equal(
-  isolatedTaskScope.claudeSessionDir,
-  path.join(
-    dataDir,
-    'sessions',
-    'workspace-a',
-    'tasks-run',
-    'task-1',
-    '.claude'
-  )
-);
-assert.equal(
   isolatedTaskScope.codexHomeDir,
   path.join(dataDir, 'sessions', 'workspace-a', 'tasks-run', 'task-1', '.codex')
-);
-assert.equal(
-  isolatedTaskScopeSecondRun.claudeSessionDir,
-  path.join(
-    dataDir,
-    'sessions',
-    'workspace-a',
-    'tasks-run',
-    'task-2',
-    '.claude'
-  )
 );
 assert.equal(
   isolatedTaskScopeSecondRun.codexHomeDir,
@@ -108,13 +78,9 @@ assert.notEqual(
   isolatedTaskScopeSecondRun.codexHomeDir
 );
 
-fs.mkdirSync(isolatedTaskScope.claudeSessionDir, { recursive: true });
 fs.mkdirSync(isolatedTaskScope.codexHomeDir, { recursive: true });
-fs.mkdirSync(isolatedTaskScopeSecondRun.claudeSessionDir, { recursive: true });
 fs.mkdirSync(isolatedTaskScopeSecondRun.codexHomeDir, { recursive: true });
-assert.ok(fs.existsSync(isolatedTaskScope.claudeSessionDir));
 assert.ok(fs.existsSync(isolatedTaskScope.codexHomeDir));
-assert.ok(fs.existsSync(isolatedTaskScopeSecondRun.claudeSessionDir));
 assert.ok(fs.existsSync(isolatedTaskScopeSecondRun.codexHomeDir));
 
 const agentIpcDir = ensureAgentDirectories('workspace-a', 'agent-1');
@@ -123,7 +89,6 @@ assert.ok(fs.existsSync(path.join(agentIpcDir, 'input')));
 assert.ok(fs.existsSync(path.join(agentIpcDir, 'messages')));
 assert.ok(fs.existsSync(path.join(agentIpcDir, 'tasks')));
 assert.ok(fs.existsSync(path.join(agentIpcDir, 'agents')));
-assert.ok(fs.existsSync(agentScope.claudeSessionDir));
 assert.ok(fs.existsSync(agentScope.codexHomeDir));
 
 setSession('workspace-a', 'main-thread', undefined, 'codex_app_server');

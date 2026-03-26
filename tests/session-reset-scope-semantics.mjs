@@ -44,21 +44,15 @@ const mainScope = resolveRuntimeScopePaths('workspace-a');
 const agentScope = resolveRuntimeScopePaths('workspace-a', { agentId: 'agent-1' });
 
 for (const dir of [
-  mainScope.claudeSessionDir,
   mainScope.codexHomeDir,
-  agentScope.claudeSessionDir,
   agentScope.codexHomeDir,
 ]) {
   fs.mkdirSync(dir, { recursive: true });
 }
 
-fs.writeFileSync(path.join(mainScope.claudeSessionDir, 'settings.json'), '{}');
-fs.writeFileSync(path.join(mainScope.claudeSessionDir, 'transcript.jsonl'), 'main');
 fs.writeFileSync(path.join(mainScope.codexHomeDir, 'config.toml'), 'model = "gpt-5"');
 fs.writeFileSync(path.join(mainScope.codexHomeDir, 'thread.json'), 'main-thread');
 
-fs.writeFileSync(path.join(agentScope.claudeSessionDir, 'settings.json'), '{}');
-fs.writeFileSync(path.join(agentScope.claudeSessionDir, 'transcript.jsonl'), 'agent');
 fs.writeFileSync(path.join(agentScope.codexHomeDir, 'config.toml'), 'model = "gpt-5"');
 fs.writeFileSync(path.join(agentScope.codexHomeDir, 'thread.json'), 'agent-thread');
 
@@ -95,11 +89,8 @@ assert.deepEqual(getRuntimeSession('workspace-a', 'agent-1'), {
   sessionId: 'agent-thread',
   runtime: 'codex_app_server',
 });
-assert.ok(fs.existsSync(path.join(mainScope.claudeSessionDir, 'settings.json')));
-assert.ok(!fs.existsSync(path.join(mainScope.claudeSessionDir, 'transcript.jsonl')));
 assert.ok(fs.existsSync(path.join(mainScope.codexHomeDir, 'config.toml')));
 assert.ok(!fs.existsSync(path.join(mainScope.codexHomeDir, 'thread.json')));
-assert.ok(fs.existsSync(path.join(agentScope.claudeSessionDir, 'transcript.jsonl')));
 assert.ok(fs.existsSync(path.join(agentScope.codexHomeDir, 'thread.json')));
 assert.equal(mainBroadcasts[0]?.jid, 'web:workspace-a');
 assert.equal(mainBroadcasts[0]?.msg.content, 'context_reset');
@@ -108,9 +99,7 @@ assert.deepEqual(
   ['telegram:workspace-a', 'web:workspace-a'],
 );
 
-fs.writeFileSync(path.join(mainScope.claudeSessionDir, 'transcript.jsonl'), 'main-again');
 fs.writeFileSync(path.join(mainScope.codexHomeDir, 'thread.json'), 'main-thread');
-fs.writeFileSync(path.join(agentScope.claudeSessionDir, 'transcript.jsonl'), 'agent-again');
 fs.writeFileSync(path.join(agentScope.codexHomeDir, 'thread.json'), 'agent-thread');
 setSession('workspace-a', 'main-thread-2', undefined, 'codex_app_server');
 setSession('workspace-a', 'agent-thread-2', 'agent-1', 'codex_app_server');
@@ -146,9 +135,7 @@ assert.deepEqual(getRuntimeSession('workspace-a'), {
   runtime: 'codex_app_server',
 });
 assert.equal(getRuntimeSession('workspace-a', 'agent-1'), undefined);
-assert.ok(fs.existsSync(path.join(mainScope.claudeSessionDir, 'transcript.jsonl')));
 assert.ok(fs.existsSync(path.join(mainScope.codexHomeDir, 'thread.json')));
-assert.ok(!fs.existsSync(path.join(agentScope.claudeSessionDir, 'transcript.jsonl')));
 assert.ok(!fs.existsSync(path.join(agentScope.codexHomeDir, 'thread.json')));
 assert.equal(agentBroadcasts[0]?.jid, 'web:workspace-a#agent:agent-1');
 assert.equal(agentBroadcasts[0]?.msg.content, 'context_reset');

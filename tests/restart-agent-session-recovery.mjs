@@ -35,13 +35,7 @@ const agentScope = resolveRuntimeScopePaths('workspace-main', {
   agentId: 'agent-42',
 });
 
-fs.mkdirSync(agentScope.claudeSessionDir, { recursive: true });
 fs.mkdirSync(agentScope.codexHomeDir, { recursive: true });
-fs.writeFileSync(path.join(agentScope.claudeSessionDir, 'settings.json'), '{}');
-fs.writeFileSync(
-  path.join(agentScope.claudeSessionDir, 'transcript.jsonl'),
-  'stale-agent-session'
-);
 fs.writeFileSync(path.join(agentScope.codexHomeDir, 'config.toml'), 'model=1');
 fs.writeFileSync(
   path.join(agentScope.codexHomeDir, 'thread.json'),
@@ -69,11 +63,7 @@ assert.deepEqual(getRuntimeSession('workspace-main'), {
   runtime: 'codex_app_server',
 });
 assert.equal(getRuntimeSession('workspace-main', 'agent-42'), undefined);
-assert.ok(fs.existsSync(path.join(agentScope.claudeSessionDir, 'settings.json')));
 assert.ok(fs.existsSync(path.join(agentScope.codexHomeDir, 'config.toml')));
-assert.ok(
-  !fs.existsSync(path.join(agentScope.claudeSessionDir, 'transcript.jsonl'))
-);
 assert.ok(!fs.existsSync(path.join(agentScope.codexHomeDir, 'thread.json')));
 
 console.log('✅ restart agent session recovery cleanup checks passed');
