@@ -70,8 +70,35 @@ process.stdin.on('data', (chunk) => {
             }
           }
         });
-        send({ method: 'item/reasoning/summaryTextDelta', params: { threadId: msg.params.threadId, turnId, itemId: 'item_reasoning', delta: '总结推理' } });
+        send({ method: 'item/reasoning/summaryTextDelta', params: { threadId: msg.params.threadId, turnId, itemId: 'item_reasoning', summaryIndex: 0, delta: '总结推理' } });
         send({ method: 'item/reasoning/textDelta', params: { threadId: msg.params.threadId, turnId, itemId: 'item_reasoning', delta: '详细推理' } });
+        send({
+          method: 'item/started',
+          params: {
+            threadId: msg.params.threadId,
+            turnId,
+            item: {
+              type: 'reasoning',
+              id: 'item_reasoning_part',
+              summary: [],
+              content: []
+            }
+          }
+        });
+        send({ method: 'item/reasoning/summaryPartAdded', params: { threadId: msg.params.threadId, turnId, itemId: 'item_reasoning_part', summaryIndex: 0 } });
+        send({
+          method: 'item/completed',
+          params: {
+            threadId: msg.params.threadId,
+            turnId,
+            item: {
+              type: 'reasoning',
+              id: 'item_reasoning_part',
+              summary: ['分段推理补充'],
+              content: []
+            }
+          }
+        });
         send({
           method: 'turn/plan/updated',
           params: {
@@ -347,6 +374,15 @@ assert.ok(
       entry.streamEvent?.text === '详细推理',
   ),
   'reasoning text deltas stream separately',
+);
+assert.ok(
+  fresh.outputs.some(
+    (entry) =>
+      entry.status === 'stream' &&
+      entry.streamEvent?.eventType === 'thinking_delta' &&
+      entry.streamEvent?.text === '分段推理补充',
+  ),
+  'reasoning summary-part notifications surface through the thinking stream path',
 );
 assert.ok(
   fresh.outputs.some(

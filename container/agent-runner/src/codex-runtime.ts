@@ -28,6 +28,12 @@ type CodexTodo = {
   status: 'pending' | 'in_progress' | 'completed';
 };
 
+type ReasoningItemState = {
+  surfacedSummaryIndexes: Set<number>;
+  summaryTextByIndex: Map<number, string>;
+  pendingSummaryIndexes: Set<number>;
+};
+
 const TURN_TERMINAL_IGNORED_METHODS = new Set([
   'item/started',
   'item/completed',
@@ -488,21 +494,6 @@ function emitCodexToolLifecycle(
       });
       break;
     }
-    case 'reasoning': {
-      emitCodexStreamEvent(emit, containerInput, sessionId, {
-        status: 'stream',
-        result: null,
-        streamEvent: {
-          eventType: 'thinking_delta',
-          text: Array.isArray(item.summary)
-            ? (item.summary as string[]).join('\n')
-            : '',
-          toolUseId: itemId,
-          isSynthetic: true,
-        },
-      });
-      break;
-    }
     default:
       break;
   }
@@ -635,6 +626,104 @@ export async function runCodexRuntime(options: {
   let turnTerminal = false;
   const planTodoOrder: string[] = [];
   const planTodos = new Map<string, CodexTodo>();
+  const reasoningItems = new Map<string, ReasoningItemState>();
+
+  const emitThinkingDelta = (
+    text: string,
+    options?: { toolUseId?: string; isSynthetic?: boolean },
+  ): void => {
+    if (!text) return;
+    emit({
+      status: 'stream',
+      result: null,
+      newSessionId: currentSessionId,
+      streamEvent: {
+        eventType: 'thinking_delta',
+        text,
+        toolUseId: options?.toolUseId,
+        isSynthetic: options?.isSynthetic,
+      },
+    });
+  };
+
+  const getReasoningItemState = (itemId: string): ReasoningItemState => {
+    let state = reasoningItems.get(itemId);
+    if (!state) {
+      state = {
+        surfacedSummaryIndexes: new Set<number>(),
+        summaryTextByIndex: new Map<number, string>(),
+        pendingSummaryIndexes: new Set<number>(),
+      };
+      reasoningItems.set(itemId, state);
+    }
+    return state;
+  };
+
+  const emitReasoningSummarySnapshot = (item: Record<string, unknown>): void => {
+    if (item.type !== 'reasoning' || typeof item.id !== 'string') {
+      return;
+    }
+
+    const summary = Array.isArray(item.summary) ? item.summary : [];
+    const state = getReasoningItemState(item.id);
+    const unsurfacedSummaryParts: string[] = [];
+
+    summary.forEach((part, index) => {
+      if (typeof part !== 'string') return;
+      state.summaryTextByIndex.set(index, part);
+      if (!part.trim()) return;
+
+      if (
+        state.pendingSummaryIndexes.has(index) ||
+        !state.surfacedSummaryIndexes.has(index)
+      ) {
+        unsurfacedSummaryParts.push(part);
+        state.surfacedSummaryIndexes.add(index);
+        state.pendingSummaryIndexes.delete(index);
+      }
+    });
+
+    if (unsurfacedSummaryParts.length > 0) {
+      emitThinkingDelta(unsurfacedSummaryParts.join('\n'), {
+        toolUseId: item.id,
+        isSynthetic: true,
+      });
+    }
+  };
+
+  const handleReasoningSummaryPartAdded = (
+    itemId: string,
+    summaryIndex: number,
+  ): void => {
+    const state = getReasoningItemState(itemId);
+    state.pendingSummaryIndexes.add(summaryIndex);
+
+    const cachedText = state.summaryTextByIndex.get(summaryIndex);
+    if (
+      typeof cachedText === 'string' &&
+      cachedText.trim() &&
+      !state.surfacedSummaryIndexes.has(summaryIndex)
+    ) {
+      state.surfacedSummaryIndexes.add(summaryIndex);
+      state.pendingSummaryIndexes.delete(summaryIndex);
+      emitThinkingDelta(cachedText, {
+        toolUseId: itemId,
+        isSynthetic: true,
+      });
+    }
+  };
+
+  const noteReasoningSummaryTextDelta = (
+    itemId: string,
+    summaryIndex: number,
+    delta: string,
+  ): void => {
+    const state = getReasoningItemState(itemId);
+    const previous = state.summaryTextByIndex.get(summaryIndex) ?? '';
+    state.summaryTextByIndex.set(summaryIndex, `${previous}${delta}`);
+    state.surfacedSummaryIndexes.add(summaryIndex);
+    state.pendingSummaryIndexes.delete(summaryIndex);
+  };
 
   const emitPlanTodos = (): void => {
     const todos = planTodoOrder
@@ -738,6 +827,7 @@ export async function runCodexRuntime(options: {
             ) {
               upsertPlanTodo(item.id, item.text, 'in_progress');
             }
+            emitReasoningSummarySnapshot(item);
             emitCodexToolLifecycle(
               emit,
               containerInput,
@@ -756,6 +846,7 @@ export async function runCodexRuntime(options: {
             ) {
               upsertPlanTodo(item.id, item.text, 'completed');
             }
+            emitReasoningSummarySnapshot(item);
             emitCodexToolCompletion(
               emit,
               containerInput,
@@ -783,21 +874,41 @@ export async function runCodexRuntime(options: {
           }
           break;
         case 'item/reasoning/textDelta':
+          if (
+            typeof params?.turnId === 'string' &&
+            params.turnId === turnId &&
+            typeof params.delta === 'string'
+          ) {
+            emitThinkingDelta(params.delta);
+          }
+          break;
         case 'item/reasoning/summaryTextDelta':
           if (
             typeof params?.turnId === 'string' &&
             params.turnId === turnId &&
             typeof params.delta === 'string'
           ) {
-            emit({
-              status: 'stream',
-              result: null,
-              newSessionId: currentSessionId,
-              streamEvent: {
-                eventType: 'thinking_delta',
-                text: params.delta,
-              },
-            });
+            if (
+              typeof params.itemId === 'string' &&
+              typeof params.summaryIndex === 'number'
+            ) {
+              noteReasoningSummaryTextDelta(
+                params.itemId,
+                params.summaryIndex,
+                params.delta,
+              );
+            }
+            emitThinkingDelta(params.delta);
+          }
+          break;
+        case 'item/reasoning/summaryPartAdded':
+          if (
+            typeof params?.turnId === 'string' &&
+            params.turnId === turnId &&
+            typeof params.itemId === 'string' &&
+            typeof params.summaryIndex === 'number'
+          ) {
+            handleReasoningSummaryPartAdded(params.itemId, params.summaryIndex);
           }
           break;
         case 'turn/plan/updated':
