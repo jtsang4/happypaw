@@ -1794,6 +1794,20 @@ async function main(): Promise<void> {
         });
         // 清理可能残留的 _interrupt 文件
         try { fs.unlinkSync(IPC_INPUT_INTERRUPT_SENTINEL); } catch { /* ignore */ }
+        const followUpInput = queryResult.followUpInput;
+        if (followUpInput) {
+          log(
+            `Re-entering immediately with deferred follow-up input after interrupt (${followUpInput.text.length} chars, ${
+              followUpInput.images?.length || 0
+            } images)`,
+          );
+          clearInterruptRequested();
+          consecutiveCompactions = 0;
+          prompt = followUpInput.text;
+          promptImages = followUpInput.images;
+          containerInput.turnId = generateTurnId();
+          continue;
+        }
         // 不 break，等待下一条消息
         const nextMessage = await waitForIpcMessage();
         if (nextMessage === null) {
@@ -1804,20 +1818,8 @@ async function main(): Promise<void> {
         }
         clearInterruptRequested();
         consecutiveCompactions = 0;
-        const followUpInput = queryResult.followUpInput;
-        if (followUpInput) {
-          prompt = [followUpInput.text, nextMessage.text]
-            .filter((value) => value.trim().length > 0)
-            .join('\n');
-          const mergedImages = [
-            ...(followUpInput.images || []),
-            ...(nextMessage.images || []),
-          ];
-          promptImages = mergedImages.length > 0 ? mergedImages : undefined;
-        } else {
-          prompt = nextMessage.text;
-          promptImages = nextMessage.images;
-        }
+        prompt = nextMessage.text;
+        promptImages = nextMessage.images;
         containerInput.turnId = generateTurnId();
         continue;
       }
