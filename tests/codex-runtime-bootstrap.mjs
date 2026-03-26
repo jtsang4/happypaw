@@ -266,6 +266,22 @@ process.stdin.on('data', (chunk) => {
       continue;
     }
     if (typeof msg.id !== 'undefined' && !msg.method && activeTurn && turnConfig.requestUserInput) {
+      if (msg.error && typeof msg.error.message === 'string') {
+        send({
+          method: 'turn/completed',
+          params: {
+            threadId: activeTurn.threadId,
+            turn: {
+              id: activeTurn.turnId,
+              status: 'failed',
+              items: [],
+              error: { message: msg.error.message }
+            }
+          }
+        });
+        activeTurn = null;
+        continue;
+      }
       const answers = msg.result && msg.result.answers ? msg.result.answers : {};
       const flattened = Object.values(answers)
         .flatMap((entry) => Array.isArray(entry.answers) ? entry.answers : [])
@@ -382,46 +398,52 @@ async function runScenario(name, sessionId, options = {}) {
     path.join(agentRunnerDist, 'codex-runtime.js')
   );
 
-  const result = await runCodexRuntime({
-    prompt: '请回答一句问候',
-    sessionId,
-    containerInput: {
+  let result;
+  let error;
+  try {
+    result = await runCodexRuntime({
       prompt: '请回答一句问候',
       sessionId,
-      runtime: 'codex_app_server',
-      groupFolder: 'demo',
-      chatJid: 'web:demo',
-      isMain: false,
-      isHome: false,
-      isAdminHome: false,
-      turnId: 'turn-from-host',
+      containerInput: {
+        prompt: '请回答一句问候',
+        sessionId,
+        runtime: 'codex_app_server',
+        groupFolder: 'demo',
+        chatJid: 'web:demo',
+        isMain: false,
+        isHome: false,
+        isAdminHome: false,
+        turnId: 'turn-from-host',
+        images: options.images,
+      },
+      memoryRecall: 'memory recall prompt',
       images: options.images,
-    },
-    memoryRecall: 'memory recall prompt',
-    images: options.images,
-    deps: {
-      WORKSPACE_GLOBAL: globalDir,
-      WORKSPACE_GROUP: groupDir,
-      WORKSPACE_MEMORY: memoryDir,
-      SECURITY_RULES: 'security rules',
-      log: () => {},
-      writeOutput: (output) => outputs.push(output),
-      shouldInterrupt: options.shouldInterrupt || (() => false),
-      shouldClose: options.shouldClose || (() => false),
-      shouldDrain: options.shouldDrain || (() => false),
-      drainIpcInput:
-        options.drainIpcInput ||
-        (() => ({ messages: [] })),
-      normalizeHomeFlags: (input) => ({
-        isHome: Boolean(input.isHome),
-        isAdminHome: Boolean(input.isAdminHome),
-      }),
-      buildChannelGuidelines: () => '',
-      truncateWithHeadTail: (content) => content,
-      generateTurnId: () => 'generated-turn-id',
-    },
-    detectImageMimeTypeFromBase64Strict: detectMime,
-  });
+      deps: {
+        WORKSPACE_GLOBAL: globalDir,
+        WORKSPACE_GROUP: groupDir,
+        WORKSPACE_MEMORY: memoryDir,
+        SECURITY_RULES: 'security rules',
+        log: () => {},
+        writeOutput: (output) => outputs.push(output),
+        shouldInterrupt: options.shouldInterrupt || (() => false),
+        shouldClose: options.shouldClose || (() => false),
+        shouldDrain: options.shouldDrain || (() => false),
+        drainIpcInput:
+          options.drainIpcInput ||
+          (() => ({ messages: [] })),
+        normalizeHomeFlags: (input) => ({
+          isHome: Boolean(input.isHome),
+          isAdminHome: Boolean(input.isAdminHome),
+        }),
+        buildChannelGuidelines: () => '',
+        truncateWithHeadTail: (content) => content,
+        generateTurnId: () => 'generated-turn-id',
+      },
+      detectImageMimeTypeFromBase64Strict: detectMime,
+    });
+  } catch (caughtError) {
+    error = caughtError;
+  }
 
   const requestOrder = fs
     .readFileSync(requestLogPath, 'utf8')
@@ -430,7 +452,7 @@ async function runScenario(name, sessionId, options = {}) {
     .filter(Boolean)
     .map((line) => line.split(' ')[0]);
 
-  return { outputs, requestOrder, result, tempRoot };
+  return { outputs, requestOrder, result, error, tempRoot };
 }
 
 const fresh = await runScenario('fresh', undefined);
@@ -827,6 +849,76 @@ assert.ok(
       entry.result === '猫',
   ),
   'request_user_input answer resumes the same turn and yields the resumed assistant reply',
+);
+
+const multiQuestionRequestUserInput = await runScenario(
+  'request-user-input-multi-question',
+  undefined,
+  {
+    turnConfig: {
+      requestUserInput: {
+        id: 'req_user_input_multi',
+        itemId: 'item_request_user_input_multi',
+        questions: [
+          {
+            id: 'favorite_pet',
+            header: '补充信息',
+            question: '你最喜欢的宠物是什么？',
+            isOther: true,
+            isSecret: false,
+            options: [
+              { label: '猫', description: '喵喵' },
+              { label: '狗', description: '汪汪' },
+            ],
+          },
+          {
+            id: 'favorite_color',
+            header: '补充信息',
+            question: '你最喜欢的颜色是什么？',
+            isOther: true,
+            isSecret: false,
+            options: [
+              { label: '蓝色', description: '冷静' },
+              { label: '绿色', description: '自然' },
+            ],
+          },
+        ],
+      },
+      completionDelayMs: 0,
+    },
+    drainIpcInput: (() => {
+      let reads = 0;
+      return () => {
+        reads += 1;
+        if (reads >= 2) {
+          return { messages: [{ text: '猫\n蓝色' }] };
+        }
+        return { messages: [] };
+      };
+    })(),
+  },
+);
+assert.ok(
+  multiQuestionRequestUserInput.outputs.some(
+    (entry) =>
+      entry.status === 'stream' &&
+      entry.streamEvent?.eventType === 'tool_use_start' &&
+      entry.streamEvent?.toolUseId === 'item_request_user_input_multi' &&
+      Array.isArray(entry.streamEvent?.toolInput?.questions) &&
+      entry.streamEvent.toolInput.questions.length === 2,
+  ),
+  'multi-question request_user_input still surfaces the full prompt payload before rejection',
+);
+assert.match(
+  multiQuestionRequestUserInput.error?.message || '',
+  /HappyPaw 当前仅支持单题文本回答.*answers 映射/u,
+  'multi-question request_user_input fails explicitly when HappyPaw cannot construct the required answers map',
+);
+assert.ok(
+  !multiQuestionRequestUserInput.outputs.some(
+    (entry) => entry.status === 'success',
+  ),
+  'unsupported multi-question request_user_input does not fabricate a success result',
 );
 
 const drained = await runScenario('drain', 'thr_drain', {

@@ -344,7 +344,7 @@ function buildRequestUserInputPrompts(
 ): RequestUserInputPrompt[] {
   if (!Array.isArray(questions)) return [];
   const prompts: RequestUserInputPrompt[] = [];
-  for (const question of questions) {
+  for (const [index, question] of questions.entries()) {
     if (!question || typeof question !== 'object') continue;
     const record = question as Record<string, unknown>;
     const options: Array<{ label: string; description?: string }> = [];
@@ -366,7 +366,9 @@ function buildRequestUserInputPrompts(
       requestId: String(requestId),
       itemId,
       questionId:
-        typeof record.id === 'string' ? record.id : `question-${itemId}`,
+        typeof record.id === 'string' && record.id.trim()
+          ? record.id
+          : `question-${itemId}-${index + 1}`,
       header: typeof record.header === 'string' ? record.header : '',
       question: typeof record.question === 'string' ? record.question : '',
       options,
@@ -396,10 +398,24 @@ function buildRequestUserInputToolPayload(
   };
 }
 
+function assertSupportedRequestUserInputPrompts(
+  prompts: RequestUserInputPrompt[],
+): void {
+  if (prompts.length <= 1) {
+    return;
+  }
+
+  throw new Error(
+    `当前交互提示包含 ${prompts.length} 个问题，HappyPaw 当前仅支持单题文本回答，无法构造 Codex 要求的 answers 映射。`,
+  );
+}
+
 function buildRequestUserInputAnswer(
   prompts: RequestUserInputPrompt[],
   message: { text: string; images?: Array<{ data: string; mimeType?: string }> },
 ): { answers: Record<string, { answers: string[] }> } {
+  assertSupportedRequestUserInputPrompts(prompts);
+
   if (message.images && message.images.length > 0) {
     throw new Error('当前交互提示暂不支持图片回复，请仅发送文本答案。');
   }
@@ -409,12 +425,10 @@ function buildRequestUserInputAnswer(
     throw new Error('请输入回答内容后再继续。');
   }
 
-  const singlePrompt =
-    prompts.length === 1
-      ? prompts[0]
-      : prompts.find((prompt) => !prompt.isSecret) ?? prompts[0];
   const answers: Record<string, { answers: string[] }> = {};
-  answers[singlePrompt.questionId] = { answers: [answerText] };
+  for (const prompt of prompts) {
+    answers[prompt.questionId] = { answers: [answerText] };
+  }
   return { answers };
 }
 
@@ -1322,13 +1336,6 @@ export async function runCodexRuntime(options: {
       if (prompts.length === 0) {
         throw new Error('request_user_input missing questions');
       }
-
-      activeUserInputRequest = {
-        requestId: String(request.id),
-        itemId,
-        prompts,
-      };
-
       emit({
         status: 'stream',
         result: null,
@@ -1351,6 +1358,27 @@ export async function runCodexRuntime(options: {
           toolInput: buildRequestUserInputToolPayload(prompts),
         },
       });
+
+      try {
+        assertSupportedRequestUserInputPrompts(prompts);
+      } catch (error) {
+        emit({
+          status: 'stream',
+          result: null,
+          newSessionId: currentSessionId,
+          streamEvent: {
+            eventType: 'tool_use_end',
+            toolUseId: itemId,
+          },
+        });
+        throw error;
+      }
+
+      activeUserInputRequest = {
+        requestId: String(request.id),
+        itemId,
+        prompts,
+      };
 
       let promptMessage:
         | {
