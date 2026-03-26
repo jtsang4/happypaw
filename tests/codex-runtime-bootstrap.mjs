@@ -129,6 +129,47 @@ async function closeProc(proc) {
 function makeFakeCodexScript(scriptPath, requestLogPath, options = {}) {
   const failResumeThreadId = options.failResumeThreadId ?? null;
   const legacyMcpServerName = ['happy', 'claw'].join('');
+  const requiredBridgeTools = JSON.stringify([
+    'cancel_task',
+    'get_context',
+    'list_tasks',
+    'memory_append',
+    'memory_get',
+    'memory_search',
+    'pause_task',
+    'resume_task',
+    'schedule_task',
+    'send_file',
+    'send_image',
+    'send_message',
+  ]);
+  const mcpStatuses = JSON.stringify(
+    options.mcpStatuses ?? [
+      {
+        name: 'happypaw',
+        authStatus: 'bearerToken',
+        tools: Object.fromEntries(
+          [
+            'cancel_task',
+            'get_context',
+            'list_tasks',
+            'memory_append',
+            'memory_get',
+            'memory_search',
+            'pause_task',
+            'resume_task',
+            'schedule_task',
+            'send_file',
+            'send_image',
+            'send_message',
+          ].map((toolName) => [toolName, { name: toolName, inputSchema: {} }]),
+        ),
+        resources: [],
+        resourceTemplates: [],
+      },
+    ],
+  );
+  const configWarnings = JSON.stringify(options.configWarnings ?? []);
   const turnConfig = JSON.stringify(options.turnConfig ?? {});
   fs.writeFileSync(
     scriptPath,
@@ -137,6 +178,9 @@ const fs = require('node:fs');
 const requestLogPath = ${JSON.stringify(requestLogPath)};
 const failResumeThreadId = ${JSON.stringify(failResumeThreadId)};
 const legacyMcpServerName = ${JSON.stringify(legacyMcpServerName)};
+const requiredBridgeTools = ${requiredBridgeTools};
+const mcpStatuses = ${mcpStatuses};
+const configWarnings = ${configWarnings};
 const turnConfig = ${turnConfig};
 let buffer = '';
 let activeTurn = null;
@@ -158,6 +202,32 @@ process.stdin.on('data', (chunk) => {
       continue;
     }
     if (msg.method === 'initialized') {
+      for (const warning of configWarnings) {
+        send({
+          method: 'configWarning',
+          params: warning,
+        });
+      }
+      continue;
+    }
+    if (msg.method === 'mcpServerStatus/list') {
+      const statuses = Array.isArray(mcpStatuses)
+        ? mcpStatuses.map((status) => {
+            if (status && typeof status === 'object') {
+              return {
+                resourceTemplates: [],
+                resources: [],
+                authStatus: 'bearerToken',
+                tools: Object.fromEntries(
+                  requiredBridgeTools.map((toolName) => [toolName, { name: toolName, inputSchema: {} }]),
+                ),
+                ...status,
+              };
+            }
+            return status;
+          })
+        : [];
+      send({ id: msg.id, result: { data: statuses, nextCursor: null } });
       continue;
     }
     if (msg.method === 'thread/start') {
@@ -580,9 +650,10 @@ const legacyMcpToolName = ['mcp', ['happy', 'claw'].join(''), 'send_message'].jo
 assert.deepEqual(fresh.requestOrder.slice(0, 4), [
   'initialize',
   'initialized',
+  'mcpServerStatus/list',
   'thread/start',
-  'turn/start',
 ]);
+assert.equal(fresh.requestOrder[4], 'turn/start');
 assert.ok(
   fresh.outputs.some(
     (entry) =>
@@ -774,9 +845,10 @@ const resumed = await runScenario('resume', 'thr_saved');
 assert.deepEqual(resumed.requestOrder.slice(0, 4), [
   'initialize',
   'initialized',
+  'mcpServerStatus/list',
   'thread/resume',
-  'turn/start',
 ]);
+assert.equal(resumed.requestOrder[4], 'turn/start');
 assert.ok(
   resumed.outputs.some(
     (entry) =>
@@ -791,9 +863,10 @@ assert.equal(resumed.result.newSessionId, 'thr_saved');
 const resumeFallback = await runScenario('resume-fallback', 'thr_stale', {
   failResumeThreadId: 'thr_stale',
 });
-assert.deepEqual(resumeFallback.requestOrder.slice(0, 5), [
+assert.deepEqual(resumeFallback.requestOrder.slice(0, 6), [
   'initialize',
   'initialized',
+  'mcpServerStatus/list',
   'thread/resume',
   'thread/start',
   'turn/start',
@@ -808,6 +881,47 @@ assert.ok(
   'failed resume falls back to a fresh thread and keeps the conversation usable',
 );
 assert.equal(resumeFallback.result.newSessionId, 'thr_fresh');
+
+const brokenBridge = await runScenario('broken-bridge', undefined, {
+  mcpStatuses: [],
+  configWarnings: [
+    {
+      summary: 'HappyPaw bridge command failed',
+      details: 'spawn ENOENT node /bad/codex-mcp-bridge.mjs',
+    },
+  ],
+});
+assert.match(
+  brokenBridge.error?.message || '',
+  /HappyPaw MCP 桥接未成功注册或启动/u,
+  'missing MCP bridge status fails the turn before Codex starts a thread',
+);
+assert.deepEqual(brokenBridge.requestOrder.slice(0, 3), [
+  'initialize',
+  'initialized',
+  'mcpServerStatus/list',
+]);
+assert.ok(
+  !brokenBridge.requestOrder.includes('thread/start') &&
+    !brokenBridge.requestOrder.includes('turn/start'),
+  'broken MCP bridge blocks the degraded turn before thread or turn start',
+);
+const brokenBridgeStatus = brokenBridge.outputs.find(
+  (entry) =>
+    entry.status === 'stream' &&
+    entry.streamEvent?.eventType === 'status' &&
+    typeof entry.streamEvent?.statusText === 'string' &&
+    entry.streamEvent.statusText.includes('HappyPaw MCP 桥接未成功注册或启动'),
+);
+assert.ok(
+  brokenBridgeStatus,
+  'runtime emits an actionable status when the MCP bridge is missing',
+);
+assert.match(
+  brokenBridgeStatus?.streamEvent?.statusText || '',
+  /spawn ENOENT node \/bad\/codex-mcp-bridge\.mjs/u,
+  'startup config warnings are included in the surfaced MCP bridge failure status',
+);
 
 const bridgeTempRoot = fs.mkdtempSync(
   path.join(os.tmpdir(), 'happypaw-codex-bridge-'),

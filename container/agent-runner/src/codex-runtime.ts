@@ -8,6 +8,7 @@ import {
   type CodexJsonRpcRequest,
 } from './codex-client.js';
 import { getChannelFromJid } from './channel-prefixes.js';
+import { INTERNAL_MCP_BRIDGE_ID } from './legacy-product.js';
 import { summarizeToolInput } from './utils.js';
 
 const OUTPUT_MARKER_TURN_ID_PREFIX = 'codex-turn-';
@@ -17,6 +18,26 @@ const INTERRUPT_SETTLE_TIMEOUT_MS = 5_000;
 const STAGED_IMAGE_DIR_NAME = '.happypaw-input-images';
 const LEGACY_MCP_SERVER_NAME = ['happy', 'claw'].join('');
 const LEGACY_MCP_TOOL_PREFIX = ['mcp', LEGACY_MCP_SERVER_NAME].join('__');
+const INTERNAL_MCP_BRIDGE_STATUS_NAMES = new Set([
+  INTERNAL_MCP_BRIDGE_ID,
+  `${INTERNAL_MCP_BRIDGE_ID}-codex-bridge`,
+]);
+const REQUIRED_MCP_BRIDGE_TOOLS = [
+  'cancel_task',
+  'get_context',
+  'list_tasks',
+  'memory_append',
+  'memory_get',
+  'memory_search',
+  'pause_task',
+  'resume_task',
+  'schedule_task',
+  'send_file',
+  'send_image',
+  'send_message',
+];
+const MCP_SERVER_STATUS_PAGE_LIMIT = 100;
+const MCP_SERVER_STATUS_PAGE_MAX = 20;
 
 type StreamResult = {
   closedDuringQuery: boolean;
@@ -53,6 +74,12 @@ type ReasoningItemState = {
   surfacedSummaryIndexes: Set<number>;
   summaryTextByIndex: Map<number, string>;
   pendingSummaryIndexes: Set<number>;
+};
+
+type CodexMcpServerStatus = {
+  name: string;
+  authStatus?: string;
+  tools: string[];
 };
 
 const TURN_TERMINAL_IGNORED_METHODS = new Set([
@@ -674,6 +701,147 @@ function normalizeTokenUsage(
   };
 }
 
+function emitCodexStatus(
+  emit: (output: ContainerOutput) => void,
+  containerInput: ContainerInput,
+  sessionId: string | undefined,
+  statusText: string,
+): void {
+  emitCodexStreamEvent(emit, containerInput, sessionId, {
+    status: 'stream',
+    result: null,
+    streamEvent: {
+      eventType: 'status',
+      statusText,
+    },
+  });
+}
+
+function normalizeMcpServerStatus(value: unknown): CodexMcpServerStatus | null {
+  if (!value || typeof value !== 'object') return null;
+  const record = value as Record<string, unknown>;
+  const name = typeof record.name === 'string' ? record.name.trim() : '';
+  if (!name) return null;
+
+  const tools =
+    record.tools && typeof record.tools === 'object'
+      ? Object.keys(record.tools as Record<string, unknown>).sort()
+      : [];
+
+  return {
+    name,
+    authStatus:
+      typeof record.authStatus === 'string' ? record.authStatus : undefined,
+    tools,
+  };
+}
+
+function isInternalMcpBridgeStatus(status: CodexMcpServerStatus): boolean {
+  if (INTERNAL_MCP_BRIDGE_STATUS_NAMES.has(status.name)) {
+    return true;
+  }
+  return (
+    status.tools.includes('get_context') &&
+    REQUIRED_MCP_BRIDGE_TOOLS.every((toolName) =>
+      status.tools.includes(toolName),
+    )
+  );
+}
+
+async function listCodexMcpServerStatuses(
+  client: CodexAppServerClient,
+): Promise<CodexMcpServerStatus[]> {
+  const statuses: CodexMcpServerStatus[] = [];
+  let cursor: string | null | undefined = undefined;
+
+  for (let page = 0; page < MCP_SERVER_STATUS_PAGE_MAX; page += 1) {
+    const response = (await client.request('mcpServerStatus/list', {
+      ...(cursor ? { cursor } : {}),
+      limit: MCP_SERVER_STATUS_PAGE_LIMIT,
+    })) as {
+      data?: unknown[];
+      nextCursor?: string | null;
+    };
+
+    if (Array.isArray(response.data)) {
+      for (const entry of response.data) {
+        const normalized = normalizeMcpServerStatus(entry);
+        if (normalized) statuses.push(normalized);
+      }
+    }
+
+    cursor =
+      typeof response.nextCursor === 'string' && response.nextCursor.trim()
+        ? response.nextCursor
+        : null;
+    if (!cursor) break;
+  }
+
+  return statuses;
+}
+
+async function verifyInternalMcpBridgeHealth(options: {
+  client: CodexAppServerClient;
+  emit: (output: ContainerOutput) => void;
+  containerInput: ContainerInput;
+  sessionId: string | undefined;
+  startupWarnings: string[];
+}): Promise<void> {
+  const { client, emit, containerInput, sessionId, startupWarnings } = options;
+
+  const formatWarningSuffix = (): string =>
+    startupWarnings.length > 0
+      ? ` 附加诊断: ${startupWarnings.join(' | ')}`
+      : '';
+
+  let statuses: CodexMcpServerStatus[];
+  try {
+    statuses = await listCodexMcpServerStatuses(client);
+  } catch (error) {
+    const message =
+      `HappyPaw MCP 桥接健康检查失败：无法读取 mcpServerStatus/list（${
+        error instanceof Error ? error.message : String(error)
+      }）。已阻止本次 Codex 对话继续，请检查 .codex/config.toml 中的 happypaw 桥接配置以及 codex-mcp-bridge.mjs 是否可执行。` +
+      formatWarningSuffix();
+    emitCodexStatus(emit, containerInput, sessionId, message);
+    throw new Error(message);
+  }
+
+  const bridgeStatus = statuses.find(isInternalMcpBridgeStatus);
+  if (!bridgeStatus) {
+    const discovered =
+      statuses.length > 0
+        ? ` 已发现的 MCP 服务: ${statuses
+            .map((status) => `${status.name}[${status.tools.length}]`)
+            .join(', ')}。`
+        : ' 当前没有任何可用的 MCP 服务状态。';
+    const message =
+      `HappyPaw MCP 桥接未成功注册或启动，已阻止本次 Codex 对话继续。请检查 .codex/config.toml 中的 happypaw 桥接配置、桥接进程启动日志以及 codex-mcp-bridge.mjs 路径。${discovered}` +
+      formatWarningSuffix();
+    emitCodexStatus(emit, containerInput, sessionId, message);
+    throw new Error(message);
+  }
+
+  if (bridgeStatus.authStatus === 'notLoggedIn') {
+    const message =
+      `HappyPaw MCP 桥接鉴权未完成（authStatus=notLoggedIn），已阻止本次 Codex 对话继续。请检查桥接注册配置与 Codex MCP 登录状态。` +
+      formatWarningSuffix();
+    emitCodexStatus(emit, containerInput, sessionId, message);
+    throw new Error(message);
+  }
+
+  const missingTools = REQUIRED_MCP_BRIDGE_TOOLS.filter(
+    (toolName) => !bridgeStatus.tools.includes(toolName),
+  );
+  if (missingTools.length > 0) {
+    const message =
+      `HappyPaw MCP 桥接已启动但缺少必需工具：${missingTools.join(', ')}。已阻止本次 Codex 对话继续，请检查桥接脚本初始化流程与内置工具注册。` +
+      formatWarningSuffix();
+    emitCodexStatus(emit, containerInput, sessionId, message);
+    throw new Error(message);
+  }
+}
+
 function emitCodexStreamEvent(
   emit: (output: ContainerOutput) => void,
   containerInput: ContainerInput,
@@ -896,6 +1064,7 @@ export async function runCodexRuntime(options: {
         prompts: RequestUserInputPrompt[];
       }
     | undefined;
+  const startupWarnings: string[] = [];
 
   const emitThinkingDelta = (
     text: string,
@@ -1072,6 +1241,18 @@ export async function runCodexRuntime(options: {
             },
           });
           break;
+        case 'configWarning': {
+          const summary =
+            typeof params?.summary === 'string' ? params.summary.trim() : '';
+          const details =
+            typeof params?.details === 'string' ? params.details.trim() : '';
+          const warningText = [summary, details].filter(Boolean).join(' — ');
+          if (warningText) {
+            startupWarnings.push(warningText);
+            deps.log(`[codex-config-warning] ${warningText}`);
+          }
+          break;
+        }
         case 'turn/started':
           if (isNotificationForTurn(params, turnId) && !turnStartedAt) {
             turnStartedAt = Date.now();
@@ -1433,6 +1614,14 @@ export async function runCodexRuntime(options: {
         newSessionId: threadId,
       };
     }
+
+    await verifyInternalMcpBridgeHealth({
+      client,
+      emit,
+      containerInput,
+      sessionId: currentSessionId,
+      startupWarnings,
+    });
 
     try {
       if (threadId) {
