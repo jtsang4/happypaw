@@ -128,6 +128,8 @@ async function closeProc(proc) {
 
 function makeFakeCodexScript(scriptPath, requestLogPath, options = {}) {
   const failResumeThreadId = options.failResumeThreadId ?? null;
+  const internalBridgeStatusName =
+    options.internalBridgeStatusName ?? 'happypaw';
   const legacyMcpServerName = ['happy', 'claw'].join('');
   const requiredBridgeTools = JSON.stringify([
     'cancel_task',
@@ -146,7 +148,7 @@ function makeFakeCodexScript(scriptPath, requestLogPath, options = {}) {
   const mcpStatuses = JSON.stringify(
     options.mcpStatuses ?? [
       {
-        name: 'happypaw',
+        name: internalBridgeStatusName,
         authStatus: 'bearerToken',
         tools: Object.fromEntries(
           [
@@ -581,6 +583,8 @@ async function runScenario(name, sessionId, options = {}) {
   process.env.HAPPYPAW_WORKSPACE_GLOBAL = globalDir;
   process.env.HAPPYPAW_WORKSPACE_MEMORY = memoryDir;
   process.env.HAPPYPAW_WORKSPACE_IPC = path.join(tempRoot, 'ipc');
+  process.env.HAPPYPAW_MCP_SERVER_ID =
+    options.internalBridgeStatusName ?? 'happypaw';
 
   const { runCodexRuntime } = await import(
     path.join(agentRunnerDist, 'codex-runtime.js')
@@ -923,6 +927,126 @@ assert.match(
   'startup config warnings are included in the surfaced MCP bridge failure status',
 );
 
+const shadowBridgeStatus = await runScenario('shadow-bridge-status', undefined, {
+  mcpStatuses: [
+    {
+      name: 'workspace-tools',
+      authStatus: 'bearerToken',
+      tools: Object.fromEntries(
+        [
+          'cancel_task',
+          'get_context',
+          'list_tasks',
+          'memory_append',
+          'memory_get',
+          'memory_search',
+          'pause_task',
+          'resume_task',
+          'schedule_task',
+          'send_file',
+          'send_image',
+          'send_message',
+        ].map((toolName) => [toolName, { name: toolName, inputSchema: {} }]),
+      ),
+      resources: [],
+      resourceTemplates: [],
+    },
+  ],
+});
+assert.match(
+  shadowBridgeStatus.error?.message || '',
+  /HappyPaw MCP 桥接未成功注册或启动/u,
+  'unrelated MCP servers with matching tools cannot satisfy the reserved bridge health check',
+);
+assert.ok(
+  !shadowBridgeStatus.requestOrder.includes('thread/start') &&
+    !shadowBridgeStatus.requestOrder.includes('turn/start'),
+  'reserved bridge identity mismatch blocks thread and turn startup',
+);
+
+const unauthenticatedBridge = await runScenario('unauthenticated-bridge', undefined, {
+  mcpStatuses: [
+    {
+      name: 'happypaw',
+      authStatus: 'notLoggedIn',
+      tools: Object.fromEntries(
+        [
+          'cancel_task',
+          'get_context',
+          'list_tasks',
+          'memory_append',
+          'memory_get',
+          'memory_search',
+          'pause_task',
+          'resume_task',
+          'schedule_task',
+          'send_file',
+          'send_image',
+          'send_message',
+        ].map((toolName) => [toolName, { name: toolName, inputSchema: {} }]),
+      ),
+      resources: [],
+      resourceTemplates: [],
+    },
+  ],
+});
+assert.match(
+  unauthenticatedBridge.error?.message || '',
+  /authStatus=notLoggedIn/u,
+  'unauthenticated reserved bridge fails startup health checks',
+);
+assert.ok(
+  unauthenticatedBridge.outputs.some(
+    (entry) =>
+      entry.status === 'stream' &&
+      entry.streamEvent?.eventType === 'status' &&
+      typeof entry.streamEvent?.statusText === 'string' &&
+      entry.streamEvent.statusText.includes('authStatus=notLoggedIn'),
+  ),
+  'runtime surfaces actionable status when the reserved bridge is unauthenticated',
+);
+
+const missingBridgeTools = await runScenario('missing-bridge-tools', undefined, {
+  mcpStatuses: [
+    {
+      name: 'happypaw',
+      authStatus: 'bearerToken',
+      tools: Object.fromEntries(
+        [
+          'cancel_task',
+          'get_context',
+          'list_tasks',
+          'memory_append',
+          'memory_get',
+          'memory_search',
+          'pause_task',
+          'resume_task',
+          'schedule_task',
+          'send_image',
+          'send_message',
+        ].map((toolName) => [toolName, { name: toolName, inputSchema: {} }]),
+      ),
+      resources: [],
+      resourceTemplates: [],
+    },
+  ],
+});
+assert.match(
+  missingBridgeTools.error?.message || '',
+  /缺少必需工具：send_file/u,
+  'reserved bridge missing required tools fails startup health checks',
+);
+assert.ok(
+  missingBridgeTools.outputs.some(
+    (entry) =>
+      entry.status === 'stream' &&
+      entry.streamEvent?.eventType === 'status' &&
+      typeof entry.streamEvent?.statusText === 'string' &&
+      entry.streamEvent.statusText.includes('缺少必需工具：send_file'),
+  ),
+  'runtime surfaces actionable status when the reserved bridge is missing required tools',
+);
+
 const bridgeTempRoot = fs.mkdtempSync(
   path.join(os.tmpdir(), 'happypaw-codex-bridge-'),
 );
@@ -1154,7 +1278,7 @@ const unsupportedBridgeProc = spawn('node', [bridgeScriptPath], {
 });
 unsupportedBridgeProc.stdout.setEncoding('utf8');
 let unsupportedBuffer = '';
-let unsupportedResponse;
+const unsupportedResponses = new Map();
 unsupportedBridgeProc.stdout.on('data', (chunk) => {
   unsupportedBuffer += chunk;
   let idx;
@@ -1163,7 +1287,7 @@ unsupportedBridgeProc.stdout.on('data', (chunk) => {
     unsupportedBuffer = unsupportedBuffer.slice(idx + 1);
     if (!raw) continue;
     const parsed = JSON.parse(raw);
-    if (parsed.id === 2) unsupportedResponse = parsed;
+    if (typeof parsed.id !== 'undefined') unsupportedResponses.set(parsed.id, parsed);
   }
 });
 writeJsonLine(unsupportedBridgeProc.stdin, {
@@ -1184,6 +1308,15 @@ writeJsonLine(unsupportedBridgeProc.stdin, {
   params: {
     name: 'send_image',
     arguments: { file_path: 'photo.png' },
+  },
+});
+writeJsonLine(unsupportedBridgeProc.stdin, {
+  jsonrpc: '2.0',
+  id: 3,
+  method: 'tools/call',
+  params: {
+    name: 'send_file',
+    arguments: { filePath: 'report.pdf', fileName: 'report.pdf' },
   },
 });
 await new Promise((resolve) => setTimeout(resolve, 100));
@@ -1238,9 +1371,16 @@ assert.match(
   responseById.get(12).result.content[0].text,
   /Scheduled tasks:\n- \[task-1\]/,
 );
-assert.equal(unsupportedResponse.result.isError, true);
+const unsupportedImageResponse = unsupportedResponses.get(2);
+assert.equal(unsupportedImageResponse.result.isError, true);
 assert.match(
-  unsupportedResponse.result.content[0].text,
+  unsupportedImageResponse.result.content[0].text,
+  /Current channel "qq" is unsupported/,
+);
+const unsupportedFileResponse = unsupportedResponses.get(3);
+assert.equal(unsupportedFileResponse.result.isError, true);
+assert.match(
+  unsupportedFileResponse.result.content[0].text,
   /Current channel "qq" is unsupported/,
 );
 

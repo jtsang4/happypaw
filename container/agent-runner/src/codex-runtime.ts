@@ -18,10 +18,8 @@ const INTERRUPT_SETTLE_TIMEOUT_MS = 5_000;
 const STAGED_IMAGE_DIR_NAME = '.happypaw-input-images';
 const LEGACY_MCP_SERVER_NAME = ['happy', 'claw'].join('');
 const LEGACY_MCP_TOOL_PREFIX = ['mcp', LEGACY_MCP_SERVER_NAME].join('__');
-const INTERNAL_MCP_BRIDGE_STATUS_NAMES = new Set([
-  INTERNAL_MCP_BRIDGE_ID,
-  `${INTERNAL_MCP_BRIDGE_ID}-codex-bridge`,
-]);
+const INTERNAL_MCP_BRIDGE_STATUS_NAME =
+  process.env.HAPPYPAW_MCP_SERVER_ID?.trim() || INTERNAL_MCP_BRIDGE_ID;
 const REQUIRED_MCP_BRIDGE_TOOLS = [
   'cancel_task',
   'get_context',
@@ -737,15 +735,7 @@ function normalizeMcpServerStatus(value: unknown): CodexMcpServerStatus | null {
 }
 
 function isInternalMcpBridgeStatus(status: CodexMcpServerStatus): boolean {
-  if (INTERNAL_MCP_BRIDGE_STATUS_NAMES.has(status.name)) {
-    return true;
-  }
-  return (
-    status.tools.includes('get_context') &&
-    REQUIRED_MCP_BRIDGE_TOOLS.every((toolName) =>
-      status.tools.includes(toolName),
-    )
-  );
+  return status.name === INTERNAL_MCP_BRIDGE_STATUS_NAME;
 }
 
 async function listCodexMcpServerStatuses(
