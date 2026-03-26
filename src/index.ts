@@ -8,7 +8,6 @@ import { CronExpressionParser } from 'cron-parser';
 
 import {
   ASSISTANT_NAME,
-  CONTAINER_IMAGE,
   DATA_DIR,
   GROUPS_DIR,
   STORE_DIR,
@@ -26,7 +25,6 @@ import {
   ContainerOutput,
   runContainerAgent,
   runHostAgent,
-  resolveRuntimeScopePaths,
   writeGroupsSnapshot,
   writeTasksSnapshot,
 } from './container-runner.js';
@@ -174,6 +172,10 @@ import {
   deleteSkillForUser,
   syncHostSkillsForUser,
 } from './routes/skills.js';
+import {
+  clearPersistedRuntimeStateForRecovery,
+  clearSessionRuntimeFiles,
+} from './runtime-state-cleanup.js';
 import { verifyPairingCode } from './telegram-pairing.js';
 import { executeSessionReset } from './commands.js';
 
@@ -864,81 +866,8 @@ function sendBillingDeniedMessage(jid: string, content: string): string {
   return msgId;
 }
 
-function getSessionClaudeDir(folder: string, agentId?: string): string {
-  return resolveRuntimeScopePaths(folder, { agentId }).claudeSessionDir;
-}
-
-function getSessionCodexDir(folder: string, agentId?: string): string {
-  return resolveRuntimeScopePaths(folder, { agentId }).codexHomeDir;
-}
-
 function getEffectiveRuntime(group: RegisteredGroup): RuntimeType {
   return group.runtime ?? getSystemSettings().defaultRuntime;
-}
-
-async function clearSessionRuntimeFiles(
-  folder: string,
-  agentId?: string,
-): Promise<void> {
-  const claudeDir = getSessionClaudeDir(folder, agentId);
-  const codexDir = getSessionCodexDir(folder, agentId);
-  if (!fs.existsSync(claudeDir) && !fs.existsSync(codexDir)) return;
-
-  const cleanupTargets = [
-    { dir: claudeDir, keep: new Set(['settings.json']) },
-    { dir: codexDir, keep: new Set(['config.toml']) },
-  ];
-
-  let cleared = true;
-  for (const target of cleanupTargets) {
-    if (!fs.existsSync(target.dir)) continue;
-    try {
-      for (const entry of fs.readdirSync(target.dir)) {
-        if (target.keep.has(entry)) continue;
-        fs.rmSync(path.join(target.dir, entry), {
-          recursive: true,
-          force: true,
-        });
-      }
-    } catch {
-      cleared = false;
-      logger.info(
-        { folder, agentId, dir: target.dir },
-        'Direct session cleanup failed for runtime dir, trying Docker fallback',
-      );
-    }
-  }
-
-  if (!cleared) {
-    const volumeArgs: string[] = [];
-    if (fs.existsSync(claudeDir)) {
-      volumeArgs.push('-v', `${claudeDir}:/target/claude`);
-    }
-    if (fs.existsSync(codexDir)) {
-      volumeArgs.push('-v', `${codexDir}:/target/codex`);
-    }
-    try {
-      await execFileAsync(
-        'docker',
-        [
-          'run',
-          '--rm',
-          ...volumeArgs,
-          CONTAINER_IMAGE,
-          'sh',
-          '-c',
-          [
-            'if [ -d /target/claude ]; then find /target/claude -mindepth 1 -not -name settings.json -exec rm -rf {} + 2>/dev/null; fi',
-            'if [ -d /target/codex ]; then find /target/codex -mindepth 1 -not -name config.toml -exec rm -rf {} + 2>/dev/null; fi',
-            'exit 0',
-          ].join('; '),
-        ],
-        { timeout: 15_000 },
-      );
-    } catch (err) {
-      logger.error({ folder, agentId, err }, 'Docker fallback cleanup failed');
-    }
-  }
 }
 
 /**
@@ -5895,8 +5824,7 @@ function recoverPendingMessages(): void {
           { group: group.name, folder: group.folder },
           'Recovery: clearing stale session to prevent session ghost',
         );
-        delete sessions[group.folder];
-        deleteSession(group.folder);
+        clearPersistedRuntimeStateForRecovery(sessions, group.folder);
       }
 
       logger.info(
@@ -5948,6 +5876,27 @@ function recoverConversationAgents(): void {
       const pending = getMessagesSince(virtualChatJid, sinceCursor);
 
       if (pending.length > 0) {
+        const persistedAgentSession = getRuntimeSession(
+          agent.group_folder,
+          agentId,
+        );
+        if (persistedAgentSession) {
+          logger.info(
+            {
+              agentId,
+              agentName: agent.name,
+              folder: agent.group_folder,
+              runtime: persistedAgentSession.runtime,
+            },
+            'Recovery: clearing stale persisted agent runtime state before requeue',
+          );
+          clearPersistedRuntimeStateForRecovery(
+            sessions,
+            agent.group_folder,
+            agentId,
+          );
+        }
+
         logger.info(
           { agentId, agentName: agent.name, pendingCount: pending.length },
           'Recovery: re-triggering conversation agent with pending messages',
