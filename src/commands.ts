@@ -3,8 +3,6 @@
  * enter the normal message pipeline.
  */
 import crypto from 'crypto';
-import fs from 'fs';
-import path from 'path';
 import {
   deleteSession,
   getJidsByFolder,
@@ -17,7 +15,7 @@ import type {
   MessageCursor,
   RuntimeSessionRecord,
 } from './types.js';
-import { resolveRuntimeScopePaths } from './container-runner.js';
+import { clearSessionRuntimeFiles } from './runtime-state-cleanup.js';
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -31,34 +29,13 @@ export interface CommandDeps {
 // ─── Session file cleanup (mirrors groups.ts clearSessionJsonlFiles) ────
 
 function clearSessionFiles(folder: string, agentId?: string): void {
-  const runtimeScope = resolveRuntimeScopePaths(folder, { agentId });
-  if (
-    !fs.existsSync(runtimeScope.claudeSessionDir) &&
-    !fs.existsSync(runtimeScope.codexHomeDir)
-  )
-    return;
-
-  const targets = [
-    { dir: runtimeScope.claudeSessionDir, keep: new Set(['settings.json']) },
-    { dir: runtimeScope.codexHomeDir, keep: new Set(['config.toml']) },
-  ];
-  for (const target of targets) {
-    if (!fs.existsSync(target.dir)) continue;
-    const entries = fs.readdirSync(target.dir);
-    for (const entry of entries) {
-      if (target.keep.has(entry)) continue;
-      try {
-        fs.rmSync(path.join(target.dir, entry), {
-          recursive: true,
-          force: true,
-        });
-      } catch (err) {
-        logger.warn(
-          { entry, folder, agentId, dir: target.dir, err },
-          'Failed to remove session file, skipping',
-        );
-      }
-    }
+  try {
+    clearSessionRuntimeFiles(folder, agentId);
+  } catch (err) {
+    logger.warn(
+      { folder, agentId, err },
+      'Failed to clear session runtime files',
+    );
   }
 }
 

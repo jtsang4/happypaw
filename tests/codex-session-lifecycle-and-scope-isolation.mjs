@@ -7,7 +7,7 @@ import path from 'node:path';
 
 const repoRoot = '/Users/jtsang/Documents/workspace/github/jtsang4/happypaw';
 const tempRoot = fs.mkdtempSync(
-  path.join(os.tmpdir(), 'happypaw-codex-session-scope-'),
+  path.join(os.tmpdir(), 'happypaw-codex-session-scope-')
 );
 const realTempRoot = fs.realpathSync(tempRoot);
 
@@ -22,12 +22,8 @@ const { resolveRuntimeScopePaths } = await import(
 const { ensureAgentDirectories } = await import(
   path.join(repoRoot, 'dist', 'utils.js')
 );
-const {
-  initDatabase,
-  setSession,
-  getRuntimeSession,
-  deleteSession,
-} = await import(path.join(repoRoot, 'dist', 'db.js'));
+const { initDatabase, setSession, getRuntimeSession, deleteSession } =
+  await import(path.join(repoRoot, 'dist', 'db.js'));
 
 initDatabase();
 
@@ -38,33 +34,36 @@ const agentScope = resolveRuntimeScopePaths('workspace-a', {
 const isolatedTaskScope = resolveRuntimeScopePaths('workspace-a', {
   taskRunId: 'task-1',
 });
+const isolatedTaskScopeSecondRun = resolveRuntimeScopePaths('workspace-a', {
+  taskRunId: 'task-2',
+});
 
 assert.equal(mainScope.ipcDir, path.join(dataDir, 'ipc', 'workspace-a'));
 assert.equal(
   mainScope.claudeSessionDir,
-  path.join(dataDir, 'sessions', 'workspace-a', '.claude'),
+  path.join(dataDir, 'sessions', 'workspace-a', '.claude')
 );
 assert.equal(
   mainScope.codexHomeDir,
-  path.join(dataDir, 'sessions', 'workspace-a', '.codex'),
+  path.join(dataDir, 'sessions', 'workspace-a', '.codex')
 );
 
 assert.equal(
   agentScope.ipcDir,
-  path.join(dataDir, 'ipc', 'workspace-a', 'agents', 'agent-1'),
+  path.join(dataDir, 'ipc', 'workspace-a', 'agents', 'agent-1')
 );
 assert.equal(
   agentScope.claudeSessionDir,
-  path.join(dataDir, 'sessions', 'workspace-a', 'agents', 'agent-1', '.claude'),
+  path.join(dataDir, 'sessions', 'workspace-a', 'agents', 'agent-1', '.claude')
 );
 assert.equal(
   agentScope.codexHomeDir,
-  path.join(dataDir, 'sessions', 'workspace-a', 'agents', 'agent-1', '.codex'),
+  path.join(dataDir, 'sessions', 'workspace-a', 'agents', 'agent-1', '.codex')
 );
 
 assert.equal(
   isolatedTaskScope.ipcDir,
-  path.join(dataDir, 'ipc', 'workspace-a', 'tasks-run', 'task-1'),
+  path.join(dataDir, 'ipc', 'workspace-a', 'tasks-run', 'task-1')
 );
 assert.equal(
   isolatedTaskScope.claudeSessionDir,
@@ -74,27 +73,49 @@ assert.equal(
     'workspace-a',
     'tasks-run',
     'task-1',
-    '.claude',
-  ),
+    '.claude'
+  )
 );
 assert.equal(
   isolatedTaskScope.codexHomeDir,
+  path.join(dataDir, 'sessions', 'workspace-a', 'tasks-run', 'task-1', '.codex')
+);
+assert.equal(
+  isolatedTaskScopeSecondRun.claudeSessionDir,
   path.join(
     dataDir,
     'sessions',
     'workspace-a',
     'tasks-run',
-    'task-1',
-    '.codex',
-  ),
+    'task-2',
+    '.claude'
+  )
+);
+assert.equal(
+  isolatedTaskScopeSecondRun.codexHomeDir,
+  path.join(dataDir, 'sessions', 'workspace-a', 'tasks-run', 'task-2', '.codex')
 );
 
 assert.notEqual(mainScope.ipcDir, agentScope.ipcDir);
 assert.notEqual(mainScope.ipcDir, isolatedTaskScope.ipcDir);
 assert.notEqual(agentScope.ipcDir, isolatedTaskScope.ipcDir);
+assert.notEqual(isolatedTaskScope.ipcDir, isolatedTaskScopeSecondRun.ipcDir);
 assert.notEqual(mainScope.codexHomeDir, agentScope.codexHomeDir);
 assert.notEqual(mainScope.codexHomeDir, isolatedTaskScope.codexHomeDir);
 assert.notEqual(agentScope.codexHomeDir, isolatedTaskScope.codexHomeDir);
+assert.notEqual(
+  isolatedTaskScope.codexHomeDir,
+  isolatedTaskScopeSecondRun.codexHomeDir
+);
+
+fs.mkdirSync(isolatedTaskScope.claudeSessionDir, { recursive: true });
+fs.mkdirSync(isolatedTaskScope.codexHomeDir, { recursive: true });
+fs.mkdirSync(isolatedTaskScopeSecondRun.claudeSessionDir, { recursive: true });
+fs.mkdirSync(isolatedTaskScopeSecondRun.codexHomeDir, { recursive: true });
+assert.ok(fs.existsSync(isolatedTaskScope.claudeSessionDir));
+assert.ok(fs.existsSync(isolatedTaskScope.codexHomeDir));
+assert.ok(fs.existsSync(isolatedTaskScopeSecondRun.claudeSessionDir));
+assert.ok(fs.existsSync(isolatedTaskScopeSecondRun.codexHomeDir));
 
 const agentIpcDir = ensureAgentDirectories('workspace-a', 'agent-1');
 assert.equal(agentIpcDir, agentScope.ipcDir);

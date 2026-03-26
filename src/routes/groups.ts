@@ -81,7 +81,10 @@ import net from 'node:net';
 import { z } from 'zod';
 import { broadcastNewMessage, invalidateAllowedUserCache } from '../web.js';
 import { getStreamingSession } from '../feishu-streaming-card.js';
-import { resolveRuntimeScopePaths } from '../container-runner.js';
+import {
+  clearSessionRuntimeFiles,
+  clearWorkspaceRuntimeState,
+} from '../runtime-state-cleanup.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -300,50 +303,6 @@ function removeFlowArtifacts(folder: string): void {
     force: true,
   });
   deleteContainerEnvConfig(folder);
-}
-
-function clearSessionJsonlFiles(folder: string, agentId?: string): void {
-  const runtimeScope = resolveRuntimeScopePaths(folder, { agentId });
-  const targets = [
-    { dir: runtimeScope.claudeSessionDir, keep: new Set(['settings.json']) },
-    { dir: runtimeScope.codexHomeDir, keep: new Set(['config.toml']) },
-  ];
-
-  for (const target of targets) {
-    if (!fs.existsSync(target.dir)) continue;
-
-    for (const entry of fs.readdirSync(target.dir)) {
-      if (target.keep.has(entry)) continue;
-      const fullPath = path.join(target.dir, entry);
-      fs.rmSync(fullPath, { recursive: true, force: true });
-    }
-  }
-}
-
-function resetWorkspaceForGroup(folder: string): void {
-  // 1. 清除工作目录（Agent 文件、CLAUDE.md、logs/ 等），然后重建空目录
-  const groupDir = path.join(GROUPS_DIR, folder);
-  fs.rmSync(groupDir, { recursive: true, force: true });
-  fs.mkdirSync(groupDir, { recursive: true });
-
-  // 2. 清除整个 Claude 会话目录（下次启动时 container-runner 会重建）
-  fs.rmSync(path.join(DATA_DIR, 'sessions', folder), {
-    recursive: true,
-    force: true,
-  });
-
-  // 3. 清除 IPC 残留并重建目录结构
-  const ipcDir = path.join(DATA_DIR, 'ipc', folder);
-  fs.rmSync(ipcDir, { recursive: true, force: true });
-  fs.mkdirSync(path.join(ipcDir, 'input'), { recursive: true });
-  fs.mkdirSync(path.join(ipcDir, 'messages'), { recursive: true });
-  fs.mkdirSync(path.join(ipcDir, 'tasks'), { recursive: true });
-
-  // 4. 清除日期记忆目录（data/memory/{folder}/）
-  fs.rmSync(path.join(DATA_DIR, 'memory', folder), {
-    recursive: true,
-    force: true,
-  });
 }
 
 function toPublicContainerEnvForUser(
@@ -603,7 +562,9 @@ groupRoutes.post('/', authMiddleware, async (c) => {
   }
 
   const jid = `web:${crypto.randomUUID()}`;
-  const folder = `flow-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+  const folder = `flow-${Date.now().toString(36)}-${Math.random()
+    .toString(36)
+    .slice(2, 6)}`;
   const now = new Date().toISOString();
 
   const group: RegisteredGroup = {
@@ -1081,7 +1042,7 @@ groupRoutes.post('/:jid/reset-session', authMiddleware, async (c) => {
 
   // 2. Delete session JSONL files so Claude starts fresh.
   try {
-    clearSessionJsonlFiles(group.folder, agentId);
+    clearSessionRuntimeFiles(group.folder, agentId);
   } catch (err) {
     logger.error(
       { jid, folder: group.folder, agentId, err },
@@ -1206,23 +1167,23 @@ groupRoutes.post('/:jid/clear-history', authMiddleware, async (c) => {
     );
   }
 
-  // 2. Reset workspace: clear working directory, session files, and IPC artifacts.
+  // 2. Reset workspace runtime state: clear working directory, runtime homes, IPC artifacts,
+  //    and all persisted session/thread mappings for this folder.
   try {
-    resetWorkspaceForGroup(group.folder);
+    clearWorkspaceRuntimeState(group.folder);
   } catch (err) {
     logger.error(
       { jid, folder: group.folder, err },
-      'Failed to reset workspace while clearing history',
+      'Failed to reset workspace runtime state while clearing history',
     );
     return c.json(
-      { error: 'Failed to reset workspace, history not cleared' },
+      { error: 'Failed to reset workspace runtime state, history not cleared' },
       500,
     );
   }
 
-  // 3. Clear session state and message history for ALL sibling JIDs.
+  // 3. Clear in-memory main-session cache and message history for ALL sibling JIDs.
   try {
-    deleteSession(group.folder);
     delete deps.getSessions()[group.folder];
     for (const siblingJid of siblingJids) {
       deleteChatHistory(siblingJid);
