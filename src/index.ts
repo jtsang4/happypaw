@@ -488,7 +488,10 @@ function getActiveImReplyRouteSnapshotPath(folder: string): string {
   return path.join(DATA_DIR, 'ipc', folder, ACTIVE_IM_REPLY_ROUTE_FILE);
 }
 
-function persistActiveImReplyRoute(folder: string, replyJid: string | null): void {
+function persistActiveImReplyRoute(
+  folder: string,
+  replyJid: string | null,
+): void {
   const snapshotPath = getActiveImReplyRouteSnapshotPath(folder);
   if (!replyJid) {
     try {
