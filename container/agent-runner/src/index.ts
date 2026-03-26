@@ -1093,7 +1093,7 @@ async function runQuery(
   disallowedTools?: string[],
   images?: Array<{ data: string; mimeType?: string }>,
   sourceKindOverride?: ContainerOutput['sourceKind'],
-): Promise<{ newSessionId?: string; lastAssistantUuid?: string; closedDuringQuery: boolean; contextOverflow?: boolean; unrecoverableTranscriptError?: boolean; interruptedDuringQuery: boolean; sessionResumeFailed?: boolean }> {
+): Promise<{ newSessionId?: string; lastAssistantUuid?: string; closedDuringQuery: boolean; contextOverflow?: boolean; unrecoverableTranscriptError?: boolean; interruptedDuringQuery: boolean; sessionResumeFailed?: boolean; followUpInput?: { text: string; images?: Array<{ data: string; mimeType?: string }> } }> {
   if (containerInput.runtime === 'codex_app_server') {
     return runCodexRuntime({
       prompt,
@@ -1114,6 +1114,8 @@ async function runQuery(
         writeOutput,
         shouldInterrupt,
         shouldClose,
+        shouldDrain,
+        drainIpcInput,
         normalizeHomeFlags,
         buildChannelGuidelines,
         truncateWithHeadTail,
@@ -1802,8 +1804,20 @@ async function main(): Promise<void> {
         }
         clearInterruptRequested();
         consecutiveCompactions = 0;
-        prompt = nextMessage.text;
-        promptImages = nextMessage.images;
+        const followUpInput = queryResult.followUpInput;
+        if (followUpInput) {
+          prompt = [followUpInput.text, nextMessage.text]
+            .filter((value) => value.trim().length > 0)
+            .join('\n');
+          const mergedImages = [
+            ...(followUpInput.images || []),
+            ...(nextMessage.images || []),
+          ];
+          promptImages = mergedImages.length > 0 ? mergedImages : undefined;
+        } else {
+          prompt = nextMessage.text;
+          promptImages = nextMessage.images;
+        }
         containerInput.turnId = generateTurnId();
         continue;
       }
@@ -1939,6 +1953,18 @@ async function main(): Promise<void> {
         }
       } else {
         consecutiveCompactions = 0;
+      }
+
+      if (queryResult.followUpInput) {
+        log(
+          `Continuing with deferred follow-up input (${queryResult.followUpInput.text.length} chars, ${
+            queryResult.followUpInput.images?.length || 0
+          } images)`,
+        );
+        prompt = queryResult.followUpInput.text;
+        promptImages = queryResult.followUpInput.images;
+        containerInput.turnId = generateTurnId();
+        continue;
       }
 
       log('Query ended, waiting for next IPC message...');

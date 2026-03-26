@@ -9,6 +9,7 @@ import { summarizeToolInput } from './utils.js';
 const OUTPUT_MARKER_TURN_ID_PREFIX = 'codex-turn-';
 const IMAGE_MAX_DIMENSION = 8000;
 const GLOBAL_CLAUDE_MD_MAX_CHARS = 8000;
+const INTERRUPT_SETTLE_TIMEOUT_MS = 5_000;
 const LEGACY_MCP_SERVER_NAME = ['happy', 'claw'].join('');
 const LEGACY_MCP_TOOL_PREFIX = ['mcp', LEGACY_MCP_SERVER_NAME].join('__');
 
@@ -20,6 +21,10 @@ type StreamResult = {
   unrecoverableTranscriptError?: boolean;
   contextOverflow?: boolean;
   sessionResumeFailed?: boolean;
+  followUpInput?: {
+    text: string;
+    images?: Array<{ data: string; mimeType?: string }>;
+  };
 };
 
 type CodexTodo = {
@@ -57,6 +62,13 @@ interface RuntimeDeps {
   writeOutput: (output: ContainerOutput) => void;
   shouldInterrupt: () => boolean;
   shouldClose: () => boolean;
+  shouldDrain: () => boolean;
+  drainIpcInput: () => {
+    messages: Array<{
+      text: string;
+      images?: Array<{ data: string; mimeType?: string }>;
+    }>;
+  };
   normalizeHomeFlags: (
     input: ContainerInput,
   ) => { isHome: boolean; isAdminHome: boolean };
@@ -187,6 +199,53 @@ function filterOversizedImages(
     valid.push(img);
   }
   return { valid, rejected };
+}
+
+function buildUserInput(
+  prompt: string,
+  images: Array<{ data: string; mimeType?: string }> | undefined,
+  detectImageMimeTypeFromBase64Strict: (data: string) => string | undefined,
+  log: (message: string) => void,
+): {
+  input: Array<Record<string, unknown>>;
+  rejected: string[];
+} {
+  const filteredImages = images
+    ? filterOversizedImages(images, log)
+    : { valid: [], rejected: [] };
+
+  return {
+    input: [
+      {
+        type: 'text',
+        text: prompt,
+        text_elements: [],
+      },
+      ...filteredImages.valid.map((img) => ({
+        type: 'image',
+        url: `data:${resolveImageMimeType(
+          img,
+          detectImageMimeTypeFromBase64Strict,
+          log,
+        )};base64,${img.data}`,
+      })),
+    ],
+    rejected: filteredImages.rejected,
+  };
+}
+
+function combineQueuedMessages(
+  messages: Array<{ text: string; images?: Array<{ data: string; mimeType?: string }> }>,
+): { text: string; images?: Array<{ data: string; mimeType?: string }> } | undefined {
+  if (messages.length === 0) return undefined;
+
+  const text = messages.map((message) => message.text).join('\n');
+  const images = messages.flatMap((message) => message.images ?? []);
+
+  return {
+    text,
+    images: images.length > 0 ? images : undefined,
+  };
 }
 
 function buildRuntimePromptContext(
@@ -565,31 +624,20 @@ export async function runCodexRuntime(options: {
     memoryRecall,
   );
 
-  const filteredImages = images
-    ? filterOversizedImages(images, deps.log)
-    : { valid: [], rejected: [] };
-  for (const reason of filteredImages.rejected) {
+  const initialInput = buildUserInput(
+    prompt,
+    images,
+    detectImageMimeTypeFromBase64Strict,
+    deps.log,
+  );
+  for (const reason of initialInput.rejected) {
     emit({
       status: 'success',
       result: `⚠️ ${reason}`,
     });
   }
 
-  const userInput: Array<Record<string, unknown>> = [
-    {
-      type: 'text',
-      text: prompt,
-      text_elements: [],
-    },
-    ...filteredImages.valid.map((img) => ({
-      type: 'image',
-      url: `data:${resolveImageMimeType(
-        img,
-        detectImageMimeTypeFromBase64Strict,
-        deps.log,
-      )};base64,${img.data}`,
-    })),
-  ];
+  const userInput = initialInput.input;
 
   const client = new CodexAppServerClient({
     env: {
@@ -624,9 +672,14 @@ export async function runCodexRuntime(options: {
   let interruptedDuringQuery = false;
   let turnStartedAt = 0;
   let turnTerminal = false;
+  let drainRequested = false;
   const planTodoOrder: string[] = [];
   const planTodos = new Map<string, CodexTodo>();
   const reasoningItems = new Map<string, ReasoningItemState>();
+  const deferredFollowUps: Array<{
+    text: string;
+    images?: Array<{ data: string; mimeType?: string }>;
+  }> = [];
 
   const emitThinkingDelta = (
     text: string,
@@ -1119,28 +1172,60 @@ export async function runCodexRuntime(options: {
     const monitorResult = await waitForTurnCompletion({
       shouldClose: deps.shouldClose,
       shouldInterrupt: deps.shouldInterrupt,
+      shouldDrain: deps.shouldDrain,
+      drainIpcInput: emitOutput ? deps.drainIpcInput : undefined,
       isTurnComplete: () => !!turnComplete,
-      onInterrupt: async (reason) => {
+      log: deps.log,
+      onInterrupt: async () => {
         interruptedDuringQuery = true;
         if (threadId && turnId) {
           await client.request('turn/interrupt', { threadId, turnId });
         }
-        return reason;
+      },
+      onSteer: async (message) => {
+        if (!threadId || !turnId) {
+          deferredFollowUps.push(message);
+          return;
+        }
+        const steerInput = buildUserInput(
+          message.text,
+          message.images,
+          detectImageMimeTypeFromBase64Strict,
+          deps.log,
+        );
+        for (const reason of steerInput.rejected) {
+          emit({
+            status: 'success',
+            result: `⚠️ ${reason}`,
+          });
+        }
+        await client.request('turn/steer', {
+          threadId,
+          expectedTurnId: turnId,
+          input: steerInput.input,
+        });
       },
     });
 
-    if (monitorResult === 'closed') {
+    drainRequested = monitorResult.drainRequested || deps.shouldDrain();
+    if (monitorResult.deferredFollowUp) {
+      deferredFollowUps.push(monitorResult.deferredFollowUp);
+    }
+
+    if (monitorResult.state === 'closed') {
       return {
         closedDuringQuery: true,
         interruptedDuringQuery: false,
         newSessionId: currentSessionId,
+        followUpInput: combineQueuedMessages(deferredFollowUps),
       };
     }
-    if (monitorResult === 'interrupted') {
+    if (monitorResult.state === 'interrupted') {
       return {
         closedDuringQuery: false,
         interruptedDuringQuery: true,
         newSessionId: currentSessionId,
+        followUpInput: combineQueuedMessages(deferredFollowUps),
       };
     }
     if (!turnComplete) {
@@ -1151,6 +1236,7 @@ export async function runCodexRuntime(options: {
         closedDuringQuery: false,
         interruptedDuringQuery: true,
         newSessionId: currentSessionId,
+        followUpInput: combineQueuedMessages(deferredFollowUps),
       };
     }
     if (turnComplete.status === 'failed') {
@@ -1184,12 +1270,13 @@ export async function runCodexRuntime(options: {
     }
 
     return {
-      closedDuringQuery: false,
+      closedDuringQuery: drainRequested,
       interruptedDuringQuery,
       newSessionId: currentSessionId,
       lastAssistantUuid: turnId
         ? `${OUTPUT_MARKER_TURN_ID_PREFIX}${turnId}`
         : undefined,
+      followUpInput: combineQueuedMessages(deferredFollowUps),
     };
   } finally {
     await client.close();
@@ -1200,18 +1287,94 @@ async function waitForTurnCompletion(
   options: {
     shouldClose: () => boolean;
     shouldInterrupt: () => boolean;
+    shouldDrain: () => boolean;
+    drainIpcInput?: () => {
+      messages: Array<{
+        text: string;
+        images?: Array<{ data: string; mimeType?: string }>;
+      }>;
+    };
     isTurnComplete: () => boolean;
-    onInterrupt: (reason: 'closed' | 'interrupted') => Promise<'closed' | 'interrupted'>;
+    onInterrupt: (reason: 'closed' | 'interrupted') => Promise<void>;
+    onSteer?: (message: {
+      text: string;
+      images?: Array<{ data: string; mimeType?: string }>;
+    }) => Promise<void>;
+    log?: (message: string) => void;
   },
-): Promise<'completed' | 'closed' | 'interrupted'> {
+): Promise<{
+  state: 'completed' | 'closed' | 'interrupted';
+  drainRequested: boolean;
+  deferredFollowUp?: {
+    text: string;
+    images?: Array<{ data: string; mimeType?: string }>;
+  };
+}> {
+  let closeRequested = false;
+  let interruptRequested = false;
+  let interruptSentAt = 0;
+  let drainRequested = false;
+  const deferredMessages: Array<{
+    text: string;
+    images?: Array<{ data: string; mimeType?: string }>;
+  }> = [];
+
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    if (options.isTurnComplete()) return 'completed';
-    if (options.shouldClose()) {
-      return await options.onInterrupt('closed');
+    if (options.isTurnComplete()) {
+      return {
+        state: closeRequested
+          ? 'closed'
+          : interruptRequested
+            ? 'interrupted'
+            : 'completed',
+        drainRequested,
+        deferredFollowUp: combineQueuedMessages(deferredMessages),
+      };
     }
-    if (options.shouldInterrupt()) {
-      return await options.onInterrupt('interrupted');
+    if (!closeRequested && options.shouldClose()) {
+      closeRequested = true;
+      interruptSentAt = Date.now();
+      await options.onInterrupt('closed');
+    }
+    if (!interruptRequested && options.shouldInterrupt()) {
+      interruptRequested = true;
+      interruptSentAt = Date.now();
+      await options.onInterrupt('interrupted');
+    }
+    if (!drainRequested && options.shouldDrain()) {
+      drainRequested = true;
+    }
+    if (
+      !closeRequested &&
+      !interruptRequested &&
+      !drainRequested &&
+      options.drainIpcInput &&
+      options.onSteer
+    ) {
+      const followUp = combineQueuedMessages(options.drainIpcInput().messages);
+      if (followUp) {
+        try {
+          await options.onSteer(followUp);
+        } catch (error) {
+          options.log?.(
+            `turn/steer failed, deferring message to next turn: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+          deferredMessages.push(followUp);
+        }
+      }
+    }
+    if (
+      interruptSentAt > 0 &&
+      Date.now() - interruptSentAt >= INTERRUPT_SETTLE_TIMEOUT_MS
+    ) {
+      return {
+        state: closeRequested ? 'closed' : 'interrupted',
+        drainRequested,
+        deferredFollowUp: combineQueuedMessages(deferredMessages),
+      };
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }

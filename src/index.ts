@@ -2945,6 +2945,7 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
     if (
       !sentReply &&
       !alreadySavedByShutdown &&
+      output?.status !== 'closed' &&
       streamingAccumulatedText.trim()
     ) {
       try {
@@ -4958,6 +4959,7 @@ async function processAgentConversation(
   let lastError = '';
   let lastAgentReplyMsgId: string | undefined;
   let lastAgentReplyText: string | undefined;
+  let output: ContainerOutput | undefined;
   const lastProcessed = missedMessages[missedMessages.length - 1];
   const commitCursor = (): void => {
     if (cursorCommitted) return;
@@ -5358,7 +5360,6 @@ async function processAgentConversation(
 
     const ownerHomeFolder = resolveOwnerHomeFolder(effectiveGroup);
 
-    let output: ContainerOutput;
     if (executionMode === 'host') {
       output = await runHostAgent(
         effectiveGroup,
@@ -5497,7 +5498,11 @@ async function processAgentConversation(
     }
 
     // ── 兜底：进程异常退出导致累积文本未持久化 ──
-    if (!cursorCommitted && agentStreamingAccText.trim()) {
+    if (
+      !cursorCommitted &&
+      output?.status !== 'closed' &&
+      agentStreamingAccText.trim()
+    ) {
       try {
         const partialReply = buildInterruptedReply(agentStreamingAccText);
         const msgId = crypto.randomUUID();

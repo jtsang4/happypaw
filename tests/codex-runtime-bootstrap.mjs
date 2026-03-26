@@ -11,6 +11,7 @@ const agentRunnerDist = path.join(repoRoot, 'container', 'agent-runner', 'dist')
 function makeFakeCodexScript(scriptPath, requestLogPath, options = {}) {
   const failResumeThreadId = options.failResumeThreadId ?? null;
   const legacyMcpServerName = ['happy', 'claw'].join('');
+  const turnConfig = JSON.stringify(options.turnConfig ?? {});
   fs.writeFileSync(
     scriptPath,
     `#!/usr/bin/env node
@@ -18,7 +19,9 @@ const fs = require('node:fs');
 const requestLogPath = ${JSON.stringify(requestLogPath)};
 const failResumeThreadId = ${JSON.stringify(failResumeThreadId)};
 const legacyMcpServerName = ${JSON.stringify(legacyMcpServerName)};
+const turnConfig = ${turnConfig};
 let buffer = '';
+let activeTurn = null;
 function log(line) { fs.appendFileSync(requestLogPath, line + '\\n'); }
 function send(msg) { process.stdout.write(JSON.stringify(msg) + '\\n'); }
 const freshThreadId = 'thr_fresh';
@@ -53,10 +56,26 @@ process.stdin.on('data', (chunk) => {
       continue;
     }
     if (msg.method === 'turn/start') {
-      const turnId = 'turn_bootstrap';
+      const turnId = turnConfig.turnId || 'turn_bootstrap';
+      const completionStatus = turnConfig.completionStatus || 'completed';
+      const completionDelayMs = turnConfig.completionDelayMs ?? 0;
+      const greetingText = turnConfig.greetingText || '你好，Codex';
+      const interruptItems = Array.isArray(turnConfig.interruptItems)
+        ? turnConfig.interruptItems
+        : [];
+      activeTurn = {
+        threadId: msg.params.threadId,
+        turnId,
+        greetingText,
+        completionStatus,
+        interruptItems,
+      };
       send({ id: msg.id, result: { turn: { id: turnId } } });
       setTimeout(() => {
         send({ method: 'turn/started', params: { threadId: msg.params.threadId, turn: { id: turnId } } });
+        if (turnConfig.deferUntilInterrupt) {
+          return;
+        }
         send({
           method: 'item/started',
           params: {
@@ -189,7 +208,7 @@ process.stdin.on('data', (chunk) => {
             }
           }
         });
-        send({ method: 'item/agentMessage/delta', params: { threadId: msg.params.threadId, turnId, itemId: 'item_msg', delta: '你好，Codex' } });
+        send({ method: 'item/agentMessage/delta', params: { threadId: msg.params.threadId, turnId, itemId: 'item_msg', delta: greetingText } });
         send({
           method: 'thread/tokenUsage/updated',
           params: {
@@ -202,27 +221,63 @@ process.stdin.on('data', (chunk) => {
             }
           }
         });
-        send({
-          method: 'turn/completed',
-          params: {
-            threadId: msg.params.threadId,
-            turn: {
-              id: turnId,
-              status: 'completed',
-              items: [
-                { type: 'agentMessage', id: 'item_msg', text: '你好，Codex', phase: 'final_answer', memoryCitation: null }
-              ],
-              error: null
+      }, 0);
+      if (!turnConfig.deferUntilInterrupt) {
+        setTimeout(() => {
+          if (!activeTurn || activeTurn.turnId !== turnId) {
+            return;
+          }
+          send({
+            method: 'turn/completed',
+            params: {
+              threadId: msg.params.threadId,
+              turn: {
+                id: turnId,
+                status: completionStatus,
+                items: [
+                  { type: 'agentMessage', id: 'item_msg', text: greetingText, phase: 'final_answer', memoryCitation: null }
+                ],
+                error: null
+              }
             }
+          });
+          send({ method: 'item/agentMessage/delta', params: { threadId: msg.params.threadId, turnId, itemId: 'item_msg', delta: ' SHOULD_IGNORE' } });
+          send({ method: 'item/commandExecution/outputDelta', params: { threadId: msg.params.threadId, turnId, itemId: 'item_command', delta: 'IGNORED_AFTER_COMPLETION' } });
+          activeTurn = null;
+        }, completionDelayMs);
+      }
+      continue;
+    }
+    if (msg.method === 'turn/steer') {
+      send({ id: msg.id, result: {} });
+      if (activeTurn && msg.params.expectedTurnId === activeTurn.turnId) {
+        send({
+          method: 'item/agentMessage/delta',
+          params: {
+            threadId: activeTurn.threadId,
+            turnId: activeTurn.turnId,
+            itemId: 'item_msg',
+            delta: '\\n[steered] ' + msg.params.input.map((entry) => entry.type === 'text' ? entry.text : '[image]').join(' | '),
           }
         });
-        send({ method: 'item/agentMessage/delta', params: { threadId: msg.params.threadId, turnId, itemId: 'item_msg', delta: ' SHOULD_IGNORE' } });
-        send({ method: 'item/commandExecution/outputDelta', params: { threadId: msg.params.threadId, turnId, itemId: 'item_command', delta: 'IGNORED_AFTER_COMPLETION' } });
-      }, 0);
+      }
       continue;
     }
     if (msg.method === 'turn/interrupt') {
       send({ id: msg.id, result: {} });
+      if (activeTurn) {
+        for (const item of activeTurn.interruptItems) {
+          send({
+            method: 'item/agentMessage/delta',
+            params: {
+              threadId: activeTurn.threadId,
+              turnId: activeTurn.turnId,
+              itemId: 'item_msg',
+              delta: item,
+            }
+          });
+        }
+      }
       send({
         method: 'turn/completed',
         params: {
@@ -230,6 +285,7 @@ process.stdin.on('data', (chunk) => {
           turn: { id: msg.params.turnId, status: 'interrupted', items: [], error: null }
         }
       });
+      activeTurn = null;
       continue;
     }
   }
@@ -298,8 +354,12 @@ async function runScenario(name, sessionId, options = {}) {
       SECURITY_RULES: 'security rules',
       log: () => {},
       writeOutput: (output) => outputs.push(output),
-      shouldInterrupt: () => false,
-      shouldClose: () => false,
+      shouldInterrupt: options.shouldInterrupt || (() => false),
+      shouldClose: options.shouldClose || (() => false),
+      shouldDrain: options.shouldDrain || (() => false),
+      drainIpcInput:
+        options.drainIpcInput ||
+        (() => ({ messages: [] })),
       normalizeHomeFlags: (input) => ({
         isHome: Boolean(input.isHome),
         isAdminHome: Boolean(input.isAdminHome),
@@ -555,5 +615,112 @@ assert.ok(
   'failed resume falls back to a fresh thread and keeps the conversation usable',
 );
 assert.equal(resumeFallback.result.newSessionId, 'thr_fresh');
+
+let interruptChecks = 0;
+const interrupted = await runScenario('interrupt', 'thr_interrupt', {
+  turnConfig: {
+    deferUntilInterrupt: true,
+    interruptItems: ['保留这段已生成文本'],
+  },
+  shouldInterrupt: () => {
+    interruptChecks += 1;
+    return interruptChecks >= 3;
+  },
+});
+assert.ok(
+  interrupted.requestOrder.includes('turn/interrupt'),
+  'interrupt path requests turn/interrupt from Codex',
+);
+assert.equal(
+  interrupted.result.interruptedDuringQuery,
+  true,
+  'interrupt result reports interrupted state',
+);
+assert.equal(
+  interrupted.outputs.filter(
+    (entry) =>
+      entry.status === 'stream' &&
+      entry.streamEvent?.eventType === 'text_delta',
+  )[0]?.streamEvent?.text,
+  '保留这段已生成文本',
+  'partial output emitted before interrupt is preserved',
+);
+
+let steerDrainRead = 0;
+const steered = await runScenario('steer', 'thr_steer', {
+  turnConfig: {
+    completionDelayMs: 200,
+  },
+  drainIpcInput: () => {
+    steerDrainRead += 1;
+    if (steerDrainRead === 2) {
+      return {
+        messages: [{ text: '继续补充这个回答' }],
+      };
+    }
+    return { messages: [] };
+  },
+});
+assert.ok(
+  steered.requestOrder.includes('turn/steer'),
+  'follow-up input while active turn uses turn/steer',
+);
+const steerTextDeltas = steered.outputs
+  .filter(
+    (entry) =>
+      entry.status === 'stream' &&
+      entry.streamEvent?.eventType === 'text_delta',
+  )
+  .map((entry) => entry.streamEvent.text);
+assert.deepEqual(
+  steerTextDeltas,
+  ['你好，Codex', '\n[steered] 继续补充这个回答'],
+  'steered output appends within the same active turn without replacing prior deltas',
+);
+assert.equal(
+  steered.result.closedDuringQuery,
+  false,
+  'steer keeps the active turn running to normal completion',
+);
+
+const drained = await runScenario('drain', 'thr_drain', {
+  turnConfig: {
+    completionDelayMs: 200,
+  },
+  shouldDrain: (() => {
+    let checks = 0;
+    return () => {
+      checks += 1;
+      return checks >= 2;
+    };
+  })(),
+});
+assert.equal(
+  drained.result.closedDuringQuery,
+  true,
+  'drain requests let the active turn finish and then exit cleanly',
+);
+
+const closed = await runScenario('close', 'thr_close', {
+  turnConfig: {
+    deferUntilInterrupt: true,
+  },
+  shouldClose: (() => {
+    let checks = 0;
+    return () => {
+      checks += 1;
+      return checks >= 2;
+    };
+  })(),
+});
+assert.equal(
+  closed.result.closedDuringQuery,
+  true,
+  'close semantics exit the active turn path',
+);
+assert.ok(
+  !closed.outputs.some((entry) => entry.status === 'success' && entry.result),
+  'close does not fabricate a final success payload',
+);
 
 console.log('✅ codex runtime bootstrap checks passed');
