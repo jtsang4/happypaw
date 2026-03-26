@@ -28,6 +28,10 @@ export interface McpContext {
   workspaceMemory: string;
 }
 
+const ACTIVE_IM_REPLY_ROUTE_FILE = 'active_im_reply_route.json';
+const SUPPORTED_OUTBOUND_IMAGE_CHANNELS = new Set(['feishu', 'telegram']);
+const SUPPORTED_OUTBOUND_FILE_CHANNELS = new Set(['feishu', 'telegram']);
+
 function writeIpcFile(dir: string, data: object): string {
   fs.mkdirSync(dir, { recursive: true });
 
@@ -146,6 +150,46 @@ function parseMemoryFileReference(fileRef: string): {
   return { pathRef: lineRefMatch[1].trim(), lineFromRef };
 }
 
+function getChannelFromJid(jid: string): string {
+  if (jid.startsWith('feishu:')) return 'feishu';
+  if (jid.startsWith('telegram:')) return 'telegram';
+  if (jid.startsWith('qq:')) return 'qq';
+  if (jid.startsWith('wechat:')) return 'wechat';
+  return 'web';
+}
+
+function readActiveImReplyRoute(ctx: McpContext): string | null {
+  if (!ctx.isHome) return null;
+  const snapshotPath = path.join(ctx.workspaceIpc, ACTIVE_IM_REPLY_ROUTE_FILE);
+  try {
+    const parsed = JSON.parse(fs.readFileSync(snapshotPath, 'utf8')) as {
+      replyJid?: unknown;
+    };
+    return typeof parsed.replyJid === 'string' && parsed.replyJid.trim()
+      ? parsed.replyJid.trim()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function getEffectiveOutboundImJid(ctx: McpContext): string | null {
+  if (getChannelFromJid(ctx.chatJid) !== 'web') return ctx.chatJid;
+  return readActiveImReplyRoute(ctx);
+}
+
+function buildUnsupportedOutboundMessage(
+  toolName: string,
+  supportedChannels: string[],
+  ctx: McpContext,
+): string {
+  const outboundJid = getEffectiveOutboundImJid(ctx);
+  const channel = outboundJid
+    ? getChannelFromJid(outboundJid)
+    : getChannelFromJid(ctx.chatJid);
+  return `Error: ${toolName} is only supported for ${supportedChannels.join('/')} channels. Current channel "${channel}" is unsupported.`;
+}
+
 /**
  * Create all HappyPaw MCP tool definitions for in-process SDK MCP server.
  */
@@ -193,13 +237,17 @@ export function createMcpTools(ctx: McpContext): SdkMcpToolDefinition<any>[] {
           .describe('Optional caption text to send with the image'),
       },
       async (args) => {
-        // Web channels don't support direct image sending
-        if (ctx.chatJid.startsWith('web:')) {
+        const outboundJid = getEffectiveOutboundImJid(ctx);
+        if (
+          !SUPPORTED_OUTBOUND_IMAGE_CHANNELS.has(
+            outboundJid ? getChannelFromJid(outboundJid) : getChannelFromJid(ctx.chatJid),
+          )
+        ) {
           return {
             content: [
               {
                 type: 'text' as const,
-                text: 'Error: send_image is not supported for Web channels. Images can only be sent to IM channels (Feishu/Telegram).',
+                text: buildUnsupportedOutboundMessage('send_image', ['Feishu', 'Telegram'], ctx),
               },
             ],
             isError: true,
@@ -285,7 +333,7 @@ export function createMcpTools(ctx: McpContext): SdkMcpToolDefinition<any>[] {
 
         const data: Record<string, unknown> = {
           type: 'image',
-          chatJid: ctx.chatJid,
+          chatJid: outboundJid || ctx.chatJid,
           imageBase64: base64,
           mimeType,
           caption: args.caption || undefined,
@@ -324,13 +372,17 @@ Supports: PDF, DOC, XLS, PPT, MP4, etc. Max file size: 30MB.`,
           .describe('File name to display (e.g., "report.pdf")'),
       },
       async (args) => {
-        // Web channels don't support direct file sending
-        if (ctx.chatJid.startsWith('web:')) {
+        const outboundJid = getEffectiveOutboundImJid(ctx);
+        if (
+          !SUPPORTED_OUTBOUND_FILE_CHANNELS.has(
+            outboundJid ? getChannelFromJid(outboundJid) : getChannelFromJid(ctx.chatJid),
+          )
+        ) {
           return {
             content: [
               {
                 type: 'text' as const,
-                text: 'Error: send_file is not supported for Web channels. Files can only be sent to IM channels (Feishu/Telegram).',
+                text: buildUnsupportedOutboundMessage('send_file', ['Feishu', 'Telegram'], ctx),
               },
             ],
             isError: true,
@@ -401,7 +453,7 @@ Supports: PDF, DOC, XLS, PPT, MP4, etc. Max file size: 30MB.`,
 
         const data = {
           type: 'send_file',
-          chatJid: ctx.chatJid,
+          chatJid: outboundJid || ctx.chatJid,
           filePath: relativePath,
           fileName: args.fileName,
           timestamp: new Date().toISOString(),

@@ -1060,6 +1060,17 @@ fs.mkdirSync(bridgeMemory, { recursive: true });
 fs.mkdirSync(path.join(bridgeIpc, 'messages'), { recursive: true });
 fs.mkdirSync(path.join(bridgeIpc, 'tasks'), { recursive: true });
 fs.writeFileSync(
+  path.join(bridgeIpc, 'active_im_reply_route.json'),
+  JSON.stringify(
+    {
+      replyJid: 'telegram:home-route',
+      updatedAt: '2026-03-26T00:00:00.000Z',
+    },
+    null,
+    2,
+  ),
+);
+fs.writeFileSync(
   path.join(bridgeWorkspace, 'photo.png'),
   Buffer.from(makePngBase64(), 'base64'),
 );
@@ -1319,8 +1330,137 @@ writeJsonLine(unsupportedBridgeProc.stdin, {
     arguments: { filePath: 'report.pdf', fileName: 'report.pdf' },
   },
 });
+
+const homeWebBridgeProc = spawn('node', [bridgeScriptPath], {
+  env: {
+    ...process.env,
+    HAPPYPAW_CHAT_JID: 'web:home-demo',
+    HAPPYPAW_GROUP_FOLDER: 'demo-folder',
+    HAPPYPAW_OWNER_ID: 'owner-1',
+    HAPPYPAW_RUNTIME: 'codex_app_server',
+    HAPPYPAW_PRODUCT_ID: 'happypaw',
+    HAPPYPAW_WORKSPACE_GROUP: bridgeWorkspace,
+    HAPPYPAW_WORKSPACE_GLOBAL: bridgeGlobal,
+    HAPPYPAW_WORKSPACE_MEMORY: bridgeMemory,
+    HAPPYPAW_WORKSPACE_IPC: bridgeIpc,
+    HAPPYPAW_IS_HOME: '1',
+    HAPPYPAW_IS_ADMIN_HOME: '0',
+  },
+  stdio: ['pipe', 'pipe', 'pipe'],
+});
+homeWebBridgeProc.stdout.setEncoding('utf8');
+let homeWebBuffer = '';
+const homeWebResponses = new Map();
+homeWebBridgeProc.stdout.on('data', (chunk) => {
+  homeWebBuffer += chunk;
+  let idx;
+  while ((idx = homeWebBuffer.indexOf('\n')) !== -1) {
+    const raw = homeWebBuffer.slice(0, idx).trim();
+    homeWebBuffer = homeWebBuffer.slice(idx + 1);
+    if (!raw) continue;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed.id !== 'undefined') homeWebResponses.set(parsed.id, parsed);
+  }
+});
+writeJsonLine(homeWebBridgeProc.stdin, {
+  jsonrpc: '2.0',
+  id: 1,
+  method: 'initialize',
+  params: {},
+});
+writeJsonLine(homeWebBridgeProc.stdin, {
+  jsonrpc: '2.0',
+  method: 'initialized',
+  params: {},
+});
+writeJsonLine(homeWebBridgeProc.stdin, {
+  jsonrpc: '2.0',
+  id: 2,
+  method: 'tools/call',
+  params: {
+    name: 'send_image',
+    arguments: { file_path: 'photo.png', caption: '家庭工作区截图' },
+  },
+});
+writeJsonLine(homeWebBridgeProc.stdin, {
+  jsonrpc: '2.0',
+  id: 3,
+  method: 'tools/call',
+  params: {
+    name: 'send_file',
+    arguments: { filePath: 'report.pdf', fileName: 'report.pdf' },
+  },
+});
+
+const homeUnsupportedIpc = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-home-web-unsupported-'));
+fs.mkdirSync(path.join(homeUnsupportedIpc, 'messages'), { recursive: true });
+fs.mkdirSync(path.join(homeUnsupportedIpc, 'tasks'), { recursive: true });
+const homeUnsupportedBridgeProc = spawn('node', [bridgeScriptPath], {
+  env: {
+    ...process.env,
+    HAPPYPAW_CHAT_JID: 'web:home-demo',
+    HAPPYPAW_GROUP_FOLDER: 'demo-folder',
+    HAPPYPAW_OWNER_ID: 'owner-1',
+    HAPPYPAW_RUNTIME: 'codex_app_server',
+    HAPPYPAW_PRODUCT_ID: 'happypaw',
+    HAPPYPAW_WORKSPACE_GROUP: bridgeWorkspace,
+    HAPPYPAW_WORKSPACE_GLOBAL: bridgeGlobal,
+    HAPPYPAW_WORKSPACE_MEMORY: bridgeMemory,
+    HAPPYPAW_WORKSPACE_IPC: homeUnsupportedIpc,
+    HAPPYPAW_IS_HOME: '1',
+    HAPPYPAW_IS_ADMIN_HOME: '0',
+  },
+  stdio: ['pipe', 'pipe', 'pipe'],
+});
+homeUnsupportedBridgeProc.stdout.setEncoding('utf8');
+let homeUnsupportedBuffer = '';
+const homeUnsupportedResponses = new Map();
+homeUnsupportedBridgeProc.stdout.on('data', (chunk) => {
+  homeUnsupportedBuffer += chunk;
+  let idx;
+  while ((idx = homeUnsupportedBuffer.indexOf('\n')) !== -1) {
+    const raw = homeUnsupportedBuffer.slice(0, idx).trim();
+    homeUnsupportedBuffer = homeUnsupportedBuffer.slice(idx + 1);
+    if (!raw) continue;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed.id !== 'undefined') homeUnsupportedResponses.set(parsed.id, parsed);
+  }
+});
+writeJsonLine(homeUnsupportedBridgeProc.stdin, {
+  jsonrpc: '2.0',
+  id: 1,
+  method: 'initialize',
+  params: {},
+});
+writeJsonLine(homeUnsupportedBridgeProc.stdin, {
+  jsonrpc: '2.0',
+  method: 'initialized',
+  params: {},
+});
+writeJsonLine(homeUnsupportedBridgeProc.stdin, {
+  jsonrpc: '2.0',
+  id: 2,
+  method: 'tools/call',
+  params: {
+    name: 'send_image',
+    arguments: { file_path: 'photo.png' },
+  },
+});
+writeJsonLine(homeUnsupportedBridgeProc.stdin, {
+  jsonrpc: '2.0',
+  id: 3,
+  method: 'tools/call',
+  params: {
+    name: 'send_file',
+    arguments: { filePath: 'report.pdf', fileName: 'report.pdf' },
+  },
+});
 await new Promise((resolve) => setTimeout(resolve, 100));
 await closeProc(unsupportedBridgeProc);
+await new Promise((resolve) => setTimeout(resolve, 100));
+await closeProc(homeWebBridgeProc);
+await new Promise((resolve) => setTimeout(resolve, 100));
+await closeProc(homeUnsupportedBridgeProc);
 
 await new Promise((resolve) => setTimeout(resolve, 150));
 await closeProc(bridgeProc);
@@ -1383,6 +1523,30 @@ assert.match(
   unsupportedFileResponse.result.content[0].text,
   /Current channel "qq" is unsupported/,
 );
+const homeWebImageResponse = homeWebResponses.get(2);
+assert.equal(homeWebImageResponse.result.isError, undefined);
+assert.match(
+  homeWebImageResponse.result.content[0].text,
+  /Image sent: photo\.png/,
+);
+const homeWebFileResponse = homeWebResponses.get(3);
+assert.equal(homeWebFileResponse.result.isError, undefined);
+assert.equal(
+  homeWebFileResponse.result.content[0].text,
+  'Sending file "report.pdf"...',
+);
+const homeUnsupportedImageResponse = homeUnsupportedResponses.get(2);
+assert.equal(homeUnsupportedImageResponse.result.isError, true);
+assert.match(
+  homeUnsupportedImageResponse.result.content[0].text,
+  /Current channel "web" is unsupported/,
+);
+const homeUnsupportedFileResponse = homeUnsupportedResponses.get(3);
+assert.equal(homeUnsupportedFileResponse.result.isError, true);
+assert.match(
+  homeUnsupportedFileResponse.result.content[0].text,
+  /Current channel "web" is unsupported/,
+);
 
 const messagePayloads = fs
   .readdirSync(path.join(bridgeIpc, 'messages'))
@@ -1390,7 +1554,7 @@ const messagePayloads = fs
   .map((file) =>
     JSON.parse(fs.readFileSync(path.join(bridgeIpc, 'messages', file), 'utf8')),
   );
-assert.equal(messagePayloads.length, 2);
+assert.equal(messagePayloads.length, 3);
 assert.equal(
   messagePayloads.find((payload) => payload.type === 'message').text,
   '进度仍在继续',
@@ -1401,6 +1565,14 @@ assert.equal(
   'image/png',
   'send_image writes image IPC payloads for supported channels',
 );
+assert.deepEqual(
+  messagePayloads
+    .filter((payload) => payload.type === 'image')
+    .map((payload) => payload.chatJid)
+    .sort(),
+  ['telegram:home-route', 'telegram:test-chat'],
+  'home web send_image reuses the active IM reply route when available',
+);
 
 const taskPayloads = fs
   .readdirSync(path.join(bridgeIpc, 'tasks'))
@@ -1410,8 +1582,16 @@ const taskPayloads = fs
   );
 assert.deepEqual(
   taskPayloads.map((payload) => payload.type).sort(),
-  ['cancel_task', 'list_tasks', 'pause_task', 'resume_task', 'schedule_task', 'send_file'],
+  ['cancel_task', 'list_tasks', 'pause_task', 'resume_task', 'schedule_task', 'send_file', 'send_file'],
   'bridge task controls fan out to IPC payloads',
+);
+assert.deepEqual(
+  taskPayloads
+    .filter((payload) => payload.type === 'send_file')
+    .map((payload) => payload.chatJid)
+    .sort(),
+  ['telegram:home-route', 'telegram:test-chat'],
+  'home web send_file reuses the active IM reply route when available',
 );
 
 let interruptChecks = 0;

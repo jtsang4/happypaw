@@ -35,6 +35,7 @@ const ctx = {
 
 const MESSAGES_DIR = path.join(ctx.workspaceIpc, 'messages');
 const TASKS_DIR = path.join(ctx.workspaceIpc, 'tasks');
+const ACTIVE_IM_REPLY_ROUTE_FILE = 'active_im_reply_route.json';
 
 function send(message) {
   process.stdout.write(`${JSON.stringify(message)}\n`);
@@ -244,11 +245,37 @@ function detectImageMimeType(buffer) {
 }
 
 function buildUnsupportedChannelMessage(toolName, supportedChannels) {
-  const channel = getChannelFromJid(ctx.chatJid);
+  const channel = getEffectiveOutboundChannel();
   return buildToolResult(
     `Error: ${toolName} is only supported for ${supportedChannels.join('/')} channels. Current channel "${channel}" is unsupported.`,
     true,
   );
+}
+
+function readActiveImReplyRoute() {
+  if (!ctx.workspaceIpc || !ctx.groupFolder || !ctx.isHome) return null;
+  const snapshotPath = path.join(
+    ctx.workspaceIpc,
+    ACTIVE_IM_REPLY_ROUTE_FILE,
+  );
+  try {
+    const parsed = JSON.parse(fs.readFileSync(snapshotPath, 'utf8'));
+    return typeof parsed?.replyJid === 'string' && parsed.replyJid.trim()
+      ? parsed.replyJid.trim()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function getEffectiveOutboundImJid() {
+  if (getChannelFromJid(ctx.chatJid) !== 'web') return ctx.chatJid;
+  return readActiveImReplyRoute();
+}
+
+function getEffectiveOutboundChannel() {
+  const outboundJid = getEffectiveOutboundImJid();
+  return outboundJid ? getChannelFromJid(outboundJid) : getChannelFromJid(ctx.chatJid);
 }
 
 function requestId() {
@@ -295,7 +322,8 @@ const toolSpecs = [
       caption: z.string().optional().describe('Optional caption text to send with the image'),
     }),
     handler: async ({ file_path, caption }) => {
-      if (!SUPPORTED_OUTBOUND_IMAGE_CHANNELS.has(getChannelFromJid(ctx.chatJid))) {
+      const outboundJid = getEffectiveOutboundImJid();
+      if (!SUPPORTED_OUTBOUND_IMAGE_CHANNELS.has(getEffectiveOutboundChannel())) {
         return buildUnsupportedChannelMessage('send_image', ['Feishu', 'Telegram']);
       }
       const resolved = resolveWorkspacePath(file_path);
@@ -326,7 +354,7 @@ const toolSpecs = [
 
       const payload = {
         type: 'image',
-        chatJid: ctx.chatJid,
+        chatJid: outboundJid || ctx.chatJid,
         imageBase64: buffer.toString('base64'),
         mimeType,
         caption: caption || undefined,
@@ -352,7 +380,8 @@ const toolSpecs = [
       fileName: z.string().describe('File name to display (e.g., "report.pdf")'),
     }),
     handler: async ({ filePath, fileName }) => {
-      if (!SUPPORTED_OUTBOUND_FILE_CHANNELS.has(getChannelFromJid(ctx.chatJid))) {
+      const outboundJid = getEffectiveOutboundImJid();
+      if (!SUPPORTED_OUTBOUND_FILE_CHANNELS.has(getEffectiveOutboundChannel())) {
         return buildUnsupportedChannelMessage('send_file', ['Feishu', 'Telegram']);
       }
       const resolved = resolveWorkspacePath(filePath);
@@ -362,7 +391,7 @@ const toolSpecs = [
       }
       writeIpcFile(TASKS_DIR, {
         type: 'send_file',
-        chatJid: ctx.chatJid,
+        chatJid: outboundJid || ctx.chatJid,
         filePath: resolved.relative,
         fileName,
         timestamp: new Date().toISOString(),

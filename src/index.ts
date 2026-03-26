@@ -482,6 +482,48 @@ const activeRouteUpdaters = new Map<string, ReplyRouteUpdater>();
 // running processGroupMessages.  IPC watcher reads this to forward send_message
 // outputs to the correct IM channel (the running session holds the truth).
 const activeImReplyRoutes = new Map<string, string | null>();
+const ACTIVE_IM_REPLY_ROUTE_FILE = 'active_im_reply_route.json';
+
+function getActiveImReplyRouteSnapshotPath(folder: string): string {
+  return path.join(DATA_DIR, 'ipc', folder, ACTIVE_IM_REPLY_ROUTE_FILE);
+}
+
+function persistActiveImReplyRoute(folder: string, replyJid: string | null): void {
+  const snapshotPath = getActiveImReplyRouteSnapshotPath(folder);
+  if (!replyJid) {
+    try {
+      fs.unlinkSync(snapshotPath);
+    } catch {
+      /* ignore */
+    }
+    return;
+  }
+
+  fs.mkdirSync(path.dirname(snapshotPath), { recursive: true });
+  const tempPath = `${snapshotPath}.tmp`;
+  fs.writeFileSync(
+    tempPath,
+    JSON.stringify(
+      {
+        replyJid,
+        updatedAt: new Date().toISOString(),
+      },
+      null,
+      2,
+    ),
+  );
+  fs.renameSync(tempPath, snapshotPath);
+}
+
+function setActiveImReplyRoute(folder: string, replyJid: string | null): void {
+  activeImReplyRoutes.set(folder, replyJid);
+  persistActiveImReplyRoute(folder, replyJid);
+}
+
+function clearActiveImReplyRoute(folder: string): void {
+  activeImReplyRoutes.delete(folder);
+  persistActiveImReplyRoute(folder, null);
+}
 
 // Track consecutive IM send failures per JID for auto-unbind
 const imSendFailCounts = new Map<string, number>();
@@ -2142,7 +2184,7 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
   }
   // Publish the current IM reply route so the IPC watcher can forward
   // send_message outputs to the correct IM channel.
-  activeImReplyRoutes.set(effectiveGroup.folder, replySourceImJid);
+  setActiveImReplyRoute(effectiveGroup.folder, replySourceImJid);
 
   const shared = isGroupShared(group.folder);
   let prompt = formatMessages(missedMessages, shared);
@@ -2260,7 +2302,7 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
       'Reply route updated via IPC injection',
     );
     replySourceImJid = newImJid;
-    activeImReplyRoutes.set(effectiveGroup.folder, replySourceImJid);
+    setActiveImReplyRoute(effectiveGroup.folder, replySourceImJid);
 
     // Rebuild streaming session if the target channel changed.
     // When the route is cleared to null (web message injected into IM-originated
@@ -2888,7 +2930,7 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
     imManager.clearAckReaction(chatJid);
     if (idleTimer) clearTimeout(idleTimer);
     activeRouteUpdaters.delete(effectiveGroup.folder);
-    activeImReplyRoutes.delete(effectiveGroup.folder);
+    clearActiveImReplyRoute(effectiveGroup.folder);
 
     // ── 检测中断：有累积文本但从未发送回复 ──
     const wasInterrupted = streamInterrupted && !sentReply;
