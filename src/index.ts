@@ -77,6 +77,7 @@ import {
   markStaleSpawnAgentsAsError,
   listActiveConversationAgents,
   getSession,
+  getRuntimeSession,
   listAgentsByJid,
   getGroupsByOwner,
   getMessagesPage,
@@ -109,11 +110,11 @@ import {
   getFeishuProviderConfigWithSource,
   getTelegramProviderConfig,
   getTelegramProviderConfigWithSource,
+  getSystemSettings,
   getUserFeishuConfig,
   getUserTelegramConfig,
   getUserQQConfig,
   getUserWeChatConfig,
-  getSystemSettings,
   saveUserFeishuConfig,
   saveUserTelegramConfig,
   updateAllSessionCredentials,
@@ -141,6 +142,8 @@ import {
   MessageCursor,
   NewMessage,
   RegisteredGroup,
+  RuntimeSessionRecord,
+  RuntimeType,
   StreamEvent,
   SubAgent,
 } from './types.js';
@@ -277,7 +280,7 @@ function feedStreamEventToCard(
 }
 
 let globalMessageCursor: MessageCursor = { timestamp: '', id: '' };
-let sessions: Record<string, string> = {};
+let sessions: Record<string, RuntimeSessionRecord> = {};
 let registeredGroups: Record<string, RegisteredGroup> = {};
 let lastAgentTimestamp: Record<string, MessageCursor> = {};
 // Recovery-safe cursor: only advances when an agent actually finishes processing.
@@ -866,40 +869,69 @@ function getSessionClaudeDir(folder: string, agentId?: string): string {
     : path.join(DATA_DIR, 'sessions', folder, '.claude');
 }
 
+function getSessionCodexDir(folder: string, agentId?: string): string {
+  return agentId
+    ? path.join(DATA_DIR, 'sessions', folder, 'agents', agentId, '.codex')
+    : path.join(DATA_DIR, 'sessions', folder, '.codex');
+}
+
+function getEffectiveRuntime(group: RegisteredGroup): RuntimeType {
+  return group.runtime ?? getSystemSettings().defaultRuntime;
+}
+
 async function clearSessionRuntimeFiles(
   folder: string,
   agentId?: string,
 ): Promise<void> {
   const claudeDir = getSessionClaudeDir(folder, agentId);
-  if (!fs.existsSync(claudeDir)) return;
+  const codexDir = getSessionCodexDir(folder, agentId);
+  if (!fs.existsSync(claudeDir) && !fs.existsSync(codexDir)) return;
 
-  let cleared = false;
-  try {
-    for (const entry of fs.readdirSync(claudeDir)) {
-      if (entry === 'settings.json') continue;
-      fs.rmSync(path.join(claudeDir, entry), { recursive: true, force: true });
+  const cleanupTargets = [
+    { dir: claudeDir, keep: new Set(['settings.json']) },
+    { dir: codexDir, keep: new Set(['config.toml']) },
+  ];
+
+  let cleared = true;
+  for (const target of cleanupTargets) {
+    if (!fs.existsSync(target.dir)) continue;
+    try {
+      for (const entry of fs.readdirSync(target.dir)) {
+        if (target.keep.has(entry)) continue;
+        fs.rmSync(path.join(target.dir, entry), { recursive: true, force: true });
+      }
+    } catch {
+      cleared = false;
+      logger.info(
+        { folder, agentId, dir: target.dir },
+        'Direct session cleanup failed for runtime dir, trying Docker fallback',
+      );
     }
-    cleared = true;
-  } catch {
-    logger.info(
-      { folder, agentId },
-      'Direct session cleanup failed, trying Docker fallback',
-    );
   }
 
   if (!cleared) {
+    const volumeArgs: string[] = [];
+    if (fs.existsSync(claudeDir)) {
+      volumeArgs.push('-v', `${claudeDir}:/target/claude`);
+    }
+    if (fs.existsSync(codexDir)) {
+      volumeArgs.push('-v', `${codexDir}:/target/codex`);
+    }
     try {
       await execFileAsync(
         'docker',
         [
           'run',
           '--rm',
-          '-v',
-          `${claudeDir}:/target`,
+          ...volumeArgs,
           CONTAINER_IMAGE,
           'sh',
           '-c',
-          'find /target -mindepth 1 -not -name settings.json -exec rm -rf {} + 2>/dev/null; exit 0',
+          [
+            'if [ -d /target/claude ]; then find /target/claude -mindepth 1 -not -name settings.json -exec rm -rf {} + 2>/dev/null; fi',
+            'if [ -d /target/codex ]; then find /target/codex -mindepth 1 -not -name config.toml -exec rm -rf {} + 2>/dev/null; fi',
+            'exit 0',
+          ].join('; '),
         ],
         { timeout: 15_000 },
       );
@@ -3340,7 +3372,12 @@ async function runAgent(
   const isHome = !!group.is_home;
   // For the agent-runner: isMain means this is an admin home container (full privileges)
   const isAdminHome = isHome && group.folder === MAIN_GROUP_FOLDER;
-  const sessionId = sessions[group.folder];
+  const runtime = getEffectiveRuntime(group);
+  const sessionRecord = sessions[group.folder];
+  const sessionId =
+    sessionRecord && sessionRecord.runtime === runtime
+      ? sessionRecord.sessionId
+      : undefined;
 
   // Update tasks snapshot for container to read (filtered by group)
   const tasks = getAllTasks();
@@ -3382,8 +3419,12 @@ async function runAgent(
         // 仅从成功的输出中更新 session ID；
         // error 输出可能携带 stale ID，会覆盖流式传递的有效 session
         if (output.newSessionId && output.status !== 'error') {
-          sessions[group.folder] = output.newSessionId;
-          setSession(group.folder, output.newSessionId);
+          const nextSession = {
+            sessionId: output.newSessionId,
+            runtime,
+          } satisfies RuntimeSessionRecord;
+          sessions[group.folder] = nextSession;
+          setSession(group.folder, output.newSessionId, undefined, runtime);
         }
         await onOutput(output);
       }
@@ -3415,6 +3456,7 @@ async function runAgent(
         {
           prompt,
           sessionId,
+          runtime,
           turnId,
           groupFolder: group.folder,
           chatJid,
@@ -3433,6 +3475,7 @@ async function runAgent(
         {
           prompt,
           sessionId,
+          runtime,
           turnId,
           groupFolder: group.folder,
           chatJid,
@@ -3450,8 +3493,12 @@ async function runAgent(
     // 仅从成功的最终输出中更新 session ID；
     // error 状态的输出可能携带 stale ID，覆盖流式阶段已写入的有效 session
     if (output.newSessionId && output.status !== 'error') {
-      sessions[group.folder] = output.newSessionId;
-      setSession(group.folder, output.newSessionId);
+      const nextSession = {
+        sessionId: output.newSessionId,
+        runtime,
+      } satisfies RuntimeSessionRecord;
+      sessions[group.folder] = nextSession;
+      setSession(group.folder, output.newSessionId, undefined, runtime);
     }
 
     // Agent was interrupted by _close sentinel (home folder drain).
@@ -4982,14 +5029,18 @@ async function processAgentConversation(
     cursorCommitted = true;
   };
 
-  // Get or use agent-specific session
-  const sessionId = getSession(effectiveGroup.folder, agentId) || undefined;
+  const runtime = getEffectiveRuntime(effectiveGroup);
+  const sessionRecord = getRuntimeSession(effectiveGroup.folder, agentId);
+  const sessionId =
+    sessionRecord && sessionRecord.runtime === runtime
+      ? sessionRecord.sessionId
+      : undefined;
   let currentAgentSessionId = sessionId;
 
   const wrappedOnOutput = async (output: ContainerOutput) => {
     // Track session
     if (output.newSessionId && output.status !== 'error') {
-      setSession(effectiveGroup.folder, output.newSessionId, agentId);
+      setSession(effectiveGroup.folder, output.newSessionId, agentId, runtime);
       currentAgentSessionId = output.newSessionId;
     }
 
@@ -5331,6 +5382,7 @@ async function processAgentConversation(
     const containerInput: ContainerInput = {
       prompt,
       sessionId,
+      runtime,
       turnId: lastProcessed.id,
       groupFolder: effectiveGroup.folder,
       chatJid,
@@ -5388,7 +5440,7 @@ async function processAgentConversation(
 
     // Finalize session
     if (output.newSessionId && output.status !== 'error') {
-      setSession(effectiveGroup.folder, output.newSessionId, agentId);
+      setSession(effectiveGroup.folder, output.newSessionId, agentId, runtime);
     }
 
     // 不可恢复的转录错误（如超大图片/MIME 错配被固化在会话历史中）

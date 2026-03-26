@@ -57,6 +57,11 @@ export interface RegisteredGroup {
   selected_mcps?: string[] | null; // custom 模式下选中的 MCP server IDs
 }
 
+export interface RuntimeSessionRecord {
+  runtime?: RuntimeType;
+  sessionId: string;
+}
+
 export interface GroupMember {
   user_id: string;
   role: 'owner' | 'member';

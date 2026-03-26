@@ -106,7 +106,7 @@ COPY agent-runner/package.json ./
 # CACHEBUST after COPY ensures both global and local npm install are cache-busted
 # (COPY caches on file content hash, which blocks ARG invalidation propagation)
 ARG CACHEBUST=1
-RUN npm install -g agent-browser
+RUN npm install -g agent-browser @openai/codex@0.116.0
 RUN npm install
 
 # Install feishu-cli (pre-compiled binary from GitHub Releases)
@@ -137,7 +137,7 @@ COPY agent-runner/ ./
 RUN npm run build
 
 # Create workspace directories
-RUN mkdir -p /workspace/group /workspace/global /workspace/memory /workspace/extra /workspace/ipc/messages /workspace/ipc/tasks /workspace/ipc/input
+RUN mkdir -p /workspace/group /workspace/global /workspace/memory /workspace/extra /workspace/ipc/messages /workspace/ipc/tasks /workspace/ipc/input /home/node/.claude /home/node/.codex
 
 # Copy entrypoint script (runs as root, drops to node user via runuser)
 COPY entrypoint.sh /app/entrypoint.sh

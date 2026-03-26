@@ -19,7 +19,11 @@ import { authMiddleware } from '../middleware/auth.js';
 import { GROUPS_DIR } from '../config.js';
 import { canAccessGroup } from '../web-context.js';
 import { getRegisteredGroup } from '../db.js';
-import { CURRENT_PRODUCT_ID, toLegacyProductToken } from '../legacy-product.js';
+import {
+  CURRENT_PRODUCT_ID,
+  isReservedMcpServerId,
+  toLegacyProductToken,
+} from '../legacy-product.js';
 import {
   parseFrontmatter,
   validateSkillId,
@@ -105,6 +109,10 @@ interface McpServerMeta {
 
 interface WorkspaceMeta {
   mcpServers: Record<string, McpServerMeta>;
+}
+
+function validateWorkspaceMcpServerId(id: string): boolean {
+  return /^[\w\-]+$/.test(id) && !isReservedMcpServerId(id);
 }
 
 function readWorkspaceMeta(
@@ -497,7 +505,7 @@ workspaceConfigRoutes.post(
     if (!id || typeof id !== 'string') {
       return c.json({ error: 'id is required' }, 400);
     }
-    if (!/^[\w\-]+$/.test(id)) {
+    if (!validateWorkspaceMcpServerId(id)) {
       return c.json({ error: 'Invalid server ID' }, 400);
     }
 
@@ -551,7 +559,7 @@ workspaceConfigRoutes.patch(
       return c.json({ error: 'Group not found or access denied' }, 404);
 
     const id = c.req.param('id');
-    if (!/^[\w\-]+$/.test(id)) {
+    if (!validateWorkspaceMcpServerId(id)) {
       return c.json({ error: 'Invalid server ID' }, 400);
     }
 
@@ -622,7 +630,7 @@ workspaceConfigRoutes.delete(
       return c.json({ error: 'Group not found or access denied' }, 404);
 
     const id = c.req.param('id');
-    if (!/^[\w\-]+$/.test(id)) {
+    if (!validateWorkspaceMcpServerId(id)) {
       return c.json({ error: 'Invalid server ID' }, 400);
     }
 

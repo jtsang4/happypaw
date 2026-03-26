@@ -10,6 +10,7 @@ export const CURRENT_PRODUCT_NAME = 'HappyPaw';
 export const LEGACY_PRODUCT_ID = toLegacyProductToken(CURRENT_PRODUCT_ID);
 export const LEGACY_PRODUCT_NAME = toLegacyProductToken(CURRENT_PRODUCT_NAME);
 export const LEGACY_AGENT_SENDER = `${LEGACY_PRODUCT_ID}-agent`;
+export const INTERNAL_MCP_BRIDGE_ID = CURRENT_PRODUCT_ID;
 
 export function toLegacyProductToken(value: string): string {
   return value
@@ -19,4 +20,12 @@ export function toLegacyProductToken(value: string): string {
 
 export function toLegacyProductEnvToken(value: string): string {
   return value.replaceAll(CURRENT_SUFFIX_ENV, LEGACY_SUFFIX_ENV);
+}
+
+export function isReservedMcpServerId(value: string): boolean {
+  return (
+    value === CURRENT_PRODUCT_ID ||
+    value === LEGACY_PRODUCT_ID ||
+    value === INTERNAL_MCP_BRIDGE_ID
+  );
 }

@@ -1,7 +1,7 @@
 // Shared state and utilities for web server
 
 import { WebSocket } from 'ws';
-import { RegisteredGroup, UserRole } from './types.js';
+import { RegisteredGroup, RuntimeSessionRecord, UserRole } from './types.js';
 import { GroupQueue } from './group-queue.js';
 import type {
   AuthUser,
@@ -25,7 +25,7 @@ export interface WsClientInfo {
 export interface WebDeps {
   queue: GroupQueue;
   getRegisteredGroups: () => Record<string, RegisteredGroup>;
-  getSessions: () => Record<string, string>;
+  getSessions: () => Record<string, RuntimeSessionRecord>;
   processGroupMessages: (chatJid: string) => Promise<boolean>;
   ensureTerminalContainerStarted: (chatJid: string) => boolean;
   formatMessages: (messages: NewMessage[], isShared?: boolean) => string;

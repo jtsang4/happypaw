@@ -13,13 +13,17 @@ import {
 } from './db.js';
 import { DATA_DIR } from './config.js';
 import { logger } from './logger.js';
-import type { NewMessage, MessageCursor } from './types.js';
+import type {
+  NewMessage,
+  MessageCursor,
+  RuntimeSessionRecord,
+} from './types.js';
 
 // ─── Types ──────────────────────────────────────────────────────
 
 export interface CommandDeps {
   queue: { stopGroup(jid: string, opts?: { force?: boolean }): Promise<void> };
-  sessions: Record<string, string>;
+  sessions: Record<string, RuntimeSessionRecord>;
   broadcast: (jid: string, msg: NewMessage & { is_from_me: boolean }) => void;
   setLastAgentTimestamp: (jid: string, cursor: MessageCursor) => void;
 }
@@ -30,19 +34,31 @@ function clearSessionFiles(folder: string, agentId?: string): void {
   const claudeDir = agentId
     ? path.join(DATA_DIR, 'sessions', folder, 'agents', agentId, '.claude')
     : path.join(DATA_DIR, 'sessions', folder, '.claude');
-  if (!fs.existsSync(claudeDir)) return;
+  const codexDir = agentId
+    ? path.join(DATA_DIR, 'sessions', folder, 'agents', agentId, '.codex')
+    : path.join(DATA_DIR, 'sessions', folder, '.codex');
+  if (!fs.existsSync(claudeDir) && !fs.existsSync(codexDir)) return;
 
-  const keep = new Set(['settings.json']);
-  const entries = fs.readdirSync(claudeDir);
-  for (const entry of entries) {
-    if (keep.has(entry)) continue;
-    try {
-      fs.rmSync(path.join(claudeDir, entry), { recursive: true, force: true });
-    } catch (err) {
-      logger.warn(
-        { entry, folder, agentId, err },
-        'Failed to remove session file, skipping',
-      );
+  const targets = [
+    { dir: claudeDir, keep: new Set(['settings.json']) },
+    { dir: codexDir, keep: new Set(['config.toml']) },
+  ];
+  for (const target of targets) {
+    if (!fs.existsSync(target.dir)) continue;
+    const entries = fs.readdirSync(target.dir);
+    for (const entry of entries) {
+      if (target.keep.has(entry)) continue;
+      try {
+        fs.rmSync(path.join(target.dir, entry), {
+          recursive: true,
+          force: true,
+        });
+      } catch (err) {
+        logger.warn(
+          { entry, folder, agentId, dir: target.dir, err },
+          'Failed to remove session file, skipping',
+        );
+      }
     }
   }
 }

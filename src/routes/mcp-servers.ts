@@ -9,7 +9,11 @@ import type { AuthUser } from '../types.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { DATA_DIR } from '../config.js';
 import { checkMcpServerLimit } from '../billing.js';
-import { CURRENT_PRODUCT_ID, LEGACY_PRODUCT_ID } from '../legacy-product.js';
+import {
+  CURRENT_PRODUCT_ID,
+  LEGACY_PRODUCT_ID,
+  isReservedMcpServerId,
+} from '../legacy-product.js';
 
 // --- Types ---
 
@@ -53,11 +57,7 @@ function getHostSyncManifestPath(userId: string): string {
 }
 
 function validateServerId(id: string): boolean {
-  return (
-    /^[\w\-]+$/.test(id) &&
-    id !== CURRENT_PRODUCT_ID &&
-    id !== LEGACY_PRODUCT_ID
-  );
+  return /^[\w\-]+$/.test(id) && !isReservedMcpServerId(id);
 }
 
 async function readMcpServersFile(userId: string): Promise<McpServersFile> {

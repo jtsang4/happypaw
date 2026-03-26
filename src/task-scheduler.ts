@@ -30,7 +30,11 @@ import {
 import { GroupQueue } from './group-queue.js';
 import { logger } from './logger.js';
 import { hasScriptCapacity, runScript } from './script-runner.js';
-import { RegisteredGroup, ScheduledTask } from './types.js';
+import {
+  RegisteredGroup,
+  RuntimeSessionRecord,
+  ScheduledTask,
+} from './types.js';
 import { checkBillingAccessFresh, isBillingEnabled } from './billing.js';
 
 /**
@@ -55,7 +59,7 @@ function resolveTargetGroupJid(
 
 export interface SchedulerDependencies {
   registeredGroups: () => Record<string, RegisteredGroup>;
-  getSessions: () => Record<string, string>;
+  getSessions: () => Record<string, RuntimeSessionRecord>;
   queue: GroupQueue;
   onProcess: (
     groupJid: string,
@@ -229,7 +233,9 @@ async function runTask(
   // For group context mode, use the group's current session
   const sessions = deps.getSessions();
   const sessionId =
-    task.context_mode === 'group' ? sessions[task.group_folder] : undefined;
+    task.context_mode === 'group'
+      ? sessions[task.group_folder]?.sessionId
+      : undefined;
 
   // Idle timer: writes _close sentinel after idleTimeout of no output,
   // so the container exits instead of hanging at waitForIpcMessage forever.

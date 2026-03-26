@@ -44,6 +44,7 @@ import {
   Permission,
   PermissionTemplateKey,
   RuntimeType,
+  RuntimeSessionRecord,
 } from './types.js';
 import { getDefaultPermissions, normalizePermissions } from './permissions.js';
 
@@ -295,6 +296,7 @@ export function initDatabase(): void {
       group_folder TEXT NOT NULL,
       session_id TEXT NOT NULL,
       agent_id TEXT NOT NULL DEFAULT '',
+      runtime TEXT,
       PRIMARY KEY (group_folder, agent_id)
     );
     CREATE TABLE IF NOT EXISTS registered_groups (
@@ -905,6 +907,8 @@ export function initDatabase(): void {
       }
     })();
   }
+
+  ensureColumn('sessions', 'runtime', 'TEXT');
 
   // v22: Fix target_main_jid that used folder-based JID (web:${folder})
   // instead of actual registered group JID (web:${uuid}).
@@ -2073,25 +2077,39 @@ export function getSession(
   groupFolder: string,
   agentId?: string | null,
 ): string | undefined {
+  return getRuntimeSession(groupFolder, agentId)?.sessionId;
+}
+
+export function getRuntimeSession(
+  groupFolder: string,
+  agentId?: string | null,
+): RuntimeSessionRecord | undefined {
   const effectiveAgentId = agentId || '';
   const row = db
     .prepare(
-      'SELECT session_id FROM sessions WHERE group_folder = ? AND agent_id = ?',
+      'SELECT session_id, runtime FROM sessions WHERE group_folder = ? AND agent_id = ?',
     )
-    .get(groupFolder, effectiveAgentId) as { session_id: string } | undefined;
-  return row?.session_id;
+    .get(groupFolder, effectiveAgentId) as
+    | { session_id: string; runtime: string | null }
+    | undefined;
+  if (!row) return undefined;
+  return {
+    sessionId: row.session_id,
+    runtime: parseRuntimeType(row.runtime, `session ${groupFolder}/${effectiveAgentId}`),
+  };
 }
 
 export function setSession(
   groupFolder: string,
   sessionId: string,
   agentId?: string | null,
+  runtime?: RuntimeType | null,
 ): void {
   const effectiveAgentId = agentId || '';
   db.prepare(
-    `INSERT INTO sessions (group_folder, session_id, agent_id) VALUES (?, ?, ?)
-     ON CONFLICT(group_folder, agent_id) DO UPDATE SET session_id = excluded.session_id`,
-  ).run(groupFolder, sessionId, effectiveAgentId);
+    `INSERT INTO sessions (group_folder, session_id, agent_id, runtime) VALUES (?, ?, ?, ?)
+     ON CONFLICT(group_folder, agent_id) DO UPDATE SET session_id = excluded.session_id, runtime = excluded.runtime`,
+  ).run(groupFolder, sessionId, effectiveAgentId, runtime ?? null);
 }
 
 export function deleteSession(
@@ -2108,15 +2126,22 @@ export function deleteAllSessionsForFolder(groupFolder: string): void {
   db.prepare('DELETE FROM sessions WHERE group_folder = ?').run(groupFolder);
 }
 
-export function getAllSessions(): Record<string, string> {
+export function getAllSessions(): Record<string, RuntimeSessionRecord> {
   const rows = db
     .prepare(
-      "SELECT group_folder, session_id FROM sessions WHERE agent_id = ''",
+      "SELECT group_folder, session_id, runtime FROM sessions WHERE agent_id = ''",
     )
-    .all() as Array<{ group_folder: string; session_id: string }>;
-  const result: Record<string, string> = {};
+    .all() as Array<{
+      group_folder: string;
+      session_id: string;
+      runtime: string | null;
+    }>;
+  const result: Record<string, RuntimeSessionRecord> = {};
   for (const row of rows) {
-    result[row.group_folder] = row.session_id;
+    result[row.group_folder] = {
+      sessionId: row.session_id,
+      runtime: parseRuntimeType(row.runtime, `session ${row.group_folder}`),
+    };
   }
   return result;
 }

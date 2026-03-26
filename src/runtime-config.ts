@@ -3032,9 +3032,27 @@ export function buildContainerEnvLines(
   global: ClaudeProviderConfig,
   override: ContainerEnvConfig,
   profileCustomEnv?: Record<string, string>,
+  codexConfig?: CodexProviderConfig,
 ): string[] {
   const merged = mergeClaudeEnvConfig(global, override);
   const lines = buildClaudeEnvLines(merged, profileCustomEnv);
+
+  const effectiveCodexConfig = codexConfig ?? getCodexProviderConfig();
+  if (effectiveCodexConfig.openaiApiKey) {
+    lines.push(
+      `OPENAI_API_KEY=${sanitizeEnvValue(effectiveCodexConfig.openaiApiKey)}`,
+    );
+  }
+  if (effectiveCodexConfig.openaiBaseUrl) {
+    lines.push(
+      `OPENAI_BASE_URL=${sanitizeEnvValue(effectiveCodexConfig.openaiBaseUrl)}`,
+    );
+  }
+  if (effectiveCodexConfig.openaiModel) {
+    lines.push(
+      `OPENAI_MODEL=${sanitizeEnvValue(effectiveCodexConfig.openaiModel)}`,
+    );
+  }
 
   // Append custom env vars (with safety sanitization as defense-in-depth)
   if (override.customEnv) {

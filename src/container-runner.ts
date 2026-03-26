@@ -14,6 +14,14 @@ import os from 'os';
 import path from 'path';
 
 import { CONTAINER_IMAGE, DATA_DIR, GROUPS_DIR } from './config.js';
+import {
+  prepareCodexHome,
+  type PrepareCodexHomeOptions,
+} from './codex-config.js';
+import {
+  CURRENT_PRODUCT_ID,
+  INTERNAL_MCP_BRIDGE_ID,
+} from './legacy-product.js';
 import { logger } from './logger.js';
 import {
   loadMountAllowlist,
@@ -25,6 +33,7 @@ import {
   getContainerEnvConfig,
   getEnabledProviders,
   getBalancingConfig,
+  getCodexProviderConfig,
   getSystemSettings,
   mergeClaudeEnvConfig,
   resolveProviderById,
@@ -35,7 +44,7 @@ import { providerPool } from './provider-pool.js';
 import { isApiError } from './agent-output-parser.js';
 import type { ClaudeProviderConfig } from './runtime-config.js';
 import { loadUserMcpServers } from './mcp-utils.js';
-import { RegisteredGroup, StreamEvent } from './types.js';
+import { RegisteredGroup, RuntimeType, StreamEvent } from './types.js';
 import {
   attachStderrHandler,
   attachStdoutHandler,
@@ -100,6 +109,7 @@ function ensureSettingsJson(
 export interface ContainerInput {
   prompt: string;
   sessionId?: string;
+  runtime?: RuntimeType;
   groupFolder: string;
   chatJid: string;
   /** @deprecated Use isHome + isAdminHome instead */
@@ -160,6 +170,76 @@ interface ResolvedProvider {
   customEnv: Record<string, string>;
 }
 
+function getEffectiveRuntime(group: RegisteredGroup): RuntimeType {
+  return group.runtime ?? getSystemSettings().defaultRuntime;
+}
+
+function buildCodexBridgeCommand(
+  executionMode: 'container' | 'host',
+): { command: string; args: string[] } {
+  const bridgeScript =
+    executionMode === 'container'
+      ? '/app/codex-mcp-bridge.mjs'
+      : path.join(
+          process.cwd(),
+          'container',
+          'agent-runner',
+          'codex-mcp-bridge.mjs',
+        );
+  return {
+    command: 'node',
+    args: [bridgeScript],
+  };
+}
+
+function ensureCodexSessionHome(
+  group: RegisteredGroup,
+  sourceWorkspaceDir: string,
+  runtimeWorkspaceDir: string,
+  ownerId: string | undefined,
+  codexHomeDir: string,
+  runtime: RuntimeType,
+  executionMode: 'container' | 'host',
+): void {
+  if (runtime !== 'codex_app_server') return;
+
+  const providerConfig = getCodexProviderConfig();
+  const workspaceSettingsPath = path.join(
+    sourceWorkspaceDir,
+    '.claude',
+    'settings.json',
+  );
+  const userSettingsPath = ownerId
+    ? path.join(DATA_DIR, 'mcp-servers', ownerId, 'servers.json')
+    : undefined;
+  const bridgeCommand = buildCodexBridgeCommand(executionMode);
+  const bridgeEnv: Record<string, string> = {
+    HAPPYPAW_GROUP_FOLDER: group.folder,
+    HAPPYPAW_RUNTIME: runtime,
+    HAPPYPAW_WORKSPACE_GROUP: runtimeWorkspaceDir,
+    HAPPYPAW_MCP_SERVER_ID: INTERNAL_MCP_BRIDGE_ID,
+    HAPPYPAW_PRODUCT_ID: CURRENT_PRODUCT_ID,
+  };
+  if (ownerId) {
+    bridgeEnv.HAPPYPAW_OWNER_ID = ownerId;
+  }
+
+  const options: PrepareCodexHomeOptions = {
+    codexHome: codexHomeDir,
+    providerConfig,
+    writableRoots: [runtimeWorkspaceDir],
+    workspaceSettingsPath,
+    userSettingsPath,
+    bridge: {
+      command: bridgeCommand.command,
+      args: bridgeCommand.args,
+      cwd: runtimeWorkspaceDir,
+      env: bridgeEnv,
+    },
+  };
+  prepareCodexHome(options);
+}
+
 /**
  * Try to select a provider from the pool. Returns profileId + resolved config,
  * or null if pool mode is off (≤1 enabled) / group has provider override / selection fails.
@@ -210,6 +290,7 @@ function buildVolumeMounts(
 ): VolumeMount[] {
   const mounts: VolumeMount[] = [];
   const projectRoot = process.cwd();
+  const runtime = getEffectiveRuntime(group);
 
   // Per-user global memory directory:
   // Each user gets their own user-global/{userId}/ mounted as /workspace/global
@@ -281,13 +362,30 @@ function buildVolumeMounts(
       )
     : path.join(DATA_DIR, 'sessions', group.folder, '.claude');
   mkdirForContainer(groupSessionsDir);
+  const groupCodexHomeDir = agentId
+    ? path.join(DATA_DIR, 'sessions', group.folder, 'agents', agentId, '.codex')
+    : path.join(DATA_DIR, 'sessions', group.folder, '.codex');
   const settingsFile = path.join(groupSessionsDir, 'settings.json');
   const mcpServers = ownerId ? loadUserMcpServers(ownerId) : {};
   ensureSettingsJson(settingsFile, mcpServers);
+  ensureCodexSessionHome(
+    group,
+    path.join(GROUPS_DIR, group.folder),
+    '/workspace/group',
+    ownerId,
+    groupCodexHomeDir,
+    runtime,
+    'container',
+  );
 
   mounts.push({
     hostPath: groupSessionsDir,
     containerPath: '/home/node/.claude',
+    readonly: false,
+  });
+  mounts.push({
+    hostPath: groupCodexHomeDir,
+    containerPath: '/home/node/.codex',
     readonly: false,
   });
 
@@ -352,11 +450,13 @@ function buildVolumeMounts(
   const envDir = path.join(DATA_DIR, 'env', group.folder);
   fs.mkdirSync(envDir, { recursive: true });
   const globalConfig = resolvedProvider?.config ?? getClaudeProviderConfig();
+  const codexProviderConfig = getCodexProviderConfig();
   const containerOverride = getContainerEnvConfig(group.folder);
   const envLines = buildContainerEnvLines(
     globalConfig,
     containerOverride,
     resolvedProvider?.customEnv,
+    codexProviderConfig,
   );
   if (envLines.length > 0) {
     const envFilePath = path.join(envDir, 'env');
@@ -872,6 +972,7 @@ export async function runHostAgent(
   fs.mkdirSync(path.join(DATA_DIR, 'memory', group.folder), {
     recursive: true,
   });
+  const runtime = getEffectiveRuntime(group);
 
   // 2. 确保目录结构（宿主机模式下限制目录权限）
   // Sub-agents get their own IPC and session directories
@@ -910,6 +1011,10 @@ export async function runHostAgent(
       )
     : path.join(DATA_DIR, 'sessions', group.folder, '.claude');
   fs.mkdirSync(groupSessionsDir, { recursive: true });
+  const groupCodexHomeDir = input.agentId
+    ? path.join(DATA_DIR, 'sessions', group.folder, 'agents', input.agentId, '.codex')
+    : path.join(DATA_DIR, 'sessions', group.folder, '.codex');
+  fs.mkdirSync(groupCodexHomeDir, { recursive: true });
 
   // 3. 写入 settings.json（合并模式，不覆盖已有用户配置）
   // Load user's global MCP servers (same logic as Docker mode).
@@ -918,6 +1023,15 @@ export async function runHostAgent(
     ? loadUserMcpServers(group.created_by)
     : {};
   ensureSettingsJson(settingsFile, hostMcpServers);
+  ensureCodexSessionHome(
+    group,
+    groupDir,
+    groupDir,
+    group.created_by,
+    groupCodexHomeDir,
+    runtime,
+    'host',
+  );
 
   // 4. Skills 自动链接到 session 目录
   // 链接顺序：项目级 → 用户级(覆盖同名项目级)
@@ -987,6 +1101,7 @@ export async function runHostAgent(
       globalConfig,
       containerOverride,
       hostPoolResult?.resolved.customEnv,
+      getCodexProviderConfig(),
     );
     for (const line of envLines) {
       const eqIdx = line.indexOf('=');
@@ -1040,6 +1155,7 @@ export async function runHostAgent(
     hostEnv['HAPPYPAW_WORKSPACE_IPC'] = groupIpcDir;
     hostEnv['HAPPYCLAW_WORKSPACE_IPC'] = groupIpcDir;
     hostEnv['CLAUDE_CONFIG_DIR'] = groupSessionsDir;
+    hostEnv['CODEX_HOME'] = groupCodexHomeDir;
     // 让 SDK 捕获 CLI 的 stderr 输出，便于排查启动失败
     hostEnv['DEBUG_CLAUDE_AGENT_SDK'] = '1';
     // CLI 禁止 root 用户使用 --dangerously-skip-permissions，

@@ -16,6 +16,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import { spawn } from 'child_process';
 import {
   query,
   HookCallback,
@@ -41,6 +42,7 @@ import { sanitizeFilename, generateFallbackName } from './utils.js';
 import { StreamEventProcessor } from './stream-processor.js';
 import { PREDEFINED_AGENTS } from './agent-definitions.js';
 import { createMcpTools } from './mcp-tools.js';
+import { runCodexRuntime } from './codex-runtime.js';
 import {
   CURRENT_PRODUCT_ID,
   LEGACY_PRODUCT_ID,
@@ -927,6 +929,136 @@ function buildMemoryRecallPrompt(isHome: boolean, isAdminHome: boolean): string 
   ].join('\n');
 }
 
+function buildRuntimePromptContext(
+  containerInput: ContainerInput,
+  memoryRecall: string,
+): { extraDirs: string[]; systemPromptAppend: string } {
+  const { isHome, isAdminHome } = normalizeHomeFlags(containerInput);
+  const globalClaudeMdPath = path.join(WORKSPACE_GLOBAL, 'CLAUDE.md');
+
+  let globalClaudeMd = '';
+  if (isHome && fs.existsSync(globalClaudeMdPath)) {
+    globalClaudeMd = fs.readFileSync(globalClaudeMdPath, 'utf-8');
+    globalClaudeMd = truncateWithHeadTail(
+      globalClaudeMd,
+      GLOBAL_CLAUDE_MD_MAX_CHARS,
+    );
+  }
+
+  const outputGuidelines = [
+    '',
+    '## 输出格式',
+    '',
+    '### 图片引用',
+    '当你生成了图片文件并需要在回复中展示时，使用 Markdown 图片语法引用**相对路径**（相对于当前工作目录）：',
+    '`![描述](filename.png)`',
+    '',
+    '**禁止使用绝对路径**（如 `/workspace/group/filename.png`）。Web 界面会自动将相对路径解析为正确的文件下载地址。',
+    '',
+    '### 技术图表',
+    '需要输出技术图表（流程图、时序图、架构图、ER 图、类图、状态图、甘特图等）时，**使用 Mermaid 语法**，用 ```mermaid 代码块包裹。',
+    'Web 界面会自动将 Mermaid 代码渲染为可视化图表。',
+  ].join('\n');
+
+  const webFetchGuidelines = [
+    '',
+    '## 网页访问策略',
+    '',
+    '访问外部网页时优先使用 WebFetch（速度快）。',
+    '如果 WebFetch 失败（403、被拦截、内容为空或需要 JavaScript 渲染），',
+    '且 agent-browser 可用，立即改用 agent-browser 通过真实浏览器访问。不要反复重试 WebFetch。',
+  ].join('\n');
+
+  let heartbeatContent = '';
+  if (isHome) {
+    const heartbeatPath = path.join(WORKSPACE_GLOBAL, 'HEARTBEAT.md');
+    if (fs.existsSync(heartbeatPath)) {
+      try {
+        const raw = fs.readFileSync(heartbeatPath, 'utf-8');
+        const truncated =
+          raw.length > 2048 ? raw.slice(0, 2048) + '\n\n[...截断]' : raw;
+        heartbeatContent = [
+          '',
+          '## 近期工作参考（仅供背景了解）',
+          '',
+          '> 以下是系统自动生成的近期工作摘要，仅供参考。',
+          '> **不要主动继续这些工作**，除非用户明确要求「继续」或主动提到相关话题。',
+          '> 请专注于用户当前的消息。',
+          '',
+          truncated,
+        ].join('\n');
+      } catch {
+        /* skip */
+      }
+    }
+  }
+
+  const backgroundTaskGuidelines = [
+    '',
+    '## 后台任务',
+    '',
+    '当用户要求执行耗时较长的批量任务（如批量文件处理、大规模数据操作等），',
+    '你应该使用 Task 工具并设置 `run_in_background: true`，让任务在后台运行。',
+    '这样用户无需等待，可以继续与你交流其他事项。',
+    '任务结束时你会自动收到通知，届时在对话中向用户汇报即可。',
+    '告知用户：「已为您在后台启动该任务，完成后我会第一时间反馈。现在有其他问题也可以随时问我。」',
+  ].join('\n');
+
+  const interactionGuidelines = [
+    '',
+    '## 交互原则',
+    '',
+    '**始终专注于用户当前的实际消息。**',
+    '',
+    '- 你可能拥有多种 MCP 工具（如外卖点餐、优惠券查询等），这些是你的辅助能力，**不是用户发送的内容**。',
+    '- **不要主动介绍、列举或描述你的可用工具**，除非用户明确询问「你能做什么」或「你有什么功能」。',
+    '- 当用户需要某个功能时，直接使用对应工具完成任务即可，无需事先解释工具的存在。',
+    '- 如果用户的消息很简短（如打招呼），简洁回应即可，不要用工具列表填充回复。',
+  ].join('\n');
+
+  const conversationAgentGuidelines = containerInput.agentId
+    ? [
+        '',
+        '## 子会话行为规则（最高优先级，覆盖其他冲突指令）',
+        '',
+        '你正在一个**子会话**中运行，不是主会话。以下规则覆盖全局记忆中的"响应行为准则"：',
+        '',
+        '1. **不要用 `send_message` 发送"收到"之类的确认消息** — 你的正常文本输出就是回复，不需要额外发消息',
+        '2. **每次回复只产生一条消息** — 把分析、结论、建议整合到一条回复中，不要拆成多条',
+        '3. **只在以下情况使用 `send_message`**：',
+        '   - 执行超过 2 分钟的长任务时，发送一次进度更新（不是确认收到）',
+        '   - 用户明确要求你"先回复一下"时',
+        '4. **你的正常文本输出会自动发送给用户**，不需要通过 `send_message` 转发',
+        '5. **回复语言使用简体中文**，除非用户用其他语言提问',
+      ].join('\n')
+    : '';
+
+  const channel = getChannelFromJid(containerInput.chatJid);
+  const channelGuidelines = buildChannelGuidelines(channel);
+
+  const systemPromptAppend = [
+    globalClaudeMd && `<user-profile>\n${globalClaudeMd}\n</user-profile>`,
+    `<behavior>\n${interactionGuidelines}\n</behavior>`,
+    `<security>\n${SECURITY_RULES}\n</security>`,
+    `<memory-system>\n${memoryRecall}\n</memory-system>`,
+    heartbeatContent && `<recent-work>\n${heartbeatContent}\n</recent-work>`,
+    `<output-format>\n${outputGuidelines}\n</output-format>`,
+    `<web-access>\n${webFetchGuidelines}\n</web-access>`,
+    `<background-tasks>\n${backgroundTaskGuidelines}\n</background-tasks>`,
+    channelGuidelines && `<channel-format>\n${channelGuidelines}\n</channel-format>`,
+    conversationAgentGuidelines &&
+      `<agent-override>\n${conversationAgentGuidelines}\n</agent-override>`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  const extraDirs = isHome
+    ? [WORKSPACE_GLOBAL, WORKSPACE_MEMORY]
+    : [WORKSPACE_MEMORY];
+
+  return { extraDirs, systemPromptAppend };
+}
+
 /** 从 settings.json 读取用户配置的 MCP servers（stdio/http/sse 类型） */
 function loadUserMcpServers(): Record<string, McpServerConfig> {
   const configDir = process.env.CLAUDE_CONFIG_DIR
@@ -962,6 +1094,34 @@ async function runQuery(
   images?: Array<{ data: string; mimeType?: string }>,
   sourceKindOverride?: ContainerOutput['sourceKind'],
 ): Promise<{ newSessionId?: string; lastAssistantUuid?: string; closedDuringQuery: boolean; contextOverflow?: boolean; unrecoverableTranscriptError?: boolean; interruptedDuringQuery: boolean; sessionResumeFailed?: boolean }> {
+  if (containerInput.runtime === 'codex_app_server') {
+    return runCodexRuntime({
+      prompt,
+      sessionId,
+      containerInput,
+      memoryRecall,
+      emitOutput,
+      images,
+      sourceKindOverride,
+      detectImageMimeTypeFromBase64Strict: (data) =>
+        detectImageMimeTypeFromBase64Strict(data) ?? undefined,
+      deps: {
+        WORKSPACE_GLOBAL,
+        WORKSPACE_GROUP,
+        WORKSPACE_MEMORY,
+        SECURITY_RULES,
+        log,
+        writeOutput,
+        shouldInterrupt,
+        shouldClose,
+        normalizeHomeFlags,
+        buildChannelGuidelines,
+        truncateWithHeadTail,
+        generateTurnId,
+      },
+    });
+  }
+
   const stream = new MessageStream();
   let newSessionId: string | undefined;
   let lastAssistantUuid: string | undefined;
@@ -1085,142 +1245,11 @@ async function runQuery(
   pollIpcDuringQuery();
 
   const processor = new StreamEventProcessor(emit, log);
-
-  // Build system prompt: memory recall guidance + global CLAUDE.md (for non-admin-home)
   const { isHome, isAdminHome } = normalizeHomeFlags(containerInput);
-  const globalClaudeMdPath = path.join(WORKSPACE_GLOBAL, 'CLAUDE.md');
-
-  // Home containers: inject full global CLAUDE.md for immediate context.
-  // Non-home containers: global CLAUDE.md is accessible via filesystem (mounted readonly)
-  // but NOT injected into system prompt to avoid context pollution that causes
-  // the agent to "continue" unrelated previous work.
-  let globalClaudeMd = '';
-  if (isHome && fs.existsSync(globalClaudeMdPath)) {
-    globalClaudeMd = fs.readFileSync(globalClaudeMdPath, 'utf-8');
-    globalClaudeMd = truncateWithHeadTail(globalClaudeMd, GLOBAL_CLAUDE_MD_MAX_CHARS);
-  }
-  const outputGuidelines = [
-    '',
-    '## 输出格式',
-    '',
-    '### 图片引用',
-    '当你生成了图片文件并需要在回复中展示时，使用 Markdown 图片语法引用**相对路径**（相对于当前工作目录）：',
-    '`![描述](filename.png)`',
-    '',
-    '**禁止使用绝对路径**（如 `/workspace/group/filename.png`）。Web 界面会自动将相对路径解析为正确的文件下载地址。',
-    '',
-    '### 技术图表',
-    '需要输出技术图表（流程图、时序图、架构图、ER 图、类图、状态图、甘特图等）时，**使用 Mermaid 语法**，用 ```mermaid 代码块包裹。',
-    'Web 界面会自动将 Mermaid 代码渲染为可视化图表。',
-  ].join('\n');
-
-  const webFetchGuidelines = [
-    '',
-    '## 网页访问策略',
-    '',
-    '访问外部网页时优先使用 WebFetch（速度快）。',
-    '如果 WebFetch 失败（403、被拦截、内容为空或需要 JavaScript 渲染），',
-    '且 agent-browser 可用，立即改用 agent-browser 通过真实浏览器访问。不要反复重试 WebFetch。',
-  ].join('\n');
-
-  // Read HEARTBEAT.md (recent work summary) — only for home containers.
-  // Non-home containers are task-isolated and should not see unrelated work history,
-  // which can mislead the agent into "continuing" previous tasks instead of
-  // focusing on the user's current message.
-  let heartbeatContent = '';
-  if (isHome) {
-    const heartbeatPath = path.join(WORKSPACE_GLOBAL, 'HEARTBEAT.md');
-    if (fs.existsSync(heartbeatPath)) {
-      try {
-        const raw = fs.readFileSync(heartbeatPath, 'utf-8');
-        const truncated = raw.length > 2048 ? raw.slice(0, 2048) + '\n\n[...截断]' : raw;
-        heartbeatContent = [
-          '',
-          '## 近期工作参考（仅供背景了解）',
-          '',
-          '> 以下是系统自动生成的近期工作摘要，仅供参考。',
-          '> **不要主动继续这些工作**，除非用户明确要求「继续」或主动提到相关话题。',
-          '> 请专注于用户当前的消息。',
-          '',
-          truncated,
-        ].join('\n');
-      } catch { /* skip */ }
-    }
-  }
-
-  const backgroundTaskGuidelines = [
-    '',
-    '## 后台任务',
-    '',
-    '当用户要求执行耗时较长的批量任务（如批量文件处理、大规模数据操作等），',
-    '你应该使用 Task 工具并设置 `run_in_background: true`，让任务在后台运行。',
-    '这样用户无需等待，可以继续与你交流其他事项。',
-    '任务结束时你会自动收到通知，届时在对话中向用户汇报即可。',
-    '告知用户：「已为您在后台启动该任务，完成后我会第一时间反馈。现在有其他问题也可以随时问我。」',
-  ].join('\n');
-
-  // Interaction guidelines to prevent the agent from confusing MCP tool
-  // descriptions with user input, or proactively describing available tools.
-  const interactionGuidelines = [
-    '',
-    '## 交互原则',
-    '',
-    '**始终专注于用户当前的实际消息。**',
-    '',
-    '- 你可能拥有多种 MCP 工具（如外卖点餐、优惠券查询等），这些是你的辅助能力，**不是用户发送的内容**。',
-    '- **不要主动介绍、列举或描述你的可用工具**，除非用户明确询问「你能做什么」或「你有什么功能」。',
-    '- 当用户需要某个功能时，直接使用对应工具完成任务即可，无需事先解释工具的存在。',
-    '- 如果用户的消息很简短（如打招呼），简洁回应即可，不要用工具列表填充回复。',
-  ].join('\n');
-
-  // Conversation agents (sub-conversations with agentId) get special behavioral guidelines
-  // to prevent excessive send_message usage and duplicate responses.
-  const conversationAgentGuidelines = containerInput.agentId ? [
-    '',
-    '## 子会话行为规则（最高优先级，覆盖其他冲突指令）',
-    '',
-    '你正在一个**子会话**中运行，不是主会话。以下规则覆盖全局记忆中的"响应行为准则"：',
-    '',
-    '1. **不要用 `send_message` 发送"收到"之类的确认消息** — 你的正常文本输出就是回复，不需要额外发消息',
-    '2. **每次回复只产生一条消息** — 把分析、结论、建议整合到一条回复中，不要拆成多条',
-    '3. **只在以下情况使用 `send_message`**：',
-    '   - 执行超过 2 分钟的长任务时，发送一次进度更新（不是确认收到）',
-    '   - 用户明确要求你"先回复一下"时',
-    '4. **你的正常文本输出会自动发送给用户**，不需要通过 `send_message` 转发',
-    '5. **回复语言使用简体中文**，除非用户用其他语言提问',
-  ].join('\n') : '';
-
-  const channel = getChannelFromJid(containerInput.chatJid);
-  const channelGuidelines = buildChannelGuidelines(channel);
-
-  const systemPromptAppend = [
-    // L1: Identity — 用户身份与偏好（仅主容器注入）
-    globalClaudeMd && `<user-profile>\n${globalClaudeMd}\n</user-profile>`,
-
-    // L2: Behavior — 核心行为约束（始终注入所有容器）
-    `<behavior>\n${interactionGuidelines}\n</behavior>`,
-    `<security>\n${SECURITY_RULES}\n</security>`,
-
-    // L3: Context — 记忆系统与工作背景
-    `<memory-system>\n${memoryRecall}\n</memory-system>`,
-    heartbeatContent && `<recent-work>\n${heartbeatContent}\n</recent-work>`,
-
-    // L4: Reference — 输出格式与工具使用指南
-    `<output-format>\n${outputGuidelines}\n</output-format>`,
-    `<web-access>\n${webFetchGuidelines}\n</web-access>`,
-    `<background-tasks>\n${backgroundTaskGuidelines}\n</background-tasks>`,
-    channelGuidelines && `<channel-format>\n${channelGuidelines}\n</channel-format>`,
-
-    // Override: Sub-Agent 行为覆盖
-    conversationAgentGuidelines && `<agent-override>\n${conversationAgentGuidelines}\n</agent-override>`,
-  ].filter(Boolean).join('\n');
-
-  // Home containers (admin & member) can access global and memory directories.
-  // Non-home containers only access memory directory; global CLAUDE.md is NOT
-  // injected into systemPrompt but remains accessible via filesystem (readonly mount).
-  const extraDirs = isHome
-    ? [WORKSPACE_GLOBAL, WORKSPACE_MEMORY]
-    : [WORKSPACE_MEMORY];
+  const { extraDirs, systemPromptAppend } = buildRuntimePromptContext(
+    containerInput,
+    memoryRecall,
+  );
 
   if (shouldInterrupt()) {
     log('Interrupt sentinel detected before query start, skipping query');
