@@ -1,7 +1,15 @@
 import { interruptibleSleep } from './message-notifier.js';
 import { getChannelType } from './im-channel.js';
-import { getMessagesSince, getNewMessages, getRegisteredGroup, getUserById } from './db.js';
-import { checkBillingAccessFresh, formatBillingAccessDeniedMessage } from './billing.js';
+import {
+  getMessagesSince,
+  getNewMessages,
+  getRegisteredGroup,
+  getUserById,
+} from './db.js';
+import {
+  checkBillingAccessFresh,
+  formatBillingAccessDeniedMessage,
+} from './billing.js';
 import { logger } from './logger.js';
 import type { GroupQueue } from './group-queue.js';
 import type { MessageCursor, NewMessage, RegisteredGroup } from './types.js';
@@ -109,12 +117,14 @@ export function createMessageLoop(deps: {
                     groupMessages[groupMessages.length - 1]?.source_jid;
                   const imSourceJid = lastSourceJid || chatJid;
                   if (getChannelType(imSourceJid)) {
-                    deps.imManager.sendMessage(imSourceJid, sysMsg).catch((err) =>
-                      logger.warn(
-                        { err, jid: imSourceJid },
-                        'Failed to send quota exceeded notice to IM',
-                      ),
-                    );
+                    deps.imManager
+                      .sendMessage(imSourceJid, sysMsg)
+                      .catch((err) =>
+                        logger.warn(
+                          { err, jid: imSourceJid },
+                          'Failed to send quota exceeded notice to IM',
+                        ),
+                      );
                   }
 
                   const lastMsg = groupMessages[groupMessages.length - 1];
@@ -146,7 +156,9 @@ export function createMessageLoop(deps: {
               formatted,
               imagesForAgent,
               () => {
-                deps.activeRouteUpdaters.get(group.folder)?.(lastSourceJidForRoute);
+                deps.activeRouteUpdaters.get(group.folder)?.(
+                  lastSourceJidForRoute,
+                );
               },
             );
             if (sendResult === 'sent') {

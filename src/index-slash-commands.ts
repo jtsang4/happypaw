@@ -1,7 +1,11 @@
 import { execFile } from 'child_process';
 import crypto from 'crypto';
 
-import { ASSISTANT_NAME, MAIN_GROUP_FOLDER, isDockerAvailable } from './config.js';
+import {
+  ASSISTANT_NAME,
+  MAIN_GROUP_FOLDER,
+  isDockerAvailable,
+} from './config.js';
 import {
   addGroupMember,
   createAgent,
@@ -395,7 +399,10 @@ export function createSlashCommandHandlers(deps: CommandDeps): {
     return `工作区「${name}」已创建并绑定\n📁 ${folder}\n🔁 回复策略: source_only\n\n发送 /unbind 可解绑回默认工作区`;
   }
 
-  function handleRequireMentionCommand(chatJid: string, rawArgs: string): string {
+  function handleRequireMentionCommand(
+    chatJid: string,
+    rawArgs: string,
+  ): string {
     const group = deps.registeredGroups[chatJid] ?? getRegisteredGroup(chatJid);
     if (!group) return '未找到当前会话';
 
@@ -523,7 +530,10 @@ export function createSlashCommandHandlers(deps: CommandDeps): {
 
     const header = `🧠 ${headerName}`;
     if (!targetJid) {
-      logger.warn({ chatJid, targetFolder }, '/recall: no JID found for target');
+      logger.warn(
+        { chatJid, targetFolder },
+        '/recall: no JID found for target',
+      );
       return `${header}\n\n📭 该对话暂无消息记录`;
     }
 
@@ -563,7 +573,12 @@ export function createSlashCommandHandlers(deps: CommandDeps): {
       '/recall: summary failed, falling back to raw messages',
     );
 
-    const context = getConversationContext(targetFolder, targetAgentId, 10, 200);
+    const context = getConversationContext(
+      targetFolder,
+      targetAgentId,
+      10,
+      200,
+    );
     if (!context) return `${header}\n\n📭 该对话暂无消息记录`;
     return header + context;
   }

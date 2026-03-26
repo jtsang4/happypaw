@@ -447,10 +447,7 @@ export function recoverConversationAgents(deps: {
     chatJid: string,
     message: NewMessage & { is_from_me?: boolean },
   ) => void;
-  processAgentConversation: (
-    chatJid: string,
-    agentId: string,
-  ) => Promise<void>;
+  processAgentConversation: (chatJid: string, agentId: string) => Promise<void>;
 }): void {
   const agents = deps.listActiveConversationAgents();
   if (agents.length === 0) return;

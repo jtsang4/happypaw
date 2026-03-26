@@ -2,12 +2,7 @@
  * Container Runner for happypaw
  * Spawns agent execution in Docker container and handles IPC
  */
-import {
-  ChildProcess,
-  execFile,
-  execFileSync,
-  spawn,
-} from 'child_process';
+import { ChildProcess, execFile, execFileSync, spawn } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';

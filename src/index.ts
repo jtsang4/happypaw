@@ -520,7 +520,8 @@ let handleSpawnCommand: (
   chatJid: string,
   rawMessage: string,
   sourceImJid?: string,
-) => Promise<string> = async () => '用法: /sw <任务描述>\n在当前工作区创建并行任务';
+) => Promise<string> = async () =>
+  '用法: /sw <任务描述>\n在当前工作区创建并行任务';
 
 const {
   unbindImGroup,
@@ -559,10 +560,7 @@ const {
   emptyCursor: EMPTY_CURSOR,
 });
 
-({
-  handleCommand,
-  handleSpawnCommand,
-} = createSlashCommandHandlers({
+({ handleCommand, handleSpawnCommand } = createSlashCommandHandlers({
   queue,
   sessions,
   registeredGroups,

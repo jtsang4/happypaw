@@ -217,7 +217,8 @@ export function createImRoutingHelpers(deps: {
     const siblingJids = getJidsByFolder(group.folder);
     for (const jid of siblingJids) {
       const sibling = deps.registeredGroups[jid] ?? getRegisteredGroup(jid);
-      if (sibling && !deps.registeredGroups[jid]) deps.registeredGroups[jid] = sibling;
+      if (sibling && !deps.registeredGroups[jid])
+        deps.registeredGroups[jid] = sibling;
       if (sibling?.is_home) {
         return {
           effectiveGroup: {
@@ -461,12 +462,14 @@ export function createImRoutingHelpers(deps: {
         `/bind <工作区> — 绑定到已有工作区\n` +
         `/list — 查看所有工作区\n\n` +
         `也可以直接发消息，我会在默认工作区回复。`;
-      imManager.sendMessage(chatJid, welcome).catch((err) =>
-        logger.warn(
-          { chatJid, err },
-          'Failed to send Telegram group welcome message',
-        ),
-      );
+      imManager
+        .sendMessage(chatJid, welcome)
+        .catch((err) =>
+          logger.warn(
+            { chatJid, err },
+            'Failed to send Telegram group welcome message',
+          ),
+        );
     };
   }
 
@@ -495,7 +498,8 @@ export function createImRoutingHelpers(deps: {
     chatJid: string,
   ) => { effectiveJid: string; agentId: string | null } | null {
     return (chatJid: string) => {
-      const group = deps.registeredGroups[chatJid] ?? getRegisteredGroup(chatJid);
+      const group =
+        deps.registeredGroups[chatJid] ?? getRegisteredGroup(chatJid);
       if (!group) return null;
 
       if (group.target_agent_id) {
@@ -543,7 +547,8 @@ export function createImRoutingHelpers(deps: {
       const sinceCursor =
         deps.lastAgentTimestamp[virtualChatJid] || deps.emptyCursor;
       const missedMessages = getMessagesSince(virtualChatJid, sinceCursor);
-      const lastSourceJid = missedMessages[missedMessages.length - 1]?.source_jid;
+      const lastSourceJid =
+        missedMessages[missedMessages.length - 1]?.source_jid;
       const isImSource =
         !!lastSourceJid && getChannelType(lastSourceJid) !== null;
 
@@ -555,8 +560,13 @@ export function createImRoutingHelpers(deps: {
         });
       } else {
         const formatted =
-          missedMessages.length > 0 ? deps.formatMessages(missedMessages, false) : '';
-        const images = deps.collectMessageImages(virtualChatJid, missedMessages);
+          missedMessages.length > 0
+            ? deps.formatMessages(missedMessages, false)
+            : '';
+        const images = deps.collectMessageImages(
+          virtualChatJid,
+          missedMessages,
+        );
         const imagesForAgent = images.length > 0 ? images : undefined;
 
         const sendResult = formatted
@@ -651,17 +661,22 @@ export function createImRoutingHelpers(deps: {
       feishuConfig.appId &&
       feishuConfig.appSecret
     ) {
-      feishu = await imManager.connectUserFeishu(userId, feishuConfig, onNewChat, {
-        ignoreMessagesBefore,
-        onCommand: deps.handleCommand,
-        resolveGroupFolder,
-        resolveEffectiveChatJid,
-        onAgentMessage,
-        onBotAddedToGroup,
-        onBotRemovedFromGroup,
-        shouldProcessGroupMessage,
-        onCardInterrupt: handleCardInterrupt,
-      } satisfies ConnectFeishuOptions);
+      feishu = await imManager.connectUserFeishu(
+        userId,
+        feishuConfig,
+        onNewChat,
+        {
+          ignoreMessagesBefore,
+          onCommand: deps.handleCommand,
+          resolveGroupFolder,
+          resolveEffectiveChatJid,
+          onAgentMessage,
+          onBotAddedToGroup,
+          onBotRemovedFromGroup,
+          shouldProcessGroupMessage,
+          onCardInterrupt: handleCardInterrupt,
+        } satisfies ConnectFeishuOptions,
+      );
     }
 
     if (
@@ -714,13 +729,18 @@ export function createImRoutingHelpers(deps: {
       wechatConfig.botToken &&
       wechatConfig.ilinkBotId
     ) {
-      wechat = await imManager.connectUserWeChat(userId, wechatConfig, onNewChat, {
-        ignoreMessagesBefore,
-        onCommand: deps.handleCommand,
-        resolveGroupFolder,
-        resolveEffectiveChatJid,
-        onAgentMessage,
-      });
+      wechat = await imManager.connectUserWeChat(
+        userId,
+        wechatConfig,
+        onNewChat,
+        {
+          ignoreMessagesBefore,
+          onCommand: deps.handleCommand,
+          resolveGroupFolder,
+          resolveEffectiveChatJid,
+          onAgentMessage,
+        },
+      );
     }
 
     return { feishu, telegram, qq, wechat };
