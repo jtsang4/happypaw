@@ -119,7 +119,13 @@ const prepared = prepareCodexHome({
 assert.ok(fs.existsSync(path.join(codexHome, 'config.toml')));
 assert.ok(fs.existsSync(path.join(codexHome, 'sessions')));
 assert.ok(fs.existsSync(path.join(codexHome, 'logs')));
-assert.match(prepared.configToml, /model_provider = "openai"/);
+assert.match(prepared.configToml, /model_provider = "happypaw_openai"/);
+assert.match(prepared.configToml, /\[model_providers\.happypaw_openai\]/);
+assert.match(prepared.configToml, /env_key = "OPENAI_API_KEY"/);
+assert.match(
+  prepared.configToml,
+  /base_url = "https:\/\/codex\.example\.com\/v1"/,
+);
 assert.match(prepared.configToml, /sandbox_mode = "workspace-write"/);
 assert.match(prepared.configToml, /\[mcp_servers\."workspaceEnabled"\]/);
 assert.doesNotMatch(prepared.configToml, /workspaceDisabled/);

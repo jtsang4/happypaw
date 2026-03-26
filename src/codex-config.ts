@@ -42,6 +42,10 @@ export interface PrepareCodexHomeOptions {
   bridge: CodexBridgeConfig;
 }
 
+const DEFAULT_OPENAI_BASE_URL = 'https://api.openai.com/v1';
+const ENV_KEY_PROVIDER_ID = 'happypaw_openai';
+const ENV_KEY_PROVIDER_NAME = 'HappyPaw OpenAI Compatible';
+
 function tomlEscape(value: string): string {
   return JSON.stringify(value);
 }
@@ -225,14 +229,19 @@ export function buildCodexConfigToml(options: {
   const writableRoots = Array.from(
     new Set(options.writableRoots.filter((value) => value.trim())),
   );
+  const hasEnvApiKey = !!providerConfig.openaiApiKey.trim();
+  const effectiveBaseUrl =
+    providerConfig.openaiBaseUrl.trim() || DEFAULT_OPENAI_BASE_URL;
 
   const lines: string[] = [];
 
   if (providerConfig.openaiModel.trim()) {
     lines.push(`model = ${tomlEscape(providerConfig.openaiModel.trim())}`);
   }
-  lines.push('model_provider = "openai"');
-  if (providerConfig.openaiBaseUrl.trim()) {
+  lines.push(
+    `model_provider = ${tomlEscape(hasEnvApiKey ? ENV_KEY_PROVIDER_ID : 'openai')}`,
+  );
+  if (!hasEnvApiKey && providerConfig.openaiBaseUrl.trim()) {
     lines.push(
       `openai_base_url = ${tomlEscape(providerConfig.openaiBaseUrl.trim())}`,
     );
@@ -245,6 +254,15 @@ export function buildCodexConfigToml(options: {
   lines.push('network_access = false');
   lines.push('exclude_tmpdir_env_var = false');
   lines.push('exclude_slash_tmp = false');
+
+  if (hasEnvApiKey) {
+    lines.push('');
+    lines.push(`[model_providers.${tomlKey(ENV_KEY_PROVIDER_ID)}]`);
+    lines.push(`name = ${tomlEscape(ENV_KEY_PROVIDER_NAME)}`);
+    lines.push(`base_url = ${tomlEscape(effectiveBaseUrl)}`);
+    lines.push('wire_api = "responses"');
+    lines.push('env_key = "OPENAI_API_KEY"');
+  }
 
   for (const [id, server] of Object.entries(mcpServers).sort(([a], [b]) =>
     a.localeCompare(b),
