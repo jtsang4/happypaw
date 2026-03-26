@@ -63,6 +63,82 @@ process.stdin.on('data', (chunk) => {
             threadId: msg.params.threadId,
             turnId,
             item: {
+              type: 'reasoning',
+              id: 'item_reasoning',
+              summary: ['先分析输入'],
+              content: []
+            }
+          }
+        });
+        send({ method: 'item/reasoning/summaryTextDelta', params: { threadId: msg.params.threadId, turnId, itemId: 'item_reasoning', delta: '总结推理' } });
+        send({ method: 'item/reasoning/textDelta', params: { threadId: msg.params.threadId, turnId, itemId: 'item_reasoning', delta: '详细推理' } });
+        send({
+          method: 'turn/plan/updated',
+          params: {
+            threadId: msg.params.threadId,
+            turnId,
+            explanation: '执行计划',
+            plan: [
+              { step: '分析问题', status: 'completed' },
+              { step: '生成补丁', status: 'inProgress' },
+              { step: '验证结果', status: 'pending' }
+            ]
+          }
+        });
+        send({
+          method: 'item/started',
+          params: {
+            threadId: msg.params.threadId,
+            turnId,
+            item: {
+              type: 'commandExecution',
+              id: 'item_command',
+              command: 'ls -la'
+            }
+          }
+        });
+        send({ method: 'item/commandExecution/outputDelta', params: { threadId: msg.params.threadId, turnId, itemId: 'item_command', delta: 'command output' } });
+        send({
+          method: 'item/completed',
+          params: {
+            threadId: msg.params.threadId,
+            turnId,
+            item: {
+              type: 'commandExecution',
+              id: 'item_command',
+              command: 'ls -la'
+            }
+          }
+        });
+        send({
+          method: 'item/started',
+          params: {
+            threadId: msg.params.threadId,
+            turnId,
+            item: {
+              type: 'fileChange',
+              id: 'item_patch'
+            }
+          }
+        });
+        send({ method: 'item/fileChange/outputDelta', params: { threadId: msg.params.threadId, turnId, itemId: 'item_patch', delta: 'patch output' } });
+        send({
+          method: 'item/completed',
+          params: {
+            threadId: msg.params.threadId,
+            turnId,
+            item: {
+              type: 'fileChange',
+              id: 'item_patch'
+            }
+          }
+        });
+        send({
+          method: 'item/started',
+          params: {
+            threadId: msg.params.threadId,
+            turnId,
+            item: {
               type: 'mcpToolCall',
               id: 'item_mcp',
               server: legacyMcpServerName,
@@ -71,6 +147,7 @@ process.stdin.on('data', (chunk) => {
             }
           }
         });
+        send({ method: 'item/mcpToolCall/progress', params: { threadId: msg.params.threadId, turnId, itemId: 'item_mcp', message: 'mcp progress' } });
         send({
           method: 'item/completed',
           params: {
@@ -112,6 +189,8 @@ process.stdin.on('data', (chunk) => {
             }
           }
         });
+        send({ method: 'item/agentMessage/delta', params: { threadId: msg.params.threadId, turnId, itemId: 'item_msg', delta: ' SHOULD_IGNORE' } });
+        send({ method: 'item/commandExecution/outputDelta', params: { threadId: msg.params.threadId, turnId, itemId: 'item_command', delta: 'IGNORED_AFTER_COMPLETION' } });
       }, 0);
       continue;
     }
@@ -246,11 +325,158 @@ assert.ok(
   fresh.outputs.some(
     (entry) =>
       entry.status === 'stream' &&
+      entry.streamEvent?.eventType === 'thinking_delta' &&
+      entry.streamEvent?.text === '先分析输入',
+  ),
+  'reasoning summary item emits a separate thinking delta',
+);
+assert.ok(
+  fresh.outputs.some(
+    (entry) =>
+      entry.status === 'stream' &&
+      entry.streamEvent?.eventType === 'thinking_delta' &&
+      entry.streamEvent?.text === '总结推理',
+  ),
+  'reasoning summary deltas remain separate from assistant text',
+);
+assert.ok(
+  fresh.outputs.some(
+    (entry) =>
+      entry.status === 'stream' &&
+      entry.streamEvent?.eventType === 'thinking_delta' &&
+      entry.streamEvent?.text === '详细推理',
+  ),
+  'reasoning text deltas stream separately',
+);
+assert.ok(
+  fresh.outputs.some(
+    (entry) =>
+      entry.status === 'stream' &&
+      entry.streamEvent?.eventType === 'tool_use_start' &&
+      entry.streamEvent?.toolName === 'Bash' &&
+      entry.streamEvent?.toolUseId === 'item_command',
+  ),
+  'command execution items map to Bash tool lifecycle events',
+);
+assert.ok(
+  fresh.outputs.some(
+    (entry) =>
+      entry.status === 'stream' &&
+      entry.streamEvent?.eventType === 'tool_use_end' &&
+      entry.streamEvent?.toolUseId === 'item_command',
+  ),
+  'command execution completion emits tool_use_end',
+);
+assert.ok(
+  fresh.outputs.some(
+    (entry) =>
+      entry.status === 'stream' &&
+      entry.streamEvent?.eventType === 'tool_use_start' &&
+      entry.streamEvent?.toolName === 'ApplyPatch' &&
+      entry.streamEvent?.toolUseId === 'item_patch',
+  ),
+  'file change items map to ApplyPatch lifecycle events',
+);
+assert.ok(
+  fresh.outputs.some(
+    (entry) =>
+      entry.status === 'stream' &&
+      entry.streamEvent?.eventType === 'tool_progress' &&
+      entry.streamEvent?.toolUseId === 'item_command' &&
+      entry.streamEvent?.text === 'command output',
+  ),
+  'command output deltas translate into tool progress updates',
+);
+assert.ok(
+  fresh.outputs.some(
+    (entry) =>
+      entry.status === 'stream' &&
+      entry.streamEvent?.eventType === 'tool_progress' &&
+      entry.streamEvent?.toolUseId === 'item_patch' &&
+      entry.streamEvent?.text === 'patch output',
+  ),
+  'patch output deltas translate into tool progress updates',
+);
+assert.ok(
+  fresh.outputs.some(
+    (entry) =>
+      entry.status === 'stream' &&
       entry.streamEvent?.eventType === 'tool_use_start' &&
       entry.streamEvent?.toolName === legacyMcpToolName &&
       entry.streamEvent?.toolUseId === 'item_mcp',
   ),
   'legacy MCP server names still map to the compatibility tool-use name',
+);
+assert.ok(
+  fresh.outputs.some(
+    (entry) =>
+      entry.status === 'stream' &&
+      entry.streamEvent?.eventType === 'tool_progress' &&
+      entry.streamEvent?.toolUseId === 'item_mcp' &&
+      entry.streamEvent?.text === 'mcp progress',
+  ),
+  'MCP progress notifications translate into tool progress updates',
+);
+const todoUpdate = fresh.outputs.find(
+  (entry) =>
+    entry.status === 'stream' &&
+    entry.streamEvent?.eventType === 'todo_update',
+)?.streamEvent;
+assert.ok(todoUpdate, 'turn plan updates emit todo_update events');
+assert.deepEqual(
+  todoUpdate?.todos,
+  [
+    {
+      id: 'codex-plan-turn_bootstrap-0',
+      content: '分析问题',
+      status: 'completed',
+    },
+    {
+      id: 'codex-plan-turn_bootstrap-1',
+      content: '生成补丁',
+      status: 'in_progress',
+    },
+    {
+      id: 'codex-plan-turn_bootstrap-2',
+      content: '验证结果',
+      status: 'pending',
+    },
+  ],
+  'turn plan status values degrade into the existing todo shape',
+);
+const usageEvent = fresh.outputs.find(
+  (entry) =>
+    entry.status === 'stream' &&
+    entry.streamEvent?.eventType === 'usage',
+)?.streamEvent;
+assert.deepEqual(
+  usageEvent?.usage,
+  {
+    inputTokens: 10,
+    outputTokens: 5,
+    cacheReadInputTokens: 2,
+    cacheCreationInputTokens: 0,
+    costUSD: 0,
+    durationMs: usageEvent?.usage?.durationMs ?? 0,
+    numTurns: 1,
+  },
+  'token usage degrades into the phase-1 compatibility shape',
+);
+assert.equal(
+  usageEvent?.turnId,
+  'turn-from-host',
+  'usage events stay correlated with the active outer turn id',
+);
+assert.ok(
+  !fresh.outputs.some(
+    (entry) =>
+      entry.status === 'stream' &&
+      ((entry.streamEvent?.eventType === 'text_delta' &&
+        entry.streamEvent?.text?.includes('SHOULD_IGNORE')) ||
+        (entry.streamEvent?.eventType === 'tool_progress' &&
+          entry.streamEvent?.text === 'IGNORED_AFTER_COMPLETION')),
+  ),
+  'post-completion deltas are ignored once the turn reaches a terminal state',
 );
 assert.equal(fresh.result.newSessionId, 'thr_fresh');
 assert.equal(fresh.result.interruptedDuringQuery, false);

@@ -22,6 +22,26 @@ type StreamResult = {
   sessionResumeFailed?: boolean;
 };
 
+type CodexTodo = {
+  id: string;
+  content: string;
+  status: 'pending' | 'in_progress' | 'completed';
+};
+
+const TURN_TERMINAL_IGNORED_METHODS = new Set([
+  'item/started',
+  'item/completed',
+  'item/agentMessage/delta',
+  'item/reasoning/textDelta',
+  'item/reasoning/summaryTextDelta',
+  'item/reasoning/summaryPartAdded',
+  'item/commandExecution/outputDelta',
+  'item/fileChange/outputDelta',
+  'item/plan/delta',
+  'item/mcpToolCall/progress',
+  'turn/plan/updated',
+]);
+
 interface RuntimeDeps {
   WORKSPACE_GLOBAL: string;
   WORKSPACE_GROUP: string;
@@ -306,6 +326,91 @@ function mapCodexToolName(server: string, tool: string): string {
   return `${server}:${tool}`;
 }
 
+function isNotificationForTurn(
+  params: Record<string, unknown> | undefined,
+  activeTurnId: string | undefined,
+): boolean {
+  return (
+    !!activeTurnId &&
+    typeof params?.turnId === 'string' &&
+    params.turnId === activeTurnId
+  );
+}
+
+function mapPlanStatus(
+  status: unknown,
+): 'pending' | 'in_progress' | 'completed' {
+  switch (status) {
+    case 'completed':
+      return 'completed';
+    case 'inProgress':
+      return 'in_progress';
+    default:
+      return 'pending';
+  }
+}
+
+function buildPlanTodosFromUpdate(
+  turnId: string,
+  explanation: string | null | undefined,
+  plan: unknown,
+): CodexTodo[] {
+  if (Array.isArray(plan) && plan.length > 0) {
+    return plan
+      .map((step, index) => {
+        if (!step || typeof step !== 'object') return null;
+        const record = step as { step?: unknown; status?: unknown };
+        const content =
+          typeof record.step === 'string' ? record.step.trim() : '';
+        if (!content) return null;
+        return {
+          id: `codex-plan-${turnId}-${index}`,
+          content,
+          status: mapPlanStatus(record.status),
+        } satisfies CodexTodo;
+      })
+      .filter((todo): todo is CodexTodo => !!todo);
+  }
+
+  if (typeof explanation === 'string' && explanation.trim()) {
+    return [
+      {
+        id: `codex-plan-${turnId}-explanation`,
+        content: explanation.trim(),
+        status: 'in_progress',
+      },
+    ];
+  }
+
+  return [];
+}
+
+function normalizeTokenUsage(
+  tokenUsage: Record<string, unknown>,
+): {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadInputTokens: number;
+} {
+  const preferred =
+    tokenUsage.total && typeof tokenUsage.total === 'object'
+      ? (tokenUsage.total as Record<string, unknown>)
+      : tokenUsage.last && typeof tokenUsage.last === 'object'
+        ? (tokenUsage.last as Record<string, unknown>)
+        : {};
+
+  return {
+    inputTokens:
+      typeof preferred.inputTokens === 'number' ? preferred.inputTokens : 0,
+    outputTokens:
+      typeof preferred.outputTokens === 'number' ? preferred.outputTokens : 0,
+    cacheReadInputTokens:
+      typeof preferred.cachedInputTokens === 'number'
+        ? preferred.cachedInputTokens
+        : 0,
+  };
+}
+
 function emitCodexStreamEvent(
   emit: (output: ContainerOutput) => void,
   containerInput: ContainerInput,
@@ -510,11 +615,13 @@ export async function runCodexRuntime(options: {
   let latestErrorMessage: string | undefined;
   let latestUsage:
     | {
-        total: {
-          inputTokens: number;
-          outputTokens: number;
-          cachedInputTokens: number;
-        };
+        inputTokens: number;
+        outputTokens: number;
+        cacheReadInputTokens: number;
+        cacheCreationInputTokens: number;
+        costUSD: number;
+        durationMs: number;
+        numTurns: number;
       }
     | undefined;
   let turnComplete:
@@ -524,6 +631,54 @@ export async function runCodexRuntime(options: {
       }
     | undefined;
   let interruptedDuringQuery = false;
+  let turnStartedAt = 0;
+  let turnTerminal = false;
+  const planTodoOrder: string[] = [];
+  const planTodos = new Map<string, CodexTodo>();
+
+  const emitPlanTodos = (): void => {
+    const todos = planTodoOrder
+      .map((id) => planTodos.get(id))
+      .filter((todo): todo is CodexTodo => !!todo);
+    if (todos.length === 0) return;
+    emit({
+      status: 'stream',
+      result: null,
+      newSessionId: currentSessionId,
+      streamEvent: {
+        eventType: 'todo_update',
+        todos,
+      },
+    });
+  };
+
+  const replacePlanTodos = (todos: CodexTodo[]): void => {
+    planTodoOrder.length = 0;
+    planTodos.clear();
+    for (const todo of todos) {
+      planTodoOrder.push(todo.id);
+      planTodos.set(todo.id, todo);
+    }
+    emitPlanTodos();
+  };
+
+  const upsertPlanTodo = (
+    todoId: string,
+    content: string,
+    status: CodexTodo['status'],
+  ): void => {
+    const trimmed = content.trim();
+    if (!trimmed) return;
+    if (!planTodos.has(todoId)) {
+      planTodoOrder.push(todoId);
+    }
+    planTodos.set(todoId, {
+      id: todoId,
+      content: trimmed,
+      status,
+    });
+    emitPlanTodos();
+  };
 
   try {
     const notificationHandler = (notification: CodexJsonRpcNotification): void => {
@@ -531,6 +686,14 @@ export async function runCodexRuntime(options: {
         notification.params && typeof notification.params === 'object'
           ? (notification.params as Record<string, unknown>)
           : undefined;
+
+      if (
+        turnTerminal &&
+        isNotificationForTurn(params, turnId) &&
+        TURN_TERMINAL_IGNORED_METHODS.has(notification.method)
+      ) {
+        return;
+      }
 
       switch (notification.method) {
         case 'thread/started':
@@ -552,6 +715,9 @@ export async function runCodexRuntime(options: {
           });
           break;
         case 'turn/started':
+          if (isNotificationForTurn(params, turnId) && !turnStartedAt) {
+            turnStartedAt = Date.now();
+          }
           emit({
             status: 'stream',
             result: null,
@@ -564,21 +730,37 @@ export async function runCodexRuntime(options: {
           break;
         case 'item/started':
           if (params?.item && typeof params.item === 'object') {
+            const item = params.item as Record<string, unknown>;
+            if (
+              item.type === 'plan' &&
+              typeof item.id === 'string' &&
+              typeof item.text === 'string'
+            ) {
+              upsertPlanTodo(item.id, item.text, 'in_progress');
+            }
             emitCodexToolLifecycle(
               emit,
               containerInput,
               currentSessionId,
-              params.item as Record<string, unknown>,
+              item,
             );
           }
           break;
         case 'item/completed':
           if (params?.item && typeof params.item === 'object') {
+            const item = params.item as Record<string, unknown>;
+            if (
+              item.type === 'plan' &&
+              typeof item.id === 'string' &&
+              typeof item.text === 'string'
+            ) {
+              upsertPlanTodo(item.id, item.text, 'completed');
+            }
             emitCodexToolCompletion(
               emit,
               containerInput,
               currentSessionId,
-              params.item as Record<string, unknown>,
+              item,
             );
           }
           break;
@@ -618,6 +800,20 @@ export async function runCodexRuntime(options: {
             });
           }
           break;
+        case 'turn/plan/updated':
+          if (isNotificationForTurn(params, turnId)) {
+            const todos = buildPlanTodosFromUpdate(
+              params?.turnId as string,
+              typeof params?.explanation === 'string'
+                ? params.explanation
+                : null,
+              params?.plan,
+            );
+            if (todos.length > 0) {
+              replacePlanTodos(todos);
+            }
+          }
+          break;
         case 'item/commandExecution/outputDelta':
         case 'item/fileChange/outputDelta':
         case 'item/plan/delta':
@@ -626,17 +822,31 @@ export async function runCodexRuntime(options: {
             params.turnId === turnId &&
             typeof params.delta === 'string'
           ) {
-            emit({
-              status: 'stream',
-              result: null,
-              newSessionId: currentSessionId,
-              streamEvent: {
-                eventType: 'tool_progress',
-                toolUseId:
-                  typeof params.itemId === 'string' ? params.itemId : undefined,
-                text: params.delta,
-              },
-            });
+            if (
+              notification.method === 'item/plan/delta' &&
+              typeof params.itemId === 'string'
+            ) {
+              const previous = planTodos.get(params.itemId)?.content || '';
+              upsertPlanTodo(
+                params.itemId,
+                `${previous}${params.delta}`,
+                'in_progress',
+              );
+            } else {
+              emit({
+                status: 'stream',
+                result: null,
+                newSessionId: currentSessionId,
+                streamEvent: {
+                  eventType: 'tool_progress',
+                  toolUseId:
+                    typeof params.itemId === 'string'
+                      ? params.itemId
+                      : undefined,
+                  text: params.delta,
+                },
+              });
+            }
           }
           break;
         case 'item/mcpToolCall/progress':
@@ -665,19 +875,17 @@ export async function runCodexRuntime(options: {
             params.tokenUsage &&
             typeof params.tokenUsage === 'object'
           ) {
-            const usage = params.tokenUsage as {
-              total?: {
-                inputTokens?: number;
-                outputTokens?: number;
-                cachedInputTokens?: number;
-              };
-            };
+            const usage = normalizeTokenUsage(
+              params.tokenUsage as Record<string, unknown>,
+            );
             latestUsage = {
-              total: {
-                inputTokens: usage.total?.inputTokens ?? 0,
-                outputTokens: usage.total?.outputTokens ?? 0,
-                cachedInputTokens: usage.total?.cachedInputTokens ?? 0,
-              },
+              inputTokens: usage.inputTokens,
+              outputTokens: usage.outputTokens,
+              cacheReadInputTokens: usage.cacheReadInputTokens,
+              cacheCreationInputTokens: 0,
+              costUSD: 0,
+              durationMs: latestUsage?.durationMs ?? 0,
+              numTurns: 1,
             };
           }
           break;
@@ -706,6 +914,11 @@ export async function runCodexRuntime(options: {
                 )
                 .join('\n');
             }
+            if (latestUsage) {
+              latestUsage.durationMs =
+                turnStartedAt > 0 ? Math.max(Date.now() - turnStartedAt, 0) : 0;
+            }
+            turnTerminal = true;
             turnComplete = { status, turn };
           }
           break;
@@ -777,6 +990,10 @@ export async function runCodexRuntime(options: {
       input: userInput,
     })) as { turn?: { id?: string } };
     turnId = turnResult.turn?.id;
+    turnStartedAt = Date.now();
+    turnTerminal = false;
+    planTodoOrder.length = 0;
+    planTodos.clear();
 
     emit({
       status: 'stream',
@@ -850,15 +1067,7 @@ export async function runCodexRuntime(options: {
         newSessionId: currentSessionId,
         streamEvent: {
           eventType: 'usage',
-          usage: {
-            inputTokens: latestUsage.total.inputTokens,
-            outputTokens: latestUsage.total.outputTokens,
-            cacheReadInputTokens: latestUsage.total.cachedInputTokens,
-            cacheCreationInputTokens: 0,
-            costUSD: 0,
-            durationMs: 0,
-            numTurns: 1,
-          },
+          usage: latestUsage,
         },
       });
     }
