@@ -266,6 +266,15 @@ function ensureCodexSessionHome(
   codexHomeDir: string,
   runtime: RuntimeType,
   executionMode: 'container' | 'host',
+  bridgeContext: {
+    chatJid: string;
+    workspaceGlobal: string;
+    workspaceMemory: string;
+    workspaceIpc: string;
+    isHome: boolean;
+    isAdminHome: boolean;
+    isScheduledTask?: boolean;
+  },
 ): void {
   if (runtime !== 'codex_app_server') return;
 
@@ -280,12 +289,21 @@ function ensureCodexSessionHome(
     : undefined;
   const bridgeCommand = buildCodexBridgeCommand(executionMode);
   const bridgeEnv: Record<string, string> = {
+    HAPPYPAW_CHAT_JID: bridgeContext.chatJid,
     HAPPYPAW_GROUP_FOLDER: group.folder,
     HAPPYPAW_RUNTIME: runtime,
     HAPPYPAW_WORKSPACE_GROUP: runtimeWorkspaceDir,
+    HAPPYPAW_WORKSPACE_GLOBAL: bridgeContext.workspaceGlobal,
+    HAPPYPAW_WORKSPACE_MEMORY: bridgeContext.workspaceMemory,
+    HAPPYPAW_WORKSPACE_IPC: bridgeContext.workspaceIpc,
     HAPPYPAW_MCP_SERVER_ID: INTERNAL_MCP_BRIDGE_ID,
     HAPPYPAW_PRODUCT_ID: CURRENT_PRODUCT_ID,
+    HAPPYPAW_IS_HOME: bridgeContext.isHome ? '1' : '0',
+    HAPPYPAW_IS_ADMIN_HOME: bridgeContext.isAdminHome ? '1' : '0',
   };
+  if (bridgeContext.isScheduledTask) {
+    bridgeEnv.HAPPYPAW_IS_SCHEDULED_TASK = '1';
+  }
   if (ownerId) {
     bridgeEnv.HAPPYPAW_OWNER_ID = ownerId;
   }
@@ -353,32 +371,34 @@ function buildVolumeMounts(
   ownerHomeFolder?: string,
   taskRunId?: string,
   resolvedProvider?: ResolvedProvider,
+  currentChatJid?: string,
 ): VolumeMount[] {
   const mounts: VolumeMount[] = [];
   const projectRoot = process.cwd();
   const runtime = getEffectiveRuntime(group);
+  const ownerId = group.created_by;
   const runtimeScopePaths = resolveRuntimeScopePaths(group.folder, {
     agentId,
     taskRunId,
   });
+  const workspaceGlobalDir = ownerId
+    ? path.join(GROUPS_DIR, 'user-global', ownerId)
+    : path.join(GROUPS_DIR, 'global');
 
   // Per-user global memory directory:
   // Each user gets their own user-global/{userId}/ mounted as /workspace/global
-  const ownerId = group.created_by;
   if (ownerId) {
-    const userGlobalDir = path.join(GROUPS_DIR, 'user-global', ownerId);
-    mkdirForContainer(userGlobalDir);
+    mkdirForContainer(workspaceGlobalDir);
     mounts.push({
-      hostPath: userGlobalDir,
+      hostPath: workspaceGlobalDir,
       containerPath: '/workspace/global',
       readonly: !group.is_home,
     });
   } else {
     // Legacy fallback for rows without created_by.
-    const legacyGlobalDir = path.join(GROUPS_DIR, 'global');
-    mkdirForContainer(legacyGlobalDir);
+    mkdirForContainer(workspaceGlobalDir);
     mounts.push({
-      hostPath: legacyGlobalDir,
+      hostPath: workspaceGlobalDir,
       containerPath: '/workspace/global',
       readonly: !isAdminHome,
     });
@@ -435,6 +455,15 @@ function buildVolumeMounts(
     groupCodexHomeDir,
     runtime,
     'container',
+    {
+      chatJid: currentChatJid || `web:${group.folder}`,
+      workspaceGlobal: '/workspace/global',
+      workspaceMemory: '/workspace/memory',
+      workspaceIpc: '/workspace/ipc',
+      isHome: !!group.is_home,
+      isAdminHome,
+      isScheduledTask: !!taskRunId,
+    },
   );
 
   mounts.push({
@@ -649,6 +678,7 @@ export async function runContainerAgent(
       ownerHomeFolder,
       input.taskRunId,
       resolvedProvider,
+      input.chatJid,
     );
     const safeName = group.folder.replace(/[^a-zA-Z0-9-]/g, '-');
     const agentSuffix = input.agentId
@@ -1075,6 +1105,17 @@ export async function runHostAgent(
     groupCodexHomeDir,
     runtime,
     'host',
+    {
+      chatJid: input.chatJid,
+      workspaceGlobal: group.created_by
+        ? path.join(GROUPS_DIR, 'user-global', group.created_by)
+        : path.join(GROUPS_DIR, 'global'),
+      workspaceMemory: path.join(DATA_DIR, 'memory', group.folder),
+      workspaceIpc: groupIpcDir,
+      isHome: !!group.is_home,
+      isAdminHome: !!group.is_home && group.folder === 'main',
+      isScheduledTask: !!input.taskRunId,
+    },
   );
 
   // 4. Skills 自动链接到 session 目录

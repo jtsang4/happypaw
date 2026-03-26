@@ -7,6 +7,124 @@ import path from 'node:path';
 
 const repoRoot = '/Users/jtsang/Documents/workspace/github/jtsang4/happypaw';
 const agentRunnerDist = path.join(repoRoot, 'container', 'agent-runner', 'dist');
+const bridgeScriptPath = path.join(
+  repoRoot,
+  'container',
+  'agent-runner',
+  'codex-mcp-bridge.mjs',
+);
+
+function writeJsonLine(stream, payload) {
+  stream.write(`${JSON.stringify(payload)}\n`);
+}
+
+function readJsonLineLines(stream) {
+  return new Promise((resolve, reject) => {
+    let buffer = '';
+    const messages = [];
+
+    const cleanup = () => {
+      stream.off('data', onData);
+      stream.off('error', onError);
+    };
+
+    const onError = (error) => {
+      cleanup();
+      reject(error);
+    };
+
+    const onData = (chunk) => {
+      buffer += chunk;
+      let index;
+      while ((index = buffer.indexOf('\n')) !== -1) {
+        const raw = buffer.slice(0, index).trim();
+        buffer = buffer.slice(index + 1);
+        if (!raw) continue;
+        messages.push(JSON.parse(raw));
+        if (messages.length >= 3) {
+          cleanup();
+          resolve(messages);
+          return;
+        }
+      }
+    };
+
+    stream.on('data', onData);
+    stream.on('error', onError);
+  });
+}
+
+async function exerciseBridge(extraEnv = {}) {
+  const proc = (await import('node:child_process')).spawn(
+    'node',
+    [bridgeScriptPath],
+    {
+      env: {
+        ...process.env,
+        HAPPYPAW_CHAT_JID: extraEnv.HAPPYPAW_CHAT_JID || 'telegram:test-chat',
+        HAPPYPAW_GROUP_FOLDER: 'demo-folder',
+        HAPPYPAW_OWNER_ID: 'owner-1',
+        HAPPYPAW_RUNTIME: 'codex_app_server',
+        HAPPYPAW_PRODUCT_ID: 'happypaw',
+        HAPPYPAW_WORKSPACE_GROUP: extraEnv.HAPPYPAW_WORKSPACE_GROUP,
+        HAPPYPAW_WORKSPACE_GLOBAL: extraEnv.HAPPYPAW_WORKSPACE_GLOBAL,
+        HAPPYPAW_WORKSPACE_MEMORY: extraEnv.HAPPYPAW_WORKSPACE_MEMORY,
+        HAPPYPAW_WORKSPACE_IPC: extraEnv.HAPPYPAW_WORKSPACE_IPC,
+        HAPPYPAW_IS_HOME: extraEnv.HAPPYPAW_IS_HOME ?? '1',
+        HAPPYPAW_IS_ADMIN_HOME: extraEnv.HAPPYPAW_IS_ADMIN_HOME ?? '0',
+        HAPPYPAW_IS_SCHEDULED_TASK: extraEnv.HAPPYPAW_IS_SCHEDULED_TASK ?? '0',
+      },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    },
+  );
+  proc.stdout.setEncoding('utf8');
+  proc.stderr.setEncoding('utf8');
+  let stderr = '';
+  proc.stderr.on('data', (chunk) => {
+    stderr += chunk;
+  });
+
+  writeJsonLine(proc.stdin, {
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'initialize',
+    params: {},
+  });
+  writeJsonLine(proc.stdin, {
+    jsonrpc: '2.0',
+    method: 'initialized',
+    params: {},
+  });
+  writeJsonLine(proc.stdin, {
+    jsonrpc: '2.0',
+    id: 2,
+    method: 'tools/list',
+    params: {},
+  });
+  writeJsonLine(proc.stdin, {
+    jsonrpc: '2.0',
+    id: 3,
+    method: 'tools/call',
+    params: { name: 'get_context', arguments: {} },
+  });
+
+  const messages = await readJsonLineLines(proc.stdout);
+  proc.stdin.end();
+  await new Promise((resolve) => proc.on('close', resolve));
+  if (stderr.trim()) {
+    throw new Error(`Bridge stderr was not empty: ${stderr}`);
+  }
+  return messages;
+}
+
+function makePngBase64() {
+  return 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5P4oQAAAAASUVORK5CYII=';
+}
+
+async function closeProc(proc) {
+  proc.stdin.end();
+  await new Promise((resolve) => proc.on('close', resolve));
+}
 
 function makeFakeCodexScript(scriptPath, requestLogPath, options = {}) {
   const failResumeThreadId = options.failResumeThreadId ?? null;
@@ -690,6 +808,357 @@ assert.ok(
   'failed resume falls back to a fresh thread and keeps the conversation usable',
 );
 assert.equal(resumeFallback.result.newSessionId, 'thr_fresh');
+
+const bridgeTempRoot = fs.mkdtempSync(
+  path.join(os.tmpdir(), 'happypaw-codex-bridge-'),
+);
+const bridgeWorkspace = path.join(bridgeTempRoot, 'group');
+const bridgeGlobal = path.join(bridgeTempRoot, 'global');
+const bridgeMemory = path.join(bridgeTempRoot, 'memory');
+const bridgeIpc = path.join(bridgeTempRoot, 'ipc');
+fs.mkdirSync(bridgeWorkspace, { recursive: true });
+fs.mkdirSync(bridgeGlobal, { recursive: true });
+fs.mkdirSync(bridgeMemory, { recursive: true });
+fs.mkdirSync(path.join(bridgeIpc, 'messages'), { recursive: true });
+fs.mkdirSync(path.join(bridgeIpc, 'tasks'), { recursive: true });
+fs.writeFileSync(
+  path.join(bridgeWorkspace, 'photo.png'),
+  Buffer.from(makePngBase64(), 'base64'),
+);
+fs.writeFileSync(path.join(bridgeWorkspace, 'report.pdf'), '%PDF-1.4\n');
+fs.writeFileSync(path.join(bridgeWorkspace, 'CLAUDE.md'), '偏好：喝热美式\n');
+fs.writeFileSync(
+  path.join(bridgeMemory, '2026-03-26.md'),
+  '### 2026-03-26T00:00:00.000Z\n今天跟进 MCP bridge。\n',
+);
+
+const bridgeMessages = await exerciseBridge({
+  HAPPYPAW_WORKSPACE_GROUP: bridgeWorkspace,
+  HAPPYPAW_WORKSPACE_GLOBAL: bridgeGlobal,
+  HAPPYPAW_WORKSPACE_MEMORY: bridgeMemory,
+  HAPPYPAW_WORKSPACE_IPC: bridgeIpc,
+  HAPPYPAW_CHAT_JID: 'telegram:test-chat',
+  HAPPYPAW_IS_HOME: '1',
+});
+assert.equal(
+  bridgeMessages[0].result.serverInfo.name,
+  'happypaw-codex-bridge',
+);
+const bridgeTools = bridgeMessages[1].result.tools;
+assert.deepEqual(
+  bridgeTools.map((tool) => tool.name).sort(),
+  [
+    'cancel_task',
+    'get_context',
+    'list_tasks',
+    'memory_append',
+    'memory_get',
+    'memory_search',
+    'pause_task',
+    'resume_task',
+    'schedule_task',
+    'send_file',
+    'send_image',
+    'send_message',
+  ],
+  'phase-1 bridge tools are available through tools/list',
+);
+assert.deepEqual(
+  bridgeTools.find((tool) => tool.name === 'send_message').inputSchema
+    .properties,
+  {
+    text: {
+      type: 'string',
+      description: 'The message text to send',
+    },
+  },
+  'bridge exposes send_message with the expected schema',
+);
+assert.match(
+  bridgeMessages[2].result.content[0].text,
+  /groupFolder=demo-folder[\s\S]*workspace=.*group[\s\S]*ownerId=owner-1[\s\S]*runtime=codex_app_server[\s\S]*productId=happypaw/,
+  'bridge context still comes from environment variables',
+);
+
+const { spawn } = await import('node:child_process');
+const bridgeProc = spawn('node', [bridgeScriptPath], {
+  env: {
+    ...process.env,
+    HAPPYPAW_CHAT_JID: 'telegram:test-chat',
+    HAPPYPAW_GROUP_FOLDER: 'demo-folder',
+    HAPPYPAW_OWNER_ID: 'owner-1',
+    HAPPYPAW_RUNTIME: 'codex_app_server',
+    HAPPYPAW_PRODUCT_ID: 'happypaw',
+    HAPPYPAW_WORKSPACE_GROUP: bridgeWorkspace,
+    HAPPYPAW_WORKSPACE_GLOBAL: bridgeGlobal,
+    HAPPYPAW_WORKSPACE_MEMORY: bridgeMemory,
+    HAPPYPAW_WORKSPACE_IPC: bridgeIpc,
+    HAPPYPAW_IS_HOME: '1',
+    HAPPYPAW_IS_ADMIN_HOME: '1',
+  },
+  stdio: ['pipe', 'pipe', 'pipe'],
+});
+bridgeProc.stdout.setEncoding('utf8');
+let bridgeBuffer = '';
+const bridgeResponses = [];
+bridgeProc.stdout.on('data', (chunk) => {
+  bridgeBuffer += chunk;
+  let idx;
+  while ((idx = bridgeBuffer.indexOf('\n')) !== -1) {
+    const raw = bridgeBuffer.slice(0, idx).trim();
+    bridgeBuffer = bridgeBuffer.slice(idx + 1);
+    if (!raw) continue;
+    bridgeResponses.push(JSON.parse(raw));
+  }
+});
+writeJsonLine(bridgeProc.stdin, {
+  jsonrpc: '2.0',
+  id: 1,
+  method: 'initialize',
+  params: {},
+});
+writeJsonLine(bridgeProc.stdin, {
+  jsonrpc: '2.0',
+  method: 'initialized',
+  params: {},
+});
+for (const call of [
+  { id: 2, name: 'send_message', arguments: { text: '进度仍在继续' } },
+  { id: 3, name: 'send_image', arguments: { file_path: 'photo.png', caption: '截图' } },
+  { id: 4, name: 'send_file', arguments: { filePath: 'report.pdf', fileName: 'report.pdf' } },
+  {
+    id: 5,
+    name: 'schedule_task',
+    arguments: {
+      prompt: '总结日报',
+      schedule_type: 'interval',
+      schedule_value: '60000',
+      context_mode: 'isolated',
+    },
+  },
+  { id: 6, name: 'pause_task', arguments: { task_id: 'task-1' } },
+  { id: 7, name: 'resume_task', arguments: { task_id: 'task-1' } },
+  { id: 8, name: 'cancel_task', arguments: { task_id: 'task-1' } },
+  {
+    id: 9,
+    name: 'memory_append',
+    arguments: { content: '记录：桥接工具已连通', date: '2026-03-26' },
+  },
+  { id: 10, name: 'memory_search', arguments: { query: '桥接工具', max_results: 5 } },
+  { id: 11, name: 'memory_get', arguments: { file: '[memory] 2026-03-26.md' } },
+]) {
+  writeJsonLine(bridgeProc.stdin, {
+    jsonrpc: '2.0',
+    id: call.id,
+    method: 'tools/call',
+    params: {
+      name: call.name,
+      arguments: call.arguments,
+    },
+  });
+}
+
+const listTasksWait = new Promise((resolve, reject) => {
+  const deadline = Date.now() + 5_000;
+  const poll = () => {
+    const listRequestFile = fs
+      .readdirSync(path.join(bridgeIpc, 'tasks'))
+      .find((file) => {
+        if (!file.endsWith('.json') || file.startsWith('list_tasks_result_')) {
+          return false;
+        }
+        const payload = JSON.parse(
+          fs.readFileSync(path.join(bridgeIpc, 'tasks', file), 'utf8'),
+        );
+        return payload.type === 'list_tasks';
+      });
+    if (listRequestFile) {
+      const payload = JSON.parse(
+        fs.readFileSync(
+          path.join(bridgeIpc, 'tasks', listRequestFile),
+          'utf8',
+        ),
+      );
+      fs.writeFileSync(
+        path.join(
+          bridgeIpc,
+          'tasks',
+          `list_tasks_result_${payload.requestId}.json`,
+        ),
+        JSON.stringify({
+          success: true,
+          tasks: [
+            {
+              id: 'task-1',
+              prompt: '总结日报',
+              schedule_type: 'interval',
+              schedule_value: '60000',
+              status: 'active',
+              next_run: '2026-03-26T12:01:00.000Z',
+            },
+          ],
+        }),
+      );
+      resolve();
+      return;
+    }
+    if (Date.now() > deadline) {
+      reject(new Error('Timed out waiting for list_tasks request file'));
+      return;
+    }
+    setTimeout(poll, 25);
+  };
+  poll();
+});
+writeJsonLine(bridgeProc.stdin, {
+  jsonrpc: '2.0',
+  id: 12,
+  method: 'tools/call',
+  params: {
+    name: 'list_tasks',
+    arguments: {},
+  },
+});
+await listTasksWait;
+
+const unsupportedBridgeProc = spawn('node', [bridgeScriptPath], {
+  env: {
+    ...process.env,
+    HAPPYPAW_CHAT_JID: 'qq:test-chat',
+    HAPPYPAW_GROUP_FOLDER: 'demo-folder',
+    HAPPYPAW_OWNER_ID: 'owner-1',
+    HAPPYPAW_RUNTIME: 'codex_app_server',
+    HAPPYPAW_PRODUCT_ID: 'happypaw',
+    HAPPYPAW_WORKSPACE_GROUP: bridgeWorkspace,
+    HAPPYPAW_WORKSPACE_GLOBAL: bridgeGlobal,
+    HAPPYPAW_WORKSPACE_MEMORY: bridgeMemory,
+    HAPPYPAW_WORKSPACE_IPC: bridgeIpc,
+    HAPPYPAW_IS_HOME: '0',
+    HAPPYPAW_IS_ADMIN_HOME: '0',
+  },
+  stdio: ['pipe', 'pipe', 'pipe'],
+});
+unsupportedBridgeProc.stdout.setEncoding('utf8');
+let unsupportedBuffer = '';
+let unsupportedResponse;
+unsupportedBridgeProc.stdout.on('data', (chunk) => {
+  unsupportedBuffer += chunk;
+  let idx;
+  while ((idx = unsupportedBuffer.indexOf('\n')) !== -1) {
+    const raw = unsupportedBuffer.slice(0, idx).trim();
+    unsupportedBuffer = unsupportedBuffer.slice(idx + 1);
+    if (!raw) continue;
+    const parsed = JSON.parse(raw);
+    if (parsed.id === 2) unsupportedResponse = parsed;
+  }
+});
+writeJsonLine(unsupportedBridgeProc.stdin, {
+  jsonrpc: '2.0',
+  id: 1,
+  method: 'initialize',
+  params: {},
+});
+writeJsonLine(unsupportedBridgeProc.stdin, {
+  jsonrpc: '2.0',
+  method: 'initialized',
+  params: {},
+});
+writeJsonLine(unsupportedBridgeProc.stdin, {
+  jsonrpc: '2.0',
+  id: 2,
+  method: 'tools/call',
+  params: {
+    name: 'send_image',
+    arguments: { file_path: 'photo.png' },
+  },
+});
+await new Promise((resolve) => setTimeout(resolve, 100));
+await closeProc(unsupportedBridgeProc);
+
+await new Promise((resolve) => setTimeout(resolve, 150));
+await closeProc(bridgeProc);
+
+const responseById = new Map(
+  bridgeResponses
+    .filter((response) => typeof response.id !== 'undefined')
+    .map((response) => [response.id, response]),
+);
+assert.equal(responseById.get(2).result.content[0].text, 'Message sent.');
+assert.match(
+  responseById.get(3).result.content[0].text,
+  /Image sent: photo\.png/,
+);
+assert.equal(
+  responseById.get(4).result.content[0].text,
+  'Sending file "report.pdf"...',
+);
+assert.match(
+  responseById.get(5).result.content[0].text,
+  /Task scheduled \[agent\]/,
+);
+assert.equal(
+  responseById.get(6).result.content[0].text,
+  'Task task-1 pause requested.',
+);
+assert.equal(
+  responseById.get(7).result.content[0].text,
+  'Task task-1 resume requested.',
+);
+assert.equal(
+  responseById.get(8).result.content[0].text,
+  'Task task-1 cancellation requested.',
+);
+assert.match(
+  responseById.get(9).result.content[0].text,
+  /已追加到 memory\/2026-03-26\.md/,
+);
+assert.match(
+  responseById.get(10).result.content[0].text,
+  /找到 1 条匹配/,
+);
+assert.match(
+  responseById.get(11).result.content[0].text,
+  /记录：桥接工具已连通/,
+);
+assert.match(
+  responseById.get(12).result.content[0].text,
+  /Scheduled tasks:\n- \[task-1\]/,
+);
+assert.equal(unsupportedResponse.result.isError, true);
+assert.match(
+  unsupportedResponse.result.content[0].text,
+  /Current channel "qq" is unsupported/,
+);
+
+const messagePayloads = fs
+  .readdirSync(path.join(bridgeIpc, 'messages'))
+  .filter((file) => file.endsWith('.json'))
+  .map((file) =>
+    JSON.parse(fs.readFileSync(path.join(bridgeIpc, 'messages', file), 'utf8')),
+  );
+assert.equal(messagePayloads.length, 2);
+assert.equal(
+  messagePayloads.find((payload) => payload.type === 'message').text,
+  '进度仍在继续',
+  'send_message writes IPC without terminating the active turn',
+);
+assert.equal(
+  messagePayloads.find((payload) => payload.type === 'image').mimeType,
+  'image/png',
+  'send_image writes image IPC payloads for supported channels',
+);
+
+const taskPayloads = fs
+  .readdirSync(path.join(bridgeIpc, 'tasks'))
+  .filter((file) => file.endsWith('.json') && !file.startsWith('list_tasks_result_'))
+  .map((file) =>
+    JSON.parse(fs.readFileSync(path.join(bridgeIpc, 'tasks', file), 'utf8')),
+  );
+assert.deepEqual(
+  taskPayloads.map((payload) => payload.type).sort(),
+  ['cancel_task', 'list_tasks', 'pause_task', 'resume_task', 'schedule_task', 'send_file'],
+  'bridge task controls fan out to IPC payloads',
+);
 
 let interruptChecks = 0;
 const interrupted = await runScenario('interrupt', 'thr_interrupt', {

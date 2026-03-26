@@ -107,11 +107,17 @@ const prepared = prepareCodexHome({
     args: ['codex-mcp-bridge.mjs'],
     cwd: '/workspace/group',
     env: {
+      HAPPYPAW_CHAT_JID: 'telegram:demo',
       HAPPYPAW_GROUP_FOLDER: 'demo',
       HAPPYPAW_WORKSPACE_GROUP: '/workspace/group',
+      HAPPYPAW_WORKSPACE_GLOBAL: '/workspace/global',
+      HAPPYPAW_WORKSPACE_MEMORY: '/workspace/memory',
+      HAPPYPAW_WORKSPACE_IPC: '/workspace/ipc',
       HAPPYPAW_RUNTIME: 'codex_app_server',
       HAPPYPAW_OWNER_ID: 'u1',
       HAPPYPAW_PRODUCT_ID: CURRENT_PRODUCT_ID,
+      HAPPYPAW_IS_HOME: '1',
+      HAPPYPAW_IS_ADMIN_HOME: '0',
     },
   },
 });
@@ -131,8 +137,12 @@ assert.match(prepared.configToml, /\[mcp_servers\."workspaceEnabled"\]/);
 assert.doesNotMatch(prepared.configToml, /workspaceDisabled/);
 assert.match(prepared.configToml, /\[mcp_servers\."happypaw"\]/);
 assert.match(prepared.configToml, /HAPPYPAW_GROUP_FOLDER = "demo"/);
+assert.match(prepared.configToml, /HAPPYPAW_CHAT_JID = "telegram:demo"/);
 assert.match(prepared.configToml, /HAPPYPAW_OWNER_ID = "u1"/);
 assert.match(prepared.configToml, /HAPPYPAW_PRODUCT_ID = "happypaw"/);
+assert.match(prepared.configToml, /HAPPYPAW_WORKSPACE_GLOBAL = "\/workspace\/global"/);
+assert.match(prepared.configToml, /HAPPYPAW_WORKSPACE_MEMORY = "\/workspace\/memory"/);
+assert.match(prepared.configToml, /HAPPYPAW_WORKSPACE_IPC = "\/workspace\/ipc"/);
 assert.match(prepared.configToml, /command = "node"/);
 
 const workspaceServers = readCodexMcpServersFromSettings(
