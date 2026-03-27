@@ -1,24 +1,19 @@
-import { ChildProcess, execFile } from 'child_process';
+import { ChildProcess } from 'child_process';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import { promisify } from 'util';
 
 import {
   ASSISTANT_NAME,
   DATA_DIR,
   GROUPS_DIR,
-  STORE_DIR,
   MAIN_GROUP_FOLDER,
   POLL_INTERVAL,
   TIMEZONE,
-  isDockerAvailable,
-  updateWeChatNoProxy,
 } from './config.js';
-import { LEGACY_AGENT_SENDER, toLegacyProductToken } from './legacy-product.js';
+import { LEGACY_AGENT_SENDER } from './legacy-product.js';
 import { interruptibleSleep } from './message-notifier.js';
 import {
-  AvailableGroup,
   ContainerInput,
   ContainerOutput,
   runContainerAgent,
@@ -27,34 +22,16 @@ import {
   writeTasksSnapshot,
 } from './container-runner.js';
 import {
-  closeDatabase,
   createTask,
-  deleteExpiredSessions,
-  getExpiredSessionIds,
   deleteTask,
   ensureChatExists,
-  ensureUserHomeGroup,
-  getAllChats,
-  getAllRegisteredGroups,
-  getAllSessions,
-  hasContainerModeGroups,
   getAllTasks,
-  getJidsByFolder,
-  getLastGroupSync,
+  getAllRegisteredGroups,
   getRegisteredGroup,
-  getUserById,
   getMessagesSince,
   getNewMessages,
-  getRouterState,
-  getRouterStateByPrefix,
   getTaskById,
-  getUserHomeGroup,
-  initDatabase,
   isGroupShared,
-  listUsers,
-  setLastGroupSync,
-  setRegisteredGroup,
-  setRouterState,
   setSession,
   deleteSession,
   storeMessageDirect,
@@ -95,37 +72,13 @@ import {
   resolveLocationInfo,
   type WorkspaceInfo,
 } from './im-command-utils.js';
-import { invalidateSessionCache, getWebDeps } from './web-context.js';
-import {
-  getFeishuProviderConfigWithSource,
-  getTelegramProviderConfig,
-  getTelegramProviderConfigWithSource,
-  getSystemSettings,
-  getUserFeishuConfig,
-  getUserTelegramConfig,
-  getUserQQConfig,
-  getUserWeChatConfig,
-  saveUserFeishuConfig,
-  saveUserTelegramConfig,
-  updateAllSessionCredentials,
-} from './runtime-config.js';
-import type {
-  FeishuConnectConfig,
-  TelegramConnectConfig,
-  QQConnectConfig,
-  WeChatConnectConfig,
-} from './im-manager.js';
+import { getSystemSettings } from './runtime-config.js';
 import { GroupQueue } from './group-queue.js';
-import { startSchedulerLoop, triggerTaskNow } from './task-scheduler.js';
 import {
   checkBillingAccessFresh,
   formatBillingAccessDeniedMessage,
   updateUsage,
   deductUsageCost,
-  checkAndExpireSubscriptions,
-  isBillingEnabled,
-  getUserConcurrentContainerLimit,
-  reconcileMonthlyUsage,
 } from './billing.js';
 import {
   AgentStatus,
@@ -142,23 +95,15 @@ import {
   stripVirtualJidSuffix,
 } from './utils.js';
 import {
-  startWebServer,
   broadcastToWebClients,
   broadcastNewMessage,
   broadcastTyping,
   broadcastStreamEvent,
   broadcastAgentStatus,
   broadcastBillingUpdate,
-  shutdownTerminals,
-  shutdownWebServer,
   getActiveStreamingTexts,
-  clearStreamingSnapshot,
 } from './web.js';
-import {
-  installSkillForUser,
-  deleteSkillForUser,
-  syncHostSkillsForUser,
-} from './routes/skills.js';
+import { installSkillForUser, deleteSkillForUser } from './routes/skills.js';
 import {
   clearPersistedRuntimeStateForRecovery,
   clearSessionRuntimeFiles,
@@ -170,14 +115,14 @@ import {
   createCursorStateHelpers,
   createStreamingBufferManager,
   isCursorAfter,
-  normalizeCursor,
   recoverConversationAgents as recoverConversationAgentsHelper,
   recoverPendingMessages as recoverPendingMessagesHelper,
   recoverStuckPendingGroups as recoverStuckPendingGroupsHelper,
 } from './index-recovery.js';
+import { createIndexBootstrap } from './index-bootstrap.js';
+import { createIndexStateBootstrap } from './index-bootstrap-state.js';
 import { createSlashCommandHandlers } from './index-slash-commands.js';
 import {
-  IM_HEALTH_CHECK_FAIL_THRESHOLD,
   createImRoutingHelpers,
   type ReplyRouteUpdater,
 } from './index-im-routing.js';
@@ -190,8 +135,6 @@ import {
 import { createMessageLoop } from './index-message-loop.js';
 import { createIpcRuntime } from './index-ipc-runtime.js';
 
-const GROUP_SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
-const execFileAsync = promisify(execFile);
 const OOM_EXIT_RE = /code 137/;
 
 let globalMessageCursor: MessageCursor = { timestamp: '', id: '' };
@@ -236,6 +179,7 @@ const recoveryGroups = new Set<string>();
 
 // Track consecutive IM health check failures per JID for safe auto-unbind
 const imHealthCheckFailCounts = new Map<string, number>();
+let bootstrap: ReturnType<typeof createIndexBootstrap>;
 
 const { setCursors, advanceCursors } = createCursorStateHelpers({
   getLastAgentTimestamp: () => lastAgentTimestamp,
@@ -258,6 +202,26 @@ const {
   getActiveStreamingTexts,
   ensureChatExists,
   storeMessageDirect,
+});
+
+const {
+  getAvailableGroups,
+  loadState,
+  migrateDataDirectories,
+  migrateSystemIMToPerUser,
+  registerGroup,
+  saveState,
+  syncGroupMetadata,
+} = createIndexStateBootstrap({
+  getGlobalMessageCursor: () => globalMessageCursor,
+  setGlobalMessageCursor: (cursor) => {
+    globalMessageCursor = cursor;
+  },
+  lastAgentTimestamp,
+  lastCommittedCursor,
+  sessions,
+  registeredGroups,
+  consecutiveOomExits,
 });
 
 let handleCommand: (
@@ -456,6 +420,59 @@ const ipcRuntime = createIpcRuntime({
   deleteSkillForUser,
 });
 
+bootstrap = createIndexBootstrap({
+  activeRouteUpdaters,
+  buildIsChatAuthorized,
+  buildOnAgentMessage,
+  buildOnBotRemovedFromGroup,
+  buildOnNewChat,
+  buildOnPairAttempt,
+  buildResolveEffectiveChatJid,
+  buildTelegramBotAddedHandler,
+  connectUserIMChannels,
+  ensureTerminalContainerStarted,
+  formatMessages,
+  getGlobalMessageCursor: () => globalMessageCursor,
+  handleCardInterrupt,
+  handleCommand: (chatJid, command) => handleCommand(chatJid, command),
+  handleSpawnCommand,
+  imHealthCheckFailCounts,
+  ipcRuntime,
+  isCursorAfter,
+  lastAgentTimestamp,
+  loadState,
+  migrateDataDirectories,
+  migrateSystemIMToPerUser,
+  processAgentConversation,
+  processGroupMessages,
+  queue,
+  recoverConversationAgents,
+  recoverPendingMessages,
+  recoverStreamingBuffer,
+  registeredGroups,
+  resolveEffectiveFolder: (chatJid) => resolveEffectiveFolder(chatJid) || '',
+  resolveEffectiveGroup: (group) => resolveEffectiveGroup(group),
+  saveInterruptedStreamingMessages,
+  saveState,
+  sessions,
+  setCursors,
+  setGlobalMessageCursor: (cursor) => {
+    globalMessageCursor = cursor;
+  },
+  setShuttingDown: (value) => {
+    shuttingDown = value;
+  },
+  setTyping,
+  shouldProcessGroupMessage,
+  startMessageLoop,
+  startStreamingBuffer,
+  stopStreamingBuffer,
+  syncGroupMetadata,
+  unbindImGroup,
+  sendMessage,
+  sendSystemMessage,
+});
+
 /**
  * Write usage records from a usage event to the database.
  * Handles both modelUsage (per-model breakdown) and legacy flat format.
@@ -614,367 +631,6 @@ interface SendMessageOptions {
   };
 }
 
-/**
- * One-time migration: copy system-level IM config → admin's per-user config.
- * Safe to call repeatedly — writes a flag file after first successful run.
- */
-function migrateSystemIMToPerUser(): void {
-  const flagFile = path.join(DATA_DIR, 'config', '.im-config-migrated');
-  if (fs.existsSync(flagFile)) return;
-
-  try {
-    // Find first admin user
-    const adminResult = listUsers({
-      status: 'active',
-      role: 'admin',
-      page: 1,
-      pageSize: 1,
-    });
-    const admin = adminResult.users[0];
-    if (!admin) {
-      // No admin yet (fresh install) — nothing to migrate
-      return;
-    }
-
-    let migratedFeishu = false;
-    let migratedTelegram = false;
-
-    // Feishu: copy system config → admin per-user (if admin has no per-user config)
-    const existingUserFeishu = getUserFeishuConfig(admin.id);
-    if (!existingUserFeishu) {
-      const { config: sysFeishu, source: feishuSource } =
-        getFeishuProviderConfigWithSource();
-      if (feishuSource !== 'none' && sysFeishu.appId && sysFeishu.appSecret) {
-        saveUserFeishuConfig(admin.id, {
-          appId: sysFeishu.appId,
-          appSecret: sysFeishu.appSecret,
-          enabled: sysFeishu.enabled,
-        });
-        migratedFeishu = true;
-      }
-    }
-
-    // Telegram: copy system config → admin per-user (if admin has no per-user config)
-    const existingUserTelegram = getUserTelegramConfig(admin.id);
-    if (!existingUserTelegram) {
-      const { config: sysTelegram, source: telegramSource } =
-        getTelegramProviderConfigWithSource();
-      if (telegramSource !== 'none' && sysTelegram.botToken) {
-        saveUserTelegramConfig(admin.id, {
-          botToken: sysTelegram.botToken,
-          proxyUrl: sysTelegram.proxyUrl,
-          enabled: sysTelegram.enabled,
-        });
-        migratedTelegram = true;
-      }
-    }
-
-    // Write flag file (even if nothing was migrated — to avoid re-checking)
-    fs.mkdirSync(path.dirname(flagFile), { recursive: true });
-    fs.writeFileSync(flagFile, new Date().toISOString() + '\n', 'utf-8');
-
-    if (migratedFeishu || migratedTelegram) {
-      logger.info(
-        {
-          adminId: admin.id,
-          feishu: migratedFeishu,
-          telegram: migratedTelegram,
-        },
-        'Migrated system-level IM config to admin per-user config',
-      );
-    }
-  } catch (err) {
-    logger.warn(
-      { err },
-      'Failed to migrate system-level IM config (non-fatal)',
-    );
-  }
-}
-
-function loadState(): void {
-  // Load from SQLite
-  const persistedTimestamp = getRouterState('last_timestamp') || '';
-  const lastTimestampId = getRouterState('last_timestamp_id') || '';
-  globalMessageCursor = {
-    timestamp: persistedTimestamp,
-    id: lastTimestampId,
-  };
-  const loadCursorMap = (key: string): Record<string, MessageCursor> => {
-    const raw = getRouterState(key);
-    try {
-      const parsed = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
-      const normalized: Record<string, MessageCursor> = {};
-      for (const [jid, v] of Object.entries(parsed)) {
-        normalized[jid] = normalizeCursor(v);
-      }
-      return normalized;
-    } catch {
-      logger.warn(`Corrupted ${key} in DB, resetting`);
-      return {};
-    }
-  };
-  Object.keys(lastAgentTimestamp).forEach((key) => {
-    delete lastAgentTimestamp[key];
-  });
-  Object.assign(lastAgentTimestamp, loadCursorMap('last_agent_timestamp'));
-  Object.keys(lastCommittedCursor).forEach((key) => {
-    delete lastCommittedCursor[key];
-  });
-  Object.assign(lastCommittedCursor, loadCursorMap('last_committed_cursor'));
-
-  // Migration: fill in missing lastCommittedCursor entries from lastAgentTimestamp.
-  // The original migration only triggered when lastCommittedCursor was completely empty,
-  // missing the case where some keys exist but others don't (e.g. new IM groups).
-  {
-    let migrated = false;
-    for (const [jid, cursor] of Object.entries(lastAgentTimestamp)) {
-      if (!lastCommittedCursor[jid]) {
-        lastCommittedCursor[jid] = cursor;
-        migrated = true;
-      }
-    }
-    if (migrated) {
-      logger.info(
-        'Migrated missing lastCommittedCursor entries from lastAgentTimestamp',
-      );
-      saveState();
-    }
-  }
-
-  Object.keys(sessions).forEach((key) => {
-    delete sessions[key];
-  });
-  Object.assign(sessions, getAllSessions());
-  Object.keys(registeredGroups).forEach((key) => {
-    delete registeredGroups[key];
-  });
-  Object.assign(registeredGroups, getAllRegisteredGroups());
-
-  // Restore persisted OOM counters
-  for (const { key, value } of getRouterStateByPrefix('oom_exits:')) {
-    const folder = key.slice('oom_exits:'.length);
-    const count = parseInt(value, 10);
-    if (count > 0) {
-      consecutiveOomExits[folder] = count;
-      logger.info({ folder, count }, 'Restored OOM counter from DB');
-    }
-  }
-
-  // Auto-register default groups from config/default-groups.json
-  const defaultGroupsPath = path.resolve(
-    process.cwd(),
-    'config',
-    'default-groups.json',
-  );
-  if (fs.existsSync(defaultGroupsPath)) {
-    try {
-      const defaults = JSON.parse(
-        fs.readFileSync(defaultGroupsPath, 'utf-8'),
-      ) as Array<{
-        jid: string;
-        name: string;
-        folder: string;
-      }>;
-      for (const g of defaults) {
-        if (!registeredGroups[g.jid]) {
-          registerGroup(g.jid, {
-            name: g.name,
-            folder: g.folder,
-            added_at: new Date().toISOString(),
-          });
-        }
-      }
-    } catch (err) {
-      logger.warn({ err }, 'Failed to load default groups config');
-    }
-  }
-
-  // Ensure every active user has a home group (is_home=true).
-  // Admin → folder='main', executionMode='host'
-  // Member → folder='home-{userId}', executionMode='container'
-  try {
-    // Paginate through all active users
-    const activeUsers: Array<{ id: string; role: string; username: string }> =
-      [];
-    {
-      let page = 1;
-      while (true) {
-        const result = listUsers({ status: 'active', page, pageSize: 200 });
-        activeUsers.push(...result.users);
-        if (activeUsers.length >= result.total) break;
-        page++;
-      }
-    }
-    for (const user of activeUsers) {
-      const homeJid = ensureUserHomeGroup(
-        user.id,
-        user.role as 'admin' | 'member',
-        user.username,
-      );
-      // Always refresh this entry from DB to pick up any patches (is_home, executionMode, etc.)
-      const freshGroup = getRegisteredGroup(homeJid);
-      if (freshGroup) {
-        registeredGroups[homeJid] = freshGroup;
-      } else if (!registeredGroups[homeJid]) {
-        Object.keys(registeredGroups).forEach((key) => {
-          delete registeredGroups[key];
-        });
-        Object.assign(registeredGroups, getAllRegisteredGroups());
-      }
-    }
-  } catch (err) {
-    logger.warn({ err }, 'Failed to ensure user home groups');
-  }
-
-  // Enforce execution mode on all is_home groups:
-  // - admin home → host mode
-  // - member home → container mode
-  for (const [jid, group] of Object.entries(registeredGroups)) {
-    if (!group.is_home) continue;
-
-    // Determine expected mode based on the owner's role
-    // Admin home groups use host mode, member home groups use container mode
-    const isAdminHome = group.folder === MAIN_GROUP_FOLDER;
-    const expectedMode = isAdminHome ? 'host' : 'container';
-
-    if (group.executionMode !== expectedMode) {
-      group.executionMode = expectedMode;
-      setRegisteredGroup(jid, group);
-      registeredGroups[jid] = group;
-      // 清除旧 session，避免恢复不兼容的 session
-      if (sessions[group.folder]) {
-        logger.info(
-          { folder: group.folder, expectedMode },
-          'Clearing stale session during execution mode migration',
-        );
-        delete sessions[group.folder];
-        deleteSession(group.folder);
-      }
-    }
-  }
-
-  // Migrate shared global CLAUDE.md → per-user user-global directories
-  migrateGlobalMemoryToPerUser();
-
-  // Initialize per-user global CLAUDE.md from template for users missing it
-  const templatePath = path.resolve(
-    process.cwd(),
-    'config',
-    'global-claude-md.template.md',
-  );
-  if (fs.existsSync(templatePath)) {
-    const template = fs.readFileSync(templatePath, 'utf-8');
-    const userGlobalBase = path.join(GROUPS_DIR, 'user-global');
-    // Ensure every active user has a user-global dir
-    try {
-      let page = 1;
-      const allUsers: Array<{ id: string }> = [];
-      while (true) {
-        const result = listUsers({ status: 'active', page, pageSize: 200 });
-        allUsers.push(...result.users);
-        if (allUsers.length >= result.total) break;
-        page++;
-      }
-      for (const u of allUsers) {
-        const userDir = path.join(userGlobalBase, u.id);
-        fs.mkdirSync(userDir, { recursive: true });
-        const userClaudeMd = path.join(userDir, 'CLAUDE.md');
-        if (!fs.existsSync(userClaudeMd)) {
-          try {
-            fs.writeFileSync(userClaudeMd, template, { flag: 'wx' });
-            logger.info(
-              { userId: u.id },
-              'Initialized user-global CLAUDE.md from template',
-            );
-          } catch (err: unknown) {
-            if ((err as NodeJS.ErrnoException).code !== 'EEXIST') {
-              logger.warn(
-                { userId: u.id, err },
-                'Failed to initialize user-global CLAUDE.md',
-              );
-            }
-          }
-        }
-      }
-    } catch (err) {
-      logger.warn({ err }, 'Failed to initialize user-global CLAUDE.md files');
-    }
-  }
-
-  logger.info(
-    { groupCount: Object.keys(registeredGroups).length },
-    'State loaded',
-  );
-}
-
-function saveState(): void {
-  setRouterState('last_timestamp', globalMessageCursor.timestamp);
-  setRouterState('last_timestamp_id', globalMessageCursor.id);
-  setRouterState('last_agent_timestamp', JSON.stringify(lastAgentTimestamp));
-  setRouterState('last_committed_cursor', JSON.stringify(lastCommittedCursor));
-}
-
-function registerGroup(jid: string, group: RegisteredGroup): void {
-  registeredGroups[jid] = group;
-  setRegisteredGroup(jid, group);
-
-  // Create group folder
-  const groupDir = path.join(GROUPS_DIR, group.folder);
-  fs.mkdirSync(path.join(groupDir, 'logs'), { recursive: true });
-
-  logger.info(
-    { jid, name: group.name, folder: group.folder },
-    'Group registered',
-  );
-}
-
-/**
- * Sync group metadata from Feishu.
- * Fetches all bot groups and stores their names in the database.
- * Called on startup, daily, and on-demand via IPC.
- */
-async function syncGroupMetadata(force = false): Promise<void> {
-  // Check if we need to sync (skip if synced recently, unless forced)
-  if (!force) {
-    const lastSync = getLastGroupSync();
-    if (lastSync) {
-      const lastSyncTime = new Date(lastSync).getTime();
-      const now = Date.now();
-      if (now - lastSyncTime < GROUP_SYNC_INTERVAL_MS) {
-        logger.debug({ lastSync }, 'Skipping group sync - synced recently');
-        return;
-      }
-    }
-  }
-
-  // Sync groups via any connected user's Feishu instance
-  const connectedUserIds = imManager.getConnectedUserIds();
-  for (const uid of connectedUserIds) {
-    if (imManager.isFeishuConnected(uid)) {
-      await imManager.syncFeishuGroups(uid);
-      break; // Only need one sync
-    }
-  }
-}
-
-/**
- * Get available groups list for the agent.
- * Returns groups ordered by most recent activity.
- */
-function getAvailableGroups(): AvailableGroup[] {
-  const chats = getAllChats();
-  const registeredJids = new Set(Object.keys(registeredGroups));
-
-  return chats
-    .filter((c) => c.jid !== '__group_sync__' && c.jid.startsWith('feishu:'))
-    .map((c) => ({
-      jid: c.jid,
-      name: c.name,
-      lastActivity: c.last_message_time,
-      isRegistered: registeredJids.has(c.jid),
-    }));
-}
-
 async function runTerminalWarmup(chatJid: string): Promise<void> {
   const group = registeredGroups[chatJid];
   if (!group) return;
@@ -1076,6 +732,11 @@ function ensureTerminalContainerStarted(chatJid: string): boolean {
   return true;
 }
 
+bootstrap.start().catch((err) => {
+  logger.error({ err }, 'Failed to start happypaw');
+  process.exit(1);
+});
+
 async function runAgent(
   group: RegisteredGroup,
   prompt: string,
@@ -1134,10 +795,10 @@ async function runAgent(
         // 仅从成功的输出中更新 session ID；
         // error 输出可能携带 stale ID，会覆盖流式传递的有效 session
         if (output.newSessionId && output.status !== 'error') {
-          const nextSession = {
+          const nextSession: RuntimeSessionRecord = {
             sessionId: output.newSessionId,
             runtime,
-          } satisfies RuntimeSessionRecord;
+          };
           sessions[group.folder] = nextSession;
           setSession(group.folder, output.newSessionId, undefined, runtime);
         }
@@ -1208,10 +869,10 @@ async function runAgent(
     // 仅从成功的最终输出中更新 session ID；
     // error 状态的输出可能携带 stale ID，覆盖流式阶段已写入的有效 session
     if (output.newSessionId && output.status !== 'error') {
-      const nextSession = {
+      const nextSession: RuntimeSessionRecord = {
         sessionId: output.newSessionId,
         runtime,
-      } satisfies RuntimeSessionRecord;
+      };
       sessions[group.folder] = nextSession;
       setSession(group.folder, output.newSessionId, undefined, runtime);
     }
@@ -2120,1210 +1781,3 @@ async function processAgentConversation(
     ipcRuntime.unwatchGroup(effectiveGroup.folder);
   }
 }
-
-async function ensureDockerRunning(): Promise<void> {
-  // Skip all Docker checks when no groups use container mode
-  if (!hasContainerModeGroups()) {
-    logger.info('All groups use host execution mode, skipping Docker checks');
-    return;
-  }
-
-  if (!(await isDockerAvailable())) {
-    logger.warn(
-      'Docker is not available — container-mode workspaces will fail at message time. ' +
-        'Start Docker if you need container execution (macOS: Docker Desktop, Linux: sudo systemctl start docker).',
-    );
-    return;
-  }
-  logger.debug('Docker daemon is running');
-
-  // Kill orphaned host agent-runner processes from previous runs
-  try {
-    const { stdout: psOut } = await execFileAsync(
-      'pgrep',
-      ['-f', 'node.*container/agent-runner/dist/index\\.js'],
-      { timeout: 5000 },
-    );
-    const pids = (typeof psOut === 'string' ? psOut : String(psOut))
-      .trim()
-      .split('\n')
-      .filter(Boolean)
-      .map(Number)
-      .filter((pid) => pid !== process.pid && !isNaN(pid));
-    for (const pid of pids) {
-      try {
-        process.kill(pid, 'SIGKILL');
-      } catch {
-        /* already dead */
-      }
-    }
-    if (pids.length > 0) {
-      logger.info(
-        { count: pids.length, pids },
-        'Killed orphaned host agent-runner processes',
-      );
-    }
-  } catch (err: any) {
-    // pgrep exits 1 when no matches — that's fine
-    if (err?.code !== 1) {
-      logger.warn({ err }, 'Failed to clean up orphaned host processes');
-    }
-  }
-
-  // Kill and clean up orphaned happypaw containers from previous runs
-  try {
-    const orphanSet = new Set<string>();
-    for (const prefix of ['happypaw-', toLegacyProductToken('happypaw-')]) {
-      const { stdout } = await execFileAsync(
-        'docker',
-        ['ps', '--filter', `name=${prefix}`, '--format', '{{.Names}}'],
-        { timeout: 10000 },
-      );
-      const output = typeof stdout === 'string' ? stdout : String(stdout);
-      for (const name of output.trim().split('\n').filter(Boolean)) {
-        orphanSet.add(name);
-      }
-    }
-    const orphans = [...orphanSet];
-    for (const name of orphans) {
-      try {
-        await execFileAsync('docker', ['stop', name], { timeout: 10000 });
-      } catch {
-        /* already stopped */
-      }
-    }
-    if (orphans.length > 0) {
-      logger.info(
-        { count: orphans.length, names: orphans },
-        'Stopped orphaned containers',
-      );
-    }
-  } catch (err) {
-    logger.warn({ err }, 'Failed to clean up orphaned containers');
-  }
-}
-
-function movePathWithFallback(src: string, dst: string): void {
-  try {
-    fs.renameSync(src, dst);
-  } catch (err: unknown) {
-    // Cross-device rename fallback.
-    if ((err as NodeJS.ErrnoException).code === 'EXDEV') {
-      fs.cpSync(src, dst, { recursive: true });
-      fs.rmSync(src, { recursive: true, force: true });
-      return;
-    }
-    throw err;
-  }
-}
-
-/**
- * One-shot migration: move legacy top-level directories into data/.
- * - store/messages.db* → data/db/messages.db*
- * - groups/            → data/groups/
- * Also supports partial migrations (old+new paths both exist).
- */
-function migrateDataDirectories(): void {
-  const projectRoot = process.cwd();
-
-  // 1. Migrate store/ → data/db/
-  const oldStoreDir = path.join(projectRoot, 'store');
-  if (fs.existsSync(oldStoreDir)) {
-    fs.mkdirSync(STORE_DIR, { recursive: true });
-    // Move messages.db and WAL files
-    for (const file of ['messages.db', 'messages.db-wal', 'messages.db-shm']) {
-      const src = path.join(oldStoreDir, file);
-      const dst = path.join(STORE_DIR, file);
-      if (fs.existsSync(src) && !fs.existsSync(dst)) {
-        movePathWithFallback(src, dst);
-        logger.info({ src, dst }, 'Migrated database file');
-      }
-    }
-    // Remove old store/ if empty
-    try {
-      fs.rmdirSync(oldStoreDir);
-    } catch {
-      // Not empty — leave it
-    }
-  }
-
-  // 2. Migrate groups/ → data/groups/
-  const oldGroupsDir = path.join(projectRoot, 'groups');
-  if (fs.existsSync(oldGroupsDir)) {
-    fs.mkdirSync(path.dirname(GROUPS_DIR), { recursive: true });
-    if (!fs.existsSync(GROUPS_DIR)) {
-      movePathWithFallback(oldGroupsDir, GROUPS_DIR);
-      logger.info(
-        { src: oldGroupsDir, dst: GROUPS_DIR },
-        'Migrated groups directory',
-      );
-    } else {
-      // Partial migration: move missing entries one-by-one.
-      const entries = fs.readdirSync(oldGroupsDir, { withFileTypes: true });
-      for (const entry of entries) {
-        const src = path.join(oldGroupsDir, entry.name);
-        const dst = path.join(GROUPS_DIR, entry.name);
-        if (!fs.existsSync(dst)) {
-          movePathWithFallback(src, dst);
-          logger.info({ src, dst }, 'Migrated legacy group entry');
-        }
-      }
-      try {
-        fs.rmdirSync(oldGroupsDir);
-      } catch {
-        // Not empty — leave it
-      }
-    }
-  }
-}
-
-/**
- * One-shot migration: copy shared global CLAUDE.md → first admin's user-global dir.
- * Creates user-global directories for all existing users.
- * Idempotent via flag file.
- */
-function migrateGlobalMemoryToPerUser(): void {
-  const flagFile = path.join(DATA_DIR, 'config', '.memory-migration-v1-done');
-  if (fs.existsSync(flagFile)) return;
-
-  const oldGlobalMd = path.join(GROUPS_DIR, 'global', 'CLAUDE.md');
-  const userGlobalBase = path.join(GROUPS_DIR, 'user-global');
-
-  let migrationSucceeded = true;
-  let copiedLegacyGlobal = !fs.existsSync(oldGlobalMd);
-
-  // Find first admin user
-  try {
-    const result = listUsers({
-      role: 'admin',
-      status: 'active',
-      page: 1,
-      pageSize: 1,
-    });
-    const firstAdmin = result.users[0];
-
-    if (firstAdmin && fs.existsSync(oldGlobalMd)) {
-      const adminDir = path.join(userGlobalBase, firstAdmin.id);
-      fs.mkdirSync(adminDir, { recursive: true });
-      const target = path.join(adminDir, 'CLAUDE.md');
-      if (!fs.existsSync(target)) {
-        fs.copyFileSync(oldGlobalMd, target);
-        logger.info(
-          { userId: firstAdmin.id, src: oldGlobalMd, dst: target },
-          'Migrated global CLAUDE.md to admin user-global',
-        );
-      }
-      copiedLegacyGlobal = true;
-    } else if (!firstAdmin && fs.existsSync(oldGlobalMd)) {
-      migrationSucceeded = false;
-      logger.warn(
-        'No active admin found for legacy global memory migration; will retry on next startup',
-      );
-    }
-
-    // Create user-global dirs for all users
-    let page = 1;
-    const allUsers: Array<{ id: string }> = [];
-    while (true) {
-      const r = listUsers({ status: 'active', page, pageSize: 200 });
-      allUsers.push(...r.users);
-      if (allUsers.length >= r.total) break;
-      page++;
-    }
-    for (const u of allUsers) {
-      fs.mkdirSync(path.join(userGlobalBase, u.id), { recursive: true });
-    }
-  } catch (err) {
-    migrationSucceeded = false;
-    logger.warn({ err }, 'Global memory migration encountered an error');
-  }
-
-  if (!migrationSucceeded) {
-    logger.warn(
-      'Global memory migration incomplete; will retry on next startup',
-    );
-    return;
-  }
-
-  if (!copiedLegacyGlobal) {
-    logger.warn(
-      'Legacy global memory has not been copied; will retry on next startup',
-    );
-    return;
-  }
-
-  try {
-    fs.mkdirSync(path.dirname(flagFile), { recursive: true });
-    fs.writeFileSync(flagFile, new Date().toISOString());
-    logger.info('Global memory migration to per-user completed');
-  } catch (err) {
-    logger.warn({ err }, 'Failed to persist global memory migration flag');
-  }
-}
-
-async function main(): Promise<void> {
-  migrateDataDirectories();
-  initDatabase();
-  logger.info('Database initialized');
-
-  // Clean up stale completed agents (task + spawn, older than 1 hour) to prevent DB bloat
-  try {
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-    const cleaned = deleteCompletedAgents(oneHourAgo);
-    if (cleaned > 0) {
-      logger.info({ cleaned }, 'Cleaned up stale completed agents');
-    }
-  } catch (err) {
-    logger.warn({ err }, 'Failed to clean up stale task agents');
-  }
-
-  // After process restart there cannot be truly running SDK tasks.
-  // Mark all persisted running tasks as error to avoid stale "running" tabs.
-  try {
-    const marked = markAllRunningTaskAgentsAsError();
-    if (marked > 0) {
-      logger.warn(
-        { marked },
-        'Marked stale running task agents as error at startup',
-      );
-    }
-  } catch (err) {
-    logger.warn({ err }, 'Failed to mark stale running tasks at startup');
-  }
-
-  // Spawn agents (from /sw) lose their in-memory task callbacks on restart.
-  // Mark idle/running spawn agents as error so they don't render as "正在思考...".
-  try {
-    const marked = markStaleSpawnAgentsAsError();
-    if (marked > 0) {
-      logger.warn({ marked }, 'Marked stale spawn agents as error at startup');
-    }
-  } catch (err) {
-    logger.warn({ err }, 'Failed to mark stale spawn agents at startup');
-  }
-
-  // WeChat iLink API domains bypass proxy (applied at startup, updated on config save)
-  updateWeChatNoProxy(true);
-
-  // Migrate system-level IM config → admin's per-user config (one-time)
-  migrateSystemIMToPerUser();
-
-  loadState();
-
-  // --- Channel reload helpers (hot-reload on config save) ---
-
-  let feishuSyncInterval: ReturnType<typeof setInterval> | null = null;
-
-  // Graceful shutdown handlers
-  let shutdownInProgress = false;
-  const shutdown = async (signal: string) => {
-    if (shutdownInProgress) {
-      logger.warn('Force exit (second signal)');
-      process.exit(1);
-    }
-    shutdownInProgress = true;
-    shuttingDown = true;
-    logger.info({ signal }, 'Shutdown signal received, cleaning up...');
-
-    // Force exit after 2s if graceful shutdown hangs
-    const forceExitTimer = setTimeout(() => {
-      logger.warn('Graceful shutdown timed out, force exiting');
-      process.exit(1);
-    }, 2000);
-    forceExitTimer.unref();
-
-    if (feishuSyncInterval) {
-      clearInterval(feishuSyncInterval);
-      feishuSyncInterval = null;
-    }
-
-    try {
-      ipcRuntime.closeAll();
-    } catch (err) {
-      logger.warn({ err }, 'Error closing IPC watchers');
-    }
-
-    try {
-      shutdownTerminals();
-    } catch (err) {
-      logger.warn({ err }, 'Error shutting down terminals');
-    }
-
-    // Stop periodic buffer, then persist streaming text to DB + clean buffer files.
-    stopStreamingBuffer();
-    saveInterruptedStreamingMessages();
-
-    // Run cleanup tasks concurrently with a tight timeout
-    await Promise.allSettled([
-      // Abort all active streaming cards before disconnecting IM,
-      // so users see "服务维护中" instead of a stuck "生成中..." card.
-      abortAllStreamingSessions('服务维护中').catch((err) =>
-        logger.warn({ err }, 'Error aborting streaming sessions'),
-      ),
-      imManager
-        .disconnectAll()
-        .catch((err) =>
-          logger.warn({ err }, 'Error disconnecting IM connections'),
-        ),
-      shutdownWebServer().catch((err) =>
-        logger.warn({ err }, 'Error shutting down web server'),
-      ),
-      queue
-        .shutdown(1500)
-        .catch((err) => logger.warn({ err }, 'Error shutting down queue')),
-    ]);
-
-    try {
-      closeDatabase();
-    } catch (err) {
-      logger.warn({ err }, 'Error closing database');
-    }
-
-    logger.info('Shutdown complete');
-    process.exit(0);
-  };
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
-  process.on('SIGINT', () => shutdown('SIGINT'));
-
-  // Reload Feishu connection for a specific user (hot-reload on config save)
-  const reloadFeishuConnection = async (config: {
-    appId: string;
-    appSecret: string;
-    enabled?: boolean;
-  }): Promise<boolean> => {
-    // Find admin user's home folder (legacy global config routes to admin)
-    const adminUsers = listUsers({
-      status: 'active',
-      role: 'admin',
-      page: 1,
-      pageSize: 1,
-    }).users;
-    const adminUser = adminUsers[0];
-    if (!adminUser) {
-      logger.warn('No admin user found for Feishu reload');
-      return false;
-    }
-
-    // Disconnect existing admin Feishu connection
-    await imManager.disconnectUserFeishu(adminUser.id);
-    if (feishuSyncInterval) {
-      clearInterval(feishuSyncInterval);
-      feishuSyncInterval = null;
-    }
-
-    if (config.enabled !== false && config.appId && config.appSecret) {
-      const homeGroup = getUserHomeGroup(adminUser.id);
-      const homeFolder = homeGroup?.folder || MAIN_GROUP_FOLDER;
-      const onNewChat = buildOnNewChat(adminUser.id, homeFolder);
-      const connected = await imManager.connectUserFeishu(
-        adminUser.id,
-        config,
-        onNewChat,
-        {
-          ignoreMessagesBefore: Date.now(),
-          onCommand: handleCommand,
-          onBotAddedToGroup: buildOnNewChat(adminUser.id, homeFolder),
-          onBotRemovedFromGroup: buildOnBotRemovedFromGroup(),
-          shouldProcessGroupMessage,
-          onCardInterrupt: handleCardInterrupt,
-        },
-      );
-      if (connected) {
-        syncGroupMetadata().catch((err) =>
-          logger.error({ err }, 'Group sync after Feishu reconnect failed'),
-        );
-        feishuSyncInterval = setInterval(() => {
-          syncGroupMetadata().catch((err) =>
-            logger.error({ err }, 'Periodic group sync failed'),
-          );
-        }, GROUP_SYNC_INTERVAL_MS);
-      }
-      return connected;
-    }
-    logger.info('Feishu channel disabled via hot-reload');
-    return false;
-  };
-
-  const reloadTelegramConnection = async (config: {
-    botToken: string;
-    proxyUrl?: string;
-    enabled?: boolean;
-  }): Promise<boolean> => {
-    // Find admin user
-    const adminUsers = listUsers({
-      status: 'active',
-      role: 'admin',
-      page: 1,
-      pageSize: 1,
-    }).users;
-    const adminUser = adminUsers[0];
-    if (!adminUser) {
-      logger.warn('No admin user found for Telegram reload');
-      return false;
-    }
-
-    await imManager.disconnectUserTelegram(adminUser.id);
-
-    if (config.enabled !== false && config.botToken) {
-      const homeGroup = getUserHomeGroup(adminUser.id);
-      const homeFolder = homeGroup?.folder || MAIN_GROUP_FOLDER;
-      const onNewChat = buildOnNewChat(adminUser.id, homeFolder);
-      const connected = await imManager.connectUserTelegram(
-        adminUser.id,
-        config,
-        onNewChat,
-        buildIsChatAuthorized(adminUser.id),
-        buildOnPairAttempt(adminUser.id),
-        {
-          onCommand: handleCommand,
-          ignoreMessagesBefore: Date.now(),
-          resolveGroupFolder: (chatJid) => resolveEffectiveFolder(chatJid),
-          resolveEffectiveChatJid: buildResolveEffectiveChatJid(),
-          onAgentMessage: buildOnAgentMessage(),
-          onBotAddedToGroup: buildTelegramBotAddedHandler(
-            adminUser.id,
-            homeFolder,
-          ),
-          onBotRemovedFromGroup: buildOnBotRemovedFromGroup(),
-        },
-      );
-      return connected;
-    }
-    logger.info('Telegram channel disabled via hot-reload');
-    return false;
-  };
-
-  // Reload a per-user IM channel (hot-reload on user-im config save)
-  const reloadUserIMConfig = async (
-    userId: string,
-    channel: 'feishu' | 'telegram' | 'qq' | 'wechat',
-  ): Promise<boolean> => {
-    const homeGroup = getUserHomeGroup(userId);
-    if (!homeGroup) {
-      logger.warn(
-        { userId, channel },
-        'No home group found for user IM reload',
-      );
-      return false;
-    }
-    const homeFolder = homeGroup.folder;
-    const onNewChat = buildOnNewChat(userId, homeFolder);
-    const ignoreMessagesBefore = Date.now();
-
-    if (channel === 'feishu') {
-      await imManager.disconnectUserFeishu(userId);
-      const config = getUserFeishuConfig(userId);
-      if (
-        config &&
-        config.enabled !== false &&
-        config.appId &&
-        config.appSecret
-      ) {
-        const connected = await imManager.connectUserFeishu(
-          userId,
-          config,
-          onNewChat,
-          {
-            ignoreMessagesBefore,
-            onCommand: handleCommand,
-            onBotAddedToGroup: buildOnNewChat(userId, homeFolder),
-            onBotRemovedFromGroup: buildOnBotRemovedFromGroup(),
-            shouldProcessGroupMessage,
-            onCardInterrupt: handleCardInterrupt,
-          },
-        );
-        logger.info(
-          { userId, connected },
-          'User Feishu connection hot-reloaded',
-        );
-        return connected;
-      }
-      logger.info({ userId }, 'User Feishu channel disabled via hot-reload');
-      return false;
-    } else if (channel === 'telegram') {
-      await imManager.disconnectUserTelegram(userId);
-      const config = getUserTelegramConfig(userId);
-      const globalTelegramConfig = getTelegramProviderConfig();
-      if (config && config.enabled !== false && config.botToken) {
-        const connected = await imManager.connectUserTelegram(
-          userId,
-          {
-            ...config,
-            proxyUrl: config.proxyUrl || globalTelegramConfig.proxyUrl,
-          },
-          onNewChat,
-          buildIsChatAuthorized(userId),
-          buildOnPairAttempt(userId),
-          {
-            onCommand: handleCommand,
-            ignoreMessagesBefore,
-            resolveGroupFolder: (chatJid: string) =>
-              resolveEffectiveFolder(chatJid),
-            resolveEffectiveChatJid: buildResolveEffectiveChatJid(),
-            onAgentMessage: buildOnAgentMessage(),
-            onBotAddedToGroup: buildTelegramBotAddedHandler(userId, homeFolder),
-            onBotRemovedFromGroup: buildOnBotRemovedFromGroup(),
-          },
-        );
-        logger.info(
-          { userId, connected },
-          'User Telegram connection hot-reloaded',
-        );
-        return connected;
-      }
-      logger.info({ userId }, 'User Telegram channel disabled via hot-reload');
-      return false;
-    } else if (channel === 'qq') {
-      await imManager.disconnectUserQQ(userId);
-      const config = getUserQQConfig(userId);
-      if (
-        config &&
-        config.enabled !== false &&
-        config.appId &&
-        config.appSecret
-      ) {
-        const connected = await imManager.connectUserQQ(
-          userId,
-          config,
-          onNewChat,
-          buildIsChatAuthorized(userId),
-          buildOnPairAttempt(userId),
-          {
-            onCommand: handleCommand,
-            resolveGroupFolder: (chatJid: string) =>
-              resolveEffectiveFolder(chatJid),
-            resolveEffectiveChatJid: buildResolveEffectiveChatJid(),
-            onAgentMessage: buildOnAgentMessage(),
-          },
-        );
-        logger.info({ userId, connected }, 'User QQ connection hot-reloaded');
-        return connected;
-      }
-      logger.info({ userId }, 'User QQ channel disabled via hot-reload');
-      return false;
-    } else {
-      // WeChat
-      await imManager.disconnectUserWeChat(userId);
-      const config = getUserWeChatConfig(userId);
-      if (
-        config &&
-        config.enabled !== false &&
-        config.botToken &&
-        config.ilinkBotId
-      ) {
-        const connected = await imManager.connectUserWeChat(
-          userId,
-          {
-            botToken: config.botToken,
-            ilinkBotId: config.ilinkBotId,
-            baseUrl: config.baseUrl,
-            cdnBaseUrl: config.cdnBaseUrl,
-            getUpdatesBuf: config.getUpdatesBuf,
-          },
-          onNewChat,
-          {
-            ignoreMessagesBefore: Date.now(),
-            onCommand: handleCommand,
-            resolveGroupFolder: (chatJid: string) =>
-              resolveEffectiveFolder(chatJid),
-            resolveEffectiveChatJid: buildResolveEffectiveChatJid(),
-            onAgentMessage: buildOnAgentMessage(),
-          },
-        );
-        logger.info(
-          { userId, connected },
-          'User WeChat connection hot-reloaded',
-        );
-        return connected;
-      }
-      logger.info({ userId }, 'User WeChat channel disabled via hot-reload');
-      return false;
-    }
-  };
-
-  // Start Web server early so frontend auth/API isn't blocked by Feishu readiness.
-  startWebServer({
-    queue,
-    getRegisteredGroups: () => registeredGroups,
-    getSessions: () => sessions,
-    processGroupMessages,
-    ensureTerminalContainerStarted,
-    formatMessages,
-    getLastAgentTimestamp: () => lastAgentTimestamp,
-    setLastAgentTimestamp: setCursors,
-    advanceGlobalCursor: (cursor: MessageCursor) => {
-      if (isCursorAfter(cursor, globalMessageCursor)) {
-        globalMessageCursor = cursor;
-        saveState();
-      }
-    },
-    reloadFeishuConnection,
-    reloadTelegramConnection,
-    reloadUserIMConfig,
-    isFeishuConnected: () => imManager.isAnyFeishuConnected(),
-    isTelegramConnected: () => imManager.isAnyTelegramConnected(),
-    isUserFeishuConnected: (userId: string) =>
-      imManager.isFeishuConnected(userId),
-    isUserTelegramConnected: (userId: string) =>
-      imManager.isTelegramConnected(userId),
-    isUserQQConnected: (userId: string) => imManager.isQQConnected(userId),
-    isUserWeChatConnected: (userId: string) =>
-      imManager.isWeChatConnected(userId),
-    processAgentConversation,
-    getFeishuChatInfo: (userId: string, chatId: string) =>
-      imManager.getFeishuChatInfo(userId, chatId),
-    clearImFailCounts: (jid: string) => {
-      imHealthCheckFailCounts.delete(jid);
-    },
-    updateReplyRoute: (folder: string, sourceJid: string | null) => {
-      activeRouteUpdaters.get(folder)?.(sourceJid);
-    },
-    handleSpawnCommand,
-  });
-
-  // Clean expired sessions every hour
-  setInterval(
-    () => {
-      try {
-        const expiredIds = getExpiredSessionIds();
-        for (const id of expiredIds) invalidateSessionCache(id);
-        const deleted = deleteExpiredSessions();
-        if (deleted > 0) {
-          logger.info({ deleted }, 'Cleaned expired user sessions');
-        }
-      } catch (err) {
-        logger.error({ err }, 'Failed to clean expired sessions');
-      }
-    },
-    60 * 60 * 1000,
-  );
-
-  // Periodically clean completed agents (task + spawn, every 10 minutes)
-  setInterval(
-    () => {
-      try {
-        const tenMinutesAgo = new Date(
-          Date.now() - 10 * 60 * 1000,
-        ).toISOString();
-        const cleaned = deleteCompletedAgents(tenMinutesAgo);
-        if (cleaned > 0) {
-          logger.info(
-            { cleaned },
-            'Periodic cleanup: removed completed agents',
-          );
-        }
-      } catch (err) {
-        logger.warn({ err }, 'Failed periodic task agent cleanup');
-      }
-    },
-    10 * 60 * 1000,
-  );
-
-  // Billing: check expired subscriptions every hour
-  setInterval(
-    () => {
-      checkAndExpireSubscriptions();
-    },
-    60 * 60 * 1000,
-  );
-
-  // Billing: reconcile monthly usage every 6 hours
-  setInterval(
-    () => {
-      if (!isBillingEnabled()) return;
-      try {
-        const month = new Date().toISOString().slice(0, 7);
-        // Reconcile all non-admin users with pagination
-        let page = 1;
-        const pageSize = 200;
-        // eslint-disable-next-line no-constant-condition
-        while (true) {
-          const batch = listUsers({ status: 'active', pageSize, page });
-          for (const u of batch.users) {
-            if (u.role === 'admin') continue;
-            reconcileMonthlyUsage(u.id, month);
-          }
-          if (batch.users.length < pageSize) break;
-          page++;
-        }
-      } catch (err) {
-        logger.error({ err }, 'Failed to run monthly usage reconciliation');
-      }
-    },
-    6 * 60 * 60 * 1000,
-  );
-
-  // Billing: cleanup old daily_usage and billing_audit_log every 24 hours
-  setInterval(
-    () => {
-      try {
-        const deletedDaily = cleanupOldDailyUsage();
-        const deletedAudit = cleanupOldBillingAuditLog();
-        if (deletedDaily > 0 || deletedAudit > 0) {
-          logger.info(
-            { deletedDaily, deletedAudit },
-            'Cleaned up old billing data',
-          );
-        }
-      } catch (err) {
-        logger.error({ err }, 'Failed to cleanup old billing data');
-      }
-    },
-    24 * 60 * 60 * 1000,
-  );
-
-  // Skills auto-sync: periodically sync host skills to all admin users
-  let skillAutoSyncTimer: ReturnType<typeof setInterval> | null = null;
-
-  function startSkillAutoSync(): void {
-    stopSkillAutoSync();
-    const settings = getSystemSettings();
-    if (!settings.skillAutoSyncEnabled) return;
-
-    const intervalMs = settings.skillAutoSyncIntervalMinutes * 60 * 1000;
-    logger.info(
-      { intervalMinutes: settings.skillAutoSyncIntervalMinutes },
-      'Starting skill auto-sync timer',
-    );
-
-    const runSync = async () => {
-      const currentSettings = getSystemSettings();
-      if (!currentSettings.skillAutoSyncEnabled) {
-        stopSkillAutoSync();
-        return;
-      }
-
-      try {
-        const { users: adminUsers } = listUsers({
-          role: 'admin',
-          status: 'active',
-        });
-        for (const admin of adminUsers) {
-          try {
-            const result = await syncHostSkillsForUser(admin.id);
-            const { added, updated, deleted } = result.stats;
-            if (added > 0 || updated > 0 || deleted > 0) {
-              logger.info(
-                {
-                  userId: admin.id,
-                  username: admin.username,
-                  ...result.stats,
-                  total: result.total,
-                },
-                'Skill auto-sync completed with changes',
-              );
-            }
-          } catch (err) {
-            logger.warn(
-              { err, userId: admin.id },
-              'Skill auto-sync failed for user',
-            );
-          }
-        }
-      } catch (err) {
-        logger.error({ err }, 'Skill auto-sync failed');
-      }
-    };
-
-    // Run once immediately, then on interval
-    void runSync();
-    skillAutoSyncTimer = setInterval(() => void runSync(), intervalMs);
-  }
-
-  function stopSkillAutoSync(): void {
-    if (skillAutoSyncTimer) {
-      clearInterval(skillAutoSyncTimer);
-      skillAutoSyncTimer = null;
-    }
-  }
-
-  // Initial start + restart when settings change (check every 60s)
-  const initSettings = getSystemSettings();
-  let _lastSkillSyncEnabled: boolean = initSettings.skillAutoSyncEnabled;
-  let _lastSkillSyncInterval: number =
-    initSettings.skillAutoSyncIntervalMinutes;
-  startSkillAutoSync();
-
-  setInterval(() => {
-    const settings = getSystemSettings();
-    if (
-      settings.skillAutoSyncEnabled !== _lastSkillSyncEnabled ||
-      settings.skillAutoSyncIntervalMinutes !== _lastSkillSyncInterval
-    ) {
-      _lastSkillSyncEnabled = settings.skillAutoSyncEnabled;
-      _lastSkillSyncInterval = settings.skillAutoSyncIntervalMinutes;
-      startSkillAutoSync();
-    }
-  }, 60 * 1000);
-
-  await ensureDockerRunning();
-
-  queue.setProcessMessagesFn(processGroupMessages);
-  queue.setHostModeChecker((groupJid: string) => {
-    const baseJid = stripVirtualJidSuffix(groupJid);
-
-    let group = registeredGroups[baseJid];
-    if (!group) {
-      const dbGroup = getRegisteredGroup(baseJid);
-      if (dbGroup) {
-        registeredGroups[baseJid] = dbGroup;
-        group = dbGroup;
-      }
-    }
-    if (!group) return false;
-
-    const { effectiveGroup } = resolveEffectiveGroup(group);
-    return effectiveGroup.executionMode === 'host';
-  });
-  queue.setSerializationKeyResolver((groupJid: string) => {
-    // Agent virtual JIDs: {chatJid}#agent:{agentId} → separate serialization key
-    const agentSep = groupJid.indexOf('#agent:');
-    if (agentSep >= 0) {
-      const baseJid = groupJid.slice(0, agentSep);
-      const agentId = groupJid.slice(agentSep + 7);
-      const group = registeredGroups[baseJid];
-      const folder = group?.folder || baseJid;
-      return `${folder}#${agentId}`;
-    }
-    // Task virtual JIDs: {chatJid}#task:{taskId} → separate serialization key
-    const taskSep = groupJid.indexOf('#task:');
-    if (taskSep >= 0) {
-      const baseJid = groupJid.slice(0, taskSep);
-      const taskId = groupJid.slice(taskSep + 6);
-      const group = registeredGroups[baseJid];
-      return `${group?.folder || baseJid}#task:${taskId}`;
-    }
-    const group = registeredGroups[groupJid];
-    return group?.folder || groupJid;
-  });
-  queue.setOnMaxRetriesExceeded((groupJid: string) => {
-    const group = registeredGroups[groupJid];
-    const name = group?.name || groupJid;
-    sendSystemMessage(
-      groupJid,
-      'agent_max_retries',
-      `${name} 处理失败，已达最大重试次数`,
-    );
-    setTyping(groupJid, false);
-  });
-  // Billing: user-level concurrent container limit
-  queue.setUserConcurrentLimitChecker((groupJid: string) => {
-    if (!isBillingEnabled()) return { allowed: true };
-    const baseJid = stripVirtualJidSuffix(groupJid);
-    const group = registeredGroups[baseJid];
-    if (!group?.created_by) return { allowed: true };
-    const owner = getUserById(group.created_by);
-    if (!owner || owner.role === 'admin') return { allowed: true };
-    const limit = getUserConcurrentContainerLimit(owner.id, owner.role);
-    if (limit == null) return { allowed: true };
-    // Count active containers for this user
-    let userActive = 0;
-    for (const [jid, g] of Object.entries(registeredGroups)) {
-      if (g.created_by === owner.id && queue.hasDirectActiveRunner(jid)) {
-        userActive++;
-      }
-    }
-    return { allowed: userActive < limit };
-  });
-  // Recovery: when agent process exits with unconsumed IPC messages,
-  // re-enqueue processAgentConversation to pick them up. See issue #240.
-  queue.setOnUnconsumedAgentIpc((groupJid: string, agentId: string) => {
-    // Extract base chat JID from virtual JID (e.g. web:main#agent:abc → web:main)
-    const baseChatJid = groupJid.includes('#agent:')
-      ? groupJid.split('#agent:')[0]
-      : groupJid;
-    const agent = getAgent(agentId);
-    const homeChatJid = agent?.chat_jid || baseChatJid;
-    const virtualChatJid = `${homeChatJid}#agent:${agentId}`;
-    const taskId = `agent-ipc-recovery:${agentId}:${Date.now()}`;
-    queue.enqueueTask(virtualChatJid, taskId, async () => {
-      await processAgentConversation(homeChatJid, agentId);
-    });
-  });
-  const schedulerDeps: import('./task-scheduler.js').SchedulerDependencies = {
-    registeredGroups: () => registeredGroups,
-    getSessions: () => sessions,
-    queue,
-    onProcess: (
-      groupJid,
-      proc,
-      containerName,
-      groupFolder,
-      displayName,
-      taskRunId,
-    ) =>
-      queue.registerProcess(
-        groupJid,
-        proc,
-        containerName,
-        groupFolder,
-        displayName,
-        undefined, // agentId
-        taskRunId,
-      ),
-    sendMessage,
-    assistantName: ASSISTANT_NAME,
-    dailySummaryDeps: {
-      logger,
-      dataDir: DATA_DIR,
-    },
-  };
-  startSchedulerLoop(schedulerDeps);
-
-  // Inject triggerTaskRun into WebDeps (schedulerDeps must exist first)
-  const webDeps = getWebDeps();
-  if (webDeps) {
-    webDeps.triggerTaskRun = (taskId: string) =>
-      triggerTaskNow(taskId, schedulerDeps);
-  }
-
-  ipcRuntime.startIpcWatcher();
-  recoverStreamingBuffer();
-  recoverPendingMessages();
-  recoverConversationAgents();
-  startStreamingBuffer();
-  startMessageLoop();
-
-  // --- IM Connection Pool: connect per-user IM channels ---
-  // Load global IM config (backward compat: used for admin if no per-user config exists)
-  const globalFeishuConfig = getFeishuProviderConfigWithSource();
-  const globalTelegramConfig = getTelegramProviderConfigWithSource();
-
-  // Paginate through all active users (listUsers caps at 200 per page)
-  let allActiveUsers: typeof listUsers extends (...args: any) => {
-    users: infer U;
-  }
-    ? U
-    : never = [];
-  {
-    let page = 1;
-    while (true) {
-      const result = listUsers({ status: 'active', page, pageSize: 200 });
-      allActiveUsers = allActiveUsers.concat(result.users);
-      if (allActiveUsers.length >= result.total) break;
-      page++;
-    }
-  }
-
-  // Register admin users for fallback IM routing
-  for (const user of allActiveUsers) {
-    if (user.role === 'admin') imManager.registerAdminUser(user.id);
-  }
-
-  let anyFeishuConnected = false;
-
-  for (const user of allActiveUsers) {
-    const homeGroup = getUserHomeGroup(user.id);
-    if (!homeGroup) continue;
-
-    // Per-user IM config takes precedence; fall back to global config for admin
-    const userFeishu = getUserFeishuConfig(user.id);
-    const userTelegram = getUserTelegramConfig(user.id);
-    const userQQ = getUserQQConfig(user.id);
-    const userWeChat = getUserWeChatConfig(user.id);
-
-    // Determine effective Feishu config: per-user > global (admin only)
-    let effectiveFeishu: FeishuConnectConfig | null = null;
-    if (userFeishu && userFeishu.appId && userFeishu.appSecret) {
-      effectiveFeishu = {
-        appId: userFeishu.appId,
-        appSecret: userFeishu.appSecret,
-        enabled: userFeishu.enabled,
-      };
-    } else if (user.role === 'admin' && globalFeishuConfig.source !== 'none') {
-      const gc = globalFeishuConfig.config;
-      effectiveFeishu = {
-        appId: gc.appId,
-        appSecret: gc.appSecret,
-        enabled: gc.enabled,
-      };
-    }
-
-    // Determine effective Telegram config: per-user > global (admin only)
-    let effectiveTelegram: TelegramConnectConfig | null = null;
-    if (userTelegram && userTelegram.botToken) {
-      effectiveTelegram = {
-        botToken: userTelegram.botToken,
-        proxyUrl: userTelegram.proxyUrl || globalTelegramConfig.config.proxyUrl,
-        enabled: userTelegram.enabled,
-      };
-    } else if (
-      user.role === 'admin' &&
-      globalTelegramConfig.source !== 'none'
-    ) {
-      const gc = globalTelegramConfig.config;
-      effectiveTelegram = {
-        botToken: gc.botToken,
-        proxyUrl: gc.proxyUrl,
-        enabled: gc.enabled,
-      };
-    }
-
-    // Determine effective QQ config: per-user only (no global fallback)
-    let effectiveQQ: QQConnectConfig | null = null;
-    if (userQQ && userQQ.appId && userQQ.appSecret) {
-      effectiveQQ = {
-        appId: userQQ.appId,
-        appSecret: userQQ.appSecret,
-        enabled: userQQ.enabled,
-      };
-    }
-
-    // Determine effective WeChat config: per-user only (no global fallback)
-    let effectiveWeChat: WeChatConnectConfig | null = null;
-    if (userWeChat && userWeChat.botToken && userWeChat.ilinkBotId) {
-      effectiveWeChat = {
-        botToken: userWeChat.botToken,
-        ilinkBotId: userWeChat.ilinkBotId,
-        baseUrl: userWeChat.baseUrl,
-        cdnBaseUrl: userWeChat.cdnBaseUrl,
-        getUpdatesBuf: userWeChat.getUpdatesBuf,
-        enabled: userWeChat.enabled,
-      };
-    }
-
-    if (
-      !effectiveFeishu &&
-      !effectiveTelegram &&
-      !effectiveQQ &&
-      !effectiveWeChat
-    )
-      continue;
-
-    try {
-      const result = await connectUserIMChannels(
-        user.id,
-        homeGroup.folder,
-        effectiveFeishu,
-        effectiveTelegram,
-        effectiveQQ,
-        effectiveWeChat,
-        Date.now(),
-      );
-      if (result.feishu) anyFeishuConnected = true;
-      logger.info(
-        {
-          userId: user.id,
-          feishu: result.feishu,
-          telegram: result.telegram,
-          qq: result.qq,
-          wechat: result.wechat,
-        },
-        'User IM channels connected',
-      );
-    } catch (err) {
-      logger.error(
-        { userId: user.id, err },
-        'Failed to connect user IM channels',
-      );
-    }
-  }
-
-  // Start Feishu group sync if any connection is active
-  if (anyFeishuConnected) {
-    syncGroupMetadata().catch((err) =>
-      logger.error({ err }, 'Initial group sync failed'),
-    );
-    feishuSyncInterval = setInterval(() => {
-      syncGroupMetadata().catch((err) =>
-        logger.error({ err }, 'Periodic group sync failed'),
-      );
-    }, GROUP_SYNC_INTERVAL_MS);
-  } else if (
-    globalFeishuConfig.config.enabled !== false &&
-    globalFeishuConfig.source !== 'none'
-  ) {
-    logger.warn(
-      'Feishu is not connected. Configure credentials in Settings to enable Feishu sync.',
-    );
-  }
-
-  // Run health check once on startup to clean up orphaned bindings, then periodically
-  void checkImBindingsHealth();
-  const IM_BINDING_HEALTH_CHECK_INTERVAL = 30 * 60 * 1000; // 30 min
-  setInterval(() => {
-    void checkImBindingsHealth();
-  }, IM_BINDING_HEALTH_CHECK_INTERVAL);
-}
-
-async function checkImBindingsHealth(): Promise<void> {
-  const boundEntries: Array<{ jid: string; group: RegisteredGroup }> = [];
-  for (const [jid, group] of Object.entries(registeredGroups)) {
-    if (group.target_agent_id || group.target_main_jid) {
-      boundEntries.push({ jid, group });
-    }
-  }
-
-  if (boundEntries.length === 0) return;
-  logger.debug(
-    { count: boundEntries.length },
-    'Running IM binding health check',
-  );
-
-  for (const { jid, group } of boundEntries) {
-    // Check for orphaned target_main_jid — target workspace no longer exists
-    if (group.target_main_jid) {
-      const targetGroup =
-        registeredGroups[group.target_main_jid] ??
-        getRegisteredGroup(group.target_main_jid);
-      if (!targetGroup) {
-        unbindImGroup(
-          jid,
-          `Orphaned main conversation binding: target ${group.target_main_jid} no longer exists`,
-        );
-        continue;
-      }
-    }
-
-    // Check for orphaned target_agent_id — agent no longer exists
-    if (group.target_agent_id) {
-      const agent = getAgent(group.target_agent_id);
-      if (!agent) {
-        unbindImGroup(
-          jid,
-          `Orphaned agent binding: agent ${group.target_agent_id} no longer exists`,
-        );
-        continue;
-      }
-    }
-
-    try {
-      const info = await imManager.getChatInfo(jid);
-      if (info === undefined) {
-        // Channel doesn't support getChatInfo (e.g. Telegram, QQ) — skip reachability check
-        continue;
-      }
-      if (info === null) {
-        // Chat not reachable — could be temporary (connection down, API permission issue)
-        const count = (imHealthCheckFailCounts.get(jid) ?? 0) + 1;
-        imHealthCheckFailCounts.set(jid, count);
-        if (count >= IM_HEALTH_CHECK_FAIL_THRESHOLD) {
-          unbindImGroup(
-            jid,
-            'IM group not reachable after multiple checks, auto-unbinding',
-          );
-        } else {
-          logger.debug(
-            {
-              jid,
-              failCount: count,
-              threshold: IM_HEALTH_CHECK_FAIL_THRESHOLD,
-            },
-            'IM health check failed, will retry before unbinding',
-          );
-        }
-      } else {
-        // Chat is reachable — reset failure counter
-        imHealthCheckFailCounts.delete(jid);
-      }
-    } catch (err) {
-      // API error — could be temporary, don't unbind on single failure
-      logger.debug({ jid, err }, 'IM binding health check failed for group');
-    }
-  }
-}
-
-main().catch((err) => {
-  logger.error({ err }, 'Failed to start happypaw');
-  process.exit(1);
-});
