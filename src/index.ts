@@ -1,6 +1,5 @@
 import { ChildProcess } from 'child_process';
 import crypto from 'crypto';
-import fs from 'fs';
 import path from 'path';
 
 import {
@@ -13,9 +12,8 @@ import {
 } from './config.js';
 import { LEGACY_AGENT_SENDER } from './legacy-product.js';
 import { interruptibleSleep } from './message-notifier.js';
+import type { ContainerInput, ContainerOutput } from './container-runner.js';
 import {
-  ContainerInput,
-  ContainerOutput,
   runContainerAgent,
   runHostAgent,
   writeGroupsSnapshot,
@@ -85,7 +83,6 @@ import {
   MessageCursor,
   RegisteredGroup,
   RuntimeSessionRecord,
-  RuntimeType,
 } from './types.js';
 import { logger } from './logger.js';
 import {
@@ -134,6 +131,7 @@ import {
 } from './index-main-conversation-runtime.js';
 import { createMessageLoop } from './index-message-loop.js';
 import { createIpcRuntime } from './index-ipc-runtime.js';
+import { createIndexAgentRuntimeAdapter } from './index-agent-runtime-adapter.js';
 
 const OOM_EXIT_RE = /code 137/;
 
@@ -180,6 +178,7 @@ const recoveryGroups = new Set<string>();
 // Track consecutive IM health check failures per JID for safe auto-unbind
 const imHealthCheckFailCounts = new Map<string, number>();
 let bootstrap: ReturnType<typeof createIndexBootstrap>;
+let ipcRuntime: ReturnType<typeof createIpcRuntime>;
 
 const { setCursors, advanceCursors } = createCursorStateHelpers({
   getLastAgentTimestamp: () => lastAgentTimestamp,
@@ -326,6 +325,47 @@ function recoverConversationAgents(): void {
   });
 }
 
+const {
+  runAgent,
+  getEffectiveRuntime,
+  sendBillingDeniedMessage,
+  setTyping,
+  sendMessage,
+  sendSystemMessage,
+  writeUsageRecords,
+  ensureTerminalContainerStarted,
+} = createIndexAgentRuntimeAdapter({
+  assistantName: ASSISTANT_NAME,
+  queue,
+  registeredGroups,
+  sessions,
+  terminalWarmupInFlight,
+  getIpcRuntime: () => ipcRuntime,
+  getAvailableGroups,
+  getAllTasks,
+  activeImReplyRoutes,
+  hasActiveStreamingSession,
+  imManager,
+  getChannelType,
+  ensureChatExists,
+  storeMessageDirect,
+  broadcastNewMessage,
+  broadcastToWebClients,
+  broadcastTyping,
+  broadcastStreamEvent,
+  extractLocalImImagePaths,
+  resolveEffectiveFolder,
+  resolveOwnerHomeFolder,
+  getSystemSettings,
+  insertUsageRecord,
+  setSession,
+  runHostAgent,
+  runContainerAgent,
+  writeTasksSnapshot,
+  writeGroupsSnapshot,
+  logger,
+});
+
 const { startMessageLoop } = createMessageLoop({
   queue,
   pollInterval: POLL_INTERVAL,
@@ -382,7 +422,7 @@ const { processGroupMessages } = createMainConversationRuntime({
   writeUsageRecords,
 });
 
-const ipcRuntime = createIpcRuntime({
+ipcRuntime = createIpcRuntime({
   dataDir: DATA_DIR,
   groupsDir: GROUPS_DIR,
   mainGroupFolder: MAIN_GROUP_FOLDER,
@@ -472,509 +512,10 @@ bootstrap = createIndexBootstrap({
   sendMessage,
   sendSystemMessage,
 });
-
-/**
- * Write usage records from a usage event to the database.
- * Handles both modelUsage (per-model breakdown) and legacy flat format.
- * When modelUsage is present, root-level cache tokens are assigned to the first model entry.
- */
-function writeUsageRecords(opts: {
-  userId: string;
-  groupFolder: string;
-  messageId?: string;
-  agentId?: string;
-  usage: {
-    inputTokens: number;
-    outputTokens: number;
-    cacheReadInputTokens: number;
-    cacheCreationInputTokens: number;
-    costUSD: number;
-    durationMs: number;
-    numTurns: number;
-    modelUsage?: Record<
-      string,
-      { inputTokens: number; outputTokens: number; costUSD: number }
-    >;
-  };
-}): void {
-  const { userId, groupFolder, messageId, agentId, usage } = opts;
-  if (usage.modelUsage) {
-    const models = Object.entries(usage.modelUsage);
-    let cacheReadAssigned = false;
-    for (const [model, mu] of models) {
-      insertUsageRecord({
-        userId,
-        groupFolder,
-        agentId,
-        messageId,
-        model,
-        inputTokens: mu.inputTokens,
-        outputTokens: mu.outputTokens,
-        // Assign root-level cache tokens to the first model entry
-        cacheReadInputTokens: cacheReadAssigned
-          ? 0
-          : usage.cacheReadInputTokens,
-        cacheCreationInputTokens: cacheReadAssigned
-          ? 0
-          : usage.cacheCreationInputTokens,
-        costUSD: mu.costUSD,
-        durationMs: usage.durationMs,
-        numTurns: usage.numTurns,
-        source: 'agent',
-      });
-      cacheReadAssigned = true;
-    }
-  } else {
-    insertUsageRecord({
-      userId,
-      groupFolder,
-      agentId,
-      messageId,
-      model: 'unknown',
-      inputTokens: usage.inputTokens,
-      outputTokens: usage.outputTokens,
-      cacheReadInputTokens: usage.cacheReadInputTokens,
-      cacheCreationInputTokens: usage.cacheCreationInputTokens,
-      costUSD: usage.costUSD,
-      durationMs: usage.durationMs,
-      numTurns: usage.numTurns,
-      source: 'agent',
-    });
-  }
-}
-
-function sendSystemMessage(jid: string, type: string, detail: string): void {
-  const msgId = crypto.randomUUID();
-  const timestamp = new Date().toISOString();
-  ensureChatExists(jid);
-  storeMessageDirect(
-    msgId,
-    jid,
-    '__system__',
-    'system',
-    `${type}:${detail}`,
-    timestamp,
-    true,
-  );
-  broadcastNewMessage(jid, {
-    id: msgId,
-    chat_jid: jid,
-    sender: '__system__',
-    sender_name: 'system',
-    content: `${type}:${detail}`,
-    timestamp,
-    is_from_me: true,
-  });
-}
-
-function sendBillingDeniedMessage(jid: string, content: string): string {
-  const msgId = `sys_quota_${Date.now()}`;
-  const timestamp = new Date().toISOString();
-  ensureChatExists(jid);
-  storeMessageDirect(
-    msgId,
-    jid,
-    '__billing__',
-    ASSISTANT_NAME,
-    content,
-    timestamp,
-    true,
-  );
-  broadcastNewMessage(jid, {
-    id: msgId,
-    chat_jid: jid,
-    sender: '__billing__',
-    sender_name: ASSISTANT_NAME,
-    content,
-    timestamp,
-    is_from_me: true,
-  });
-  return msgId;
-}
-
-function getEffectiveRuntime(group: RegisteredGroup): RuntimeType {
-  return group.runtime ?? getSystemSettings().defaultRuntime;
-}
-
-async function setTyping(jid: string, isTyping: boolean): Promise<void> {
-  // Skip Feishu Reaction when a streaming card is active — the card itself
-  // serves as a live typing indicator.
-  if (isTyping && hasActiveStreamingSession(jid)) {
-    broadcastTyping(jid, isTyping);
-    return;
-  }
-  await imManager.setTyping(jid, isTyping);
-  broadcastTyping(jid, isTyping);
-}
-
-interface SendMessageOptions {
-  /** Whether to forward the reply to the IM channel (Feishu/Telegram). Defaults to true for IM JIDs. */
-  sendToIM?: boolean;
-  /** Pre-computed local image paths to attach to IM messages. Avoids redundant filesystem scans. */
-  localImagePaths?: string[];
-  /** Message source identifier (e.g. 'scheduled_task') for frontend routing. */
-  source?: string;
-  /** Metadata used to preserve Claude SDK turn semantics for persisted messages. */
-  messageMeta?: {
-    turnId?: string;
-    sessionId?: string;
-    sdkMessageUuid?: string;
-    sourceKind?:
-      | 'sdk_final'
-      | 'sdk_send_message'
-      | 'interrupt_partial'
-      | 'overflow_partial'
-      | 'compact_partial'
-      | 'legacy'
-      | 'auto_continue';
-    finalizationReason?: 'completed' | 'interrupted' | 'error';
-  };
-}
-
-async function runTerminalWarmup(chatJid: string): Promise<void> {
-  const group = registeredGroups[chatJid];
-  if (!group) return;
-  if ((group.executionMode || 'container') === 'host') return;
-
-  logger.info({ chatJid, group: group.name }, 'Starting terminal warmup run');
-
-  const warmupReadyToken = '<terminal_ready>';
-  const warmupPrompt = [
-    '这是系统触发的终端预热请求。',
-    `请只回复 ${warmupReadyToken}，不要回复其它内容，也不要调用工具。`,
-  ].join(' ');
-
-  let bootstrapCompleted = false;
-  let idleTimer: ReturnType<typeof setTimeout> | null = null;
-  const resetIdleTimer = () => {
-    if (idleTimer) clearTimeout(idleTimer);
-    idleTimer = setTimeout(() => {
-      logger.debug(
-        { chatJid, group: group.name },
-        'Terminal warmup idle timeout, closing stdin',
-      );
-      queue.closeStdin(chatJid);
-    }, getSystemSettings().idleTimeout);
-  };
-
-  try {
-    const output = await runAgent(
-      group,
-      warmupPrompt,
-      chatJid,
-      undefined,
-      async (result) => {
-        if (result.status === 'stream' && result.streamEvent) {
-          broadcastStreamEvent(chatJid, result.streamEvent);
-          return;
-        }
-
-        if (result.status === 'error') return;
-
-        // During warmup query, NEVER emit assistant text to chat.
-        // Only mark bootstrap complete after the session update marker.
-        if (result.result === null) {
-          if (!bootstrapCompleted) {
-            bootstrapCompleted = true;
-            resetIdleTimer();
-          }
-          return;
-        }
-
-        if (!bootstrapCompleted) return;
-
-        const raw =
-          typeof result.result === 'string'
-            ? result.result
-            : JSON.stringify(result.result);
-        const text = stripAgentInternalTags(raw);
-        if (!text || text === warmupReadyToken) return;
-        await sendMessage(chatJid, text);
-        resetIdleTimer();
-      },
-    );
-
-    if (output.status === 'error') {
-      logger.warn(
-        { chatJid, group: group.name, error: output.error },
-        'Terminal warmup run ended with error',
-      );
-    } else {
-      logger.info(
-        { chatJid, group: group.name },
-        'Terminal warmup run completed',
-      );
-    }
-  } finally {
-    if (idleTimer) clearTimeout(idleTimer);
-  }
-}
-
-function ensureTerminalContainerStarted(chatJid: string): boolean {
-  const group = registeredGroups[chatJid];
-  if (!group) return false;
-  if ((group.executionMode || 'container') === 'host') return false;
-
-  const status = queue.getStatus();
-  const groupStatus = status.groups.find((g) => g.jid === chatJid);
-  if (groupStatus?.active) return true;
-  if (terminalWarmupInFlight.has(chatJid)) return true;
-
-  terminalWarmupInFlight.add(chatJid);
-  const taskId = `terminal-warmup:${chatJid}`;
-  queue.enqueueTask(chatJid, taskId, async () => {
-    try {
-      await runTerminalWarmup(chatJid);
-    } finally {
-      terminalWarmupInFlight.delete(chatJid);
-    }
-  });
-  return true;
-}
-
 bootstrap.start().catch((err) => {
   logger.error({ err }, 'Failed to start happypaw');
   process.exit(1);
 });
-
-async function runAgent(
-  group: RegisteredGroup,
-  prompt: string,
-  chatJid: string,
-  turnId?: string,
-  onOutput?: (output: ContainerOutput) => Promise<void>,
-  images?: Array<{ data: string; mimeType?: string }>,
-): Promise<{ status: 'success' | 'error' | 'closed'; error?: string }> {
-  const isHome = !!group.is_home;
-  // For the agent-runner: isMain means this is an admin home container (full privileges)
-  const isAdminHome = isHome && group.folder === MAIN_GROUP_FOLDER;
-  const runtime = getEffectiveRuntime(group);
-  const sessionRecord = sessions[group.folder];
-  const sessionId =
-    sessionRecord && sessionRecord.runtime === runtime
-      ? sessionRecord.sessionId
-      : undefined;
-
-  // Update tasks snapshot for container to read (filtered by group)
-  const tasks = getAllTasks();
-  writeTasksSnapshot(
-    group.folder,
-    isAdminHome,
-    tasks.map((t) => ({
-      id: t.id,
-      groupFolder: t.group_folder,
-      prompt: t.prompt,
-      schedule_type: t.schedule_type,
-      schedule_value: t.schedule_value,
-      status: t.status,
-      next_run: t.next_run,
-    })),
-  );
-
-  // Update available groups snapshot (admin home only can see all groups)
-  const availableGroups = getAvailableGroups();
-  writeGroupsSnapshot(
-    group.folder,
-    isAdminHome,
-    availableGroups,
-    new Set(Object.keys(registeredGroups)),
-  );
-
-  // Wrap onOutput to track session ID from streamed results
-  const wrappedOnOutput = onOutput
-    ? async (output: ContainerOutput) => {
-        queue.markRunnerActivity(chatJid);
-        if (
-          (output.status === 'success' && output.result !== null) ||
-          (output.status === 'stream' &&
-            output.streamEvent?.eventType === 'status' &&
-            output.streamEvent.statusText === 'interrupted')
-        ) {
-          queue.markRunnerQueryIdle(chatJid);
-        }
-        // 仅从成功的输出中更新 session ID；
-        // error 输出可能携带 stale ID，会覆盖流式传递的有效 session
-        if (output.newSessionId && output.status !== 'error') {
-          const nextSession: RuntimeSessionRecord = {
-            sessionId: output.newSessionId,
-            runtime,
-          };
-          sessions[group.folder] = nextSession;
-          setSession(group.folder, output.newSessionId, undefined, runtime);
-        }
-        await onOutput(output);
-      }
-    : undefined;
-
-  ipcRuntime.watchGroup(group.folder);
-  try {
-    const executionMode = group.executionMode || 'container';
-
-    const onProcessCb = (proc: ChildProcess, identifier: string) => {
-      // 宿主机模式：containerName 传 null，走 process.kill() 路径
-      const containerName = executionMode === 'container' ? identifier : null;
-      queue.registerProcess(
-        chatJid,
-        proc,
-        containerName,
-        group.folder,
-        identifier,
-      );
-    };
-
-    const ownerHomeFolder = resolveOwnerHomeFolder(group);
-
-    let output: ContainerOutput;
-
-    if (executionMode === 'host') {
-      output = await runHostAgent(
-        group,
-        {
-          prompt,
-          sessionId,
-          runtime,
-          turnId,
-          groupFolder: group.folder,
-          chatJid,
-          isMain: isAdminHome,
-          isHome,
-          isAdminHome,
-          images,
-        },
-        onProcessCb,
-        wrappedOnOutput,
-        ownerHomeFolder,
-      );
-    } else {
-      output = await runContainerAgent(
-        group,
-        {
-          prompt,
-          sessionId,
-          runtime,
-          turnId,
-          groupFolder: group.folder,
-          chatJid,
-          isMain: isAdminHome,
-          isHome,
-          isAdminHome,
-          images,
-        },
-        onProcessCb,
-        wrappedOnOutput,
-        ownerHomeFolder,
-      );
-    }
-
-    // 仅从成功的最终输出中更新 session ID；
-    // error 状态的输出可能携带 stale ID，覆盖流式阶段已写入的有效 session
-    if (output.newSessionId && output.status !== 'error') {
-      const nextSession: RuntimeSessionRecord = {
-        sessionId: output.newSessionId,
-        runtime,
-      };
-      sessions[group.folder] = nextSession;
-      setSession(group.folder, output.newSessionId, undefined, runtime);
-    }
-
-    // Agent was interrupted by _close sentinel (home folder drain).
-    // Propagate so processGroupMessages can skip cursor commit.
-    if (output.status === 'closed') {
-      return { status: 'closed' };
-    }
-
-    if (output.status === 'error') {
-      logger.error({ group: group.name, error: output.error }, 'Agent error');
-      if (output.result && wrappedOnOutput) {
-        try {
-          await wrappedOnOutput(output);
-        } catch (err) {
-          logger.error(
-            { group: group.name, err },
-            'Failed to emit agent error output',
-          );
-        }
-      }
-      return { status: 'error', error: output.error };
-    }
-
-    return { status: 'success' };
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    logger.error({ group: group.name, err }, 'Agent error');
-    return { status: 'error', error: errorMsg };
-  } finally {
-    ipcRuntime.unwatchGroup(group.folder);
-  }
-}
-
-async function sendMessage(
-  jid: string,
-  text: string,
-  options: SendMessageOptions = {},
-): Promise<string | undefined> {
-  const isIMChannel = getChannelType(jid) !== null;
-  const sendToIM = options.sendToIM ?? isIMChannel;
-  try {
-    if (sendToIM && isIMChannel) {
-      try {
-        const localImagePaths =
-          options.localImagePaths ??
-          extractLocalImImagePaths(text, resolveEffectiveFolder(jid));
-        await imManager.sendMessage(jid, text, localImagePaths);
-      } catch (err) {
-        logger.error({ jid, err }, 'Failed to send message to IM channel');
-      }
-    }
-
-    // Persist assistant reply so Web polling can render it and clear waiting state.
-    const msgId = crypto.randomUUID();
-    const timestamp = new Date().toISOString();
-    ensureChatExists(jid);
-    const persistedMsgId = storeMessageDirect(
-      msgId,
-      jid,
-      'happypaw-agent',
-      ASSISTANT_NAME,
-      text,
-      timestamp,
-      true,
-      { meta: options.messageMeta },
-    );
-
-    broadcastNewMessage(
-      jid,
-      {
-        id: persistedMsgId,
-        chat_jid: jid,
-        sender: 'happypaw-agent',
-        sender_name: ASSISTANT_NAME,
-        content: text,
-        timestamp,
-        is_from_me: true,
-        turn_id: options.messageMeta?.turnId ?? null,
-        session_id: options.messageMeta?.sessionId ?? null,
-        sdk_message_uuid: options.messageMeta?.sdkMessageUuid ?? null,
-        source_kind: options.messageMeta?.sourceKind ?? null,
-        finalization_reason: options.messageMeta?.finalizationReason ?? null,
-      },
-      undefined,
-      options.source,
-    );
-    logger.info({ jid, length: text.length, sendToIM }, 'Message sent');
-    // Skip agent_reply broadcast for scheduled tasks to avoid clearing
-    // streaming state of a concurrently running main agent.
-    // Safe because scheduled tasks never trigger typing indicators, so there's
-    // no typing state to clear. The message is still delivered via new_message.
-    if (!options.source) {
-      broadcastToWebClients(jid, text);
-    }
-    return persistedMsgId;
-  } catch (err) {
-    logger.error({ jid, err }, 'Failed to send message');
-    return undefined;
-  }
-}
 
 /**
  * Process messages for a user-created conversation agent.
