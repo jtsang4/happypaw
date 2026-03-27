@@ -4,8 +4,6 @@ import fs from 'fs';
 import path from 'path';
 import { promisify } from 'util';
 
-import { CronExpressionParser } from 'cron-parser';
-
 import {
   ASSISTANT_NAME,
   DATA_DIR,
@@ -62,7 +60,6 @@ import {
   storeMessageDirect,
   updateLatestMessageTokenUsage,
   updateChatName,
-  updateTask,
   getAgent,
   updateAgentStatus,
   updateAgentLastImJid,
@@ -78,6 +75,7 @@ import {
   cleanupOldDailyUsage,
   cleanupOldBillingAuditLog,
   insertUsageRecord,
+  updateTask,
 } from './db.js';
 // feishu.js deprecated exports are no longer needed; imManager handles all connections
 import { imManager } from './im-manager.js';
@@ -190,10 +188,10 @@ import {
   formatMessages,
 } from './index-main-conversation-runtime.js';
 import { createMessageLoop } from './index-message-loop.js';
+import { createIpcRuntime } from './index-ipc-runtime.js';
 
 const GROUP_SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const execFileAsync = promisify(execFile);
-const SAFE_REQUEST_ID_RE = /^[A-Za-z0-9_-]+$/;
 const OOM_EXIT_RE = /code 137/;
 
 let globalMessageCursor: MessageCursor = { timestamp: '', id: '' };
@@ -203,156 +201,7 @@ let lastAgentTimestamp: Record<string, MessageCursor> = {};
 // Recovery-safe cursor: only advances when an agent actually finishes processing.
 // recoverPendingMessages() uses this to detect IPC-injected but unprocessed messages.
 let lastCommittedCursor: Record<string, MessageCursor> = {};
-let ipcWatcherRunning = false;
 let shuttingDown = false;
-
-// ── IPC Watcher Manager (event-driven fs.watch + fallback polling) ──
-
-class IpcWatcherManager {
-  private watchers = new Map<
-    string,
-    { watchers: fs.FSWatcher[]; refCount: number }
-  >();
-  private debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
-  private processingFolders = new Set<string>();
-  private pendingReprocess = new Set<string>();
-  private fallbackTimer: ReturnType<typeof setInterval> | null = null;
-  private processGroupFn: ((folder: string) => Promise<void>) | null = null;
-  private processFullFn: (() => Promise<void>) | null = null;
-
-  /** Bind the per-group and full-scan processing functions (set once from startIpcWatcher). */
-  bind(
-    processGroup: (folder: string) => Promise<void>,
-    processFull: () => Promise<void>,
-  ): void {
-    this.processGroupFn = processGroup;
-    this.processFullFn = processFull;
-  }
-
-  /** Start watching a group's IPC directories. Called when a container/process starts. */
-  watchGroup(folder: string): void {
-    const existing = this.watchers.get(folder);
-    if (existing) {
-      existing.refCount++;
-      return;
-    }
-
-    const groupIpcRoot = path.join(DATA_DIR, 'ipc', folder);
-    const dirsToWatch = [
-      path.join(groupIpcRoot, 'messages'),
-      path.join(groupIpcRoot, 'tasks'),
-    ];
-
-    const folderWatchers: fs.FSWatcher[] = [];
-    for (const dir of dirsToWatch) {
-      try {
-        fs.mkdirSync(dir, { recursive: true });
-        // Listen to all event types — 'rename' covers atomic writes on Linux,
-        // but Docker bind mounts (macOS virtiofs) may emit 'change' instead.
-        const w = fs.watch(dir, () => {
-          this.debouncedProcess(folder);
-        });
-        w.on('error', () => {
-          // Watcher error — fallback polling will handle it
-        });
-        folderWatchers.push(w);
-      } catch {
-        // Watch failed — fallback polling will handle it
-      }
-    }
-    this.watchers.set(folder, { watchers: folderWatchers, refCount: 1 });
-  }
-
-  /** Stop watching a group's IPC directories. Called when a container/process stops. */
-  unwatchGroup(folder: string): void {
-    const entry = this.watchers.get(folder);
-    if (!entry) return;
-    entry.refCount--;
-    if (entry.refCount > 0) return;
-
-    for (const w of entry.watchers) {
-      try {
-        w.close();
-      } catch {}
-    }
-    this.watchers.delete(folder);
-    const timer = this.debounceTimers.get(folder);
-    if (timer) {
-      clearTimeout(timer);
-      this.debounceTimers.delete(folder);
-    }
-  }
-
-  private debouncedProcess(folder: string): void {
-    const existing = this.debounceTimers.get(folder);
-    if (existing) clearTimeout(existing);
-    this.debounceTimers.set(
-      folder,
-      setTimeout(() => {
-        this.debounceTimers.delete(folder);
-        // Skip if a previous processGroupIpc call for this folder is still running;
-        // the pending flag ensures we re-process after the current run finishes.
-        if (this.processingFolders.has(folder)) {
-          this.pendingReprocess.add(folder);
-          return;
-        }
-        this.processingFolders.add(folder);
-        this.processGroupFn?.(folder)
-          .catch((err) => {
-            logger.error({ err, folder }, 'Error processing IPC for group');
-          })
-          .finally(() => {
-            this.processingFolders.delete(folder);
-            // Files may have arrived during processing — run once more
-            if (
-              this.pendingReprocess.delete(folder) &&
-              this.watchers.has(folder)
-            ) {
-              this.debouncedProcess(folder);
-            }
-          });
-      }, 100),
-    );
-  }
-
-  /** Trigger processing for a folder through the concurrency guard. */
-  triggerProcess(folder: string): void {
-    this.debouncedProcess(folder);
-  }
-
-  /** Start fallback polling (every 5s) as safety net for inotify failures. */
-  startFallback(): void {
-    this.fallbackTimer = setInterval(() => {
-      if (shuttingDown) return;
-      this.processFullFn?.().catch((err) => {
-        logger.error({ err }, 'Error in IPC fallback scan');
-      });
-    }, 5000);
-    this.fallbackTimer.unref(); // Don't prevent process from naturally exiting
-  }
-
-  /** Close all watchers and timers. */
-  closeAll(): void {
-    for (const [, entry] of this.watchers) {
-      for (const w of entry.watchers) {
-        try {
-          w.close();
-        } catch {}
-      }
-    }
-    this.watchers.clear();
-    for (const [, timer] of this.debounceTimers) {
-      clearTimeout(timer);
-    }
-    this.debounceTimers.clear();
-    if (this.fallbackTimer) {
-      clearInterval(this.fallbackTimer);
-      this.fallbackTimer = null;
-    }
-  }
-}
-
-let ipcWatcherManager: IpcWatcherManager | null = null;
 /** JIDs already persisted by the shutdown handler — prevents finally blocks from duplicating. */
 const shutdownSavedJids = new Set<string>();
 
@@ -567,6 +416,44 @@ const { processGroupMessages } = createMainConversationRuntime({
   extractLocalImImagePaths,
   sendImWithFailTracking,
   writeUsageRecords,
+});
+
+const ipcRuntime = createIpcRuntime({
+  dataDir: DATA_DIR,
+  groupsDir: GROUPS_DIR,
+  mainGroupFolder: MAIN_GROUP_FOLDER,
+  timezone: TIMEZONE,
+  assistantName: ASSISTANT_NAME,
+  getRegisteredGroups: () => registeredGroups,
+  getShuttingDown: () => shuttingDown,
+  getActiveImReplyRoute: (folder) => activeImReplyRoutes.get(folder),
+  sendMessage,
+  ensureChatExists,
+  storeMessageDirect,
+  broadcastNewMessage,
+  broadcastToWebClients,
+  extractLocalImImagePaths,
+  sendImWithFailTracking,
+  retryImOperation,
+  getChannelType,
+  getGroupsByOwner,
+  getConnectedChannelTypes: (userId) =>
+    imManager.getConnectedChannelTypes(userId),
+  sendImage: (jid, imageBuffer, mimeType, caption, fileName) =>
+    imManager.sendImage(jid, imageBuffer, mimeType, caption, fileName),
+  sendFile: (jid, filePath, fileName) =>
+    imManager.sendFile(jid, filePath, fileName),
+  createTask,
+  deleteTask,
+  getAllTasks,
+  getTaskById,
+  updateTask,
+  syncGroupMetadata,
+  getAvailableGroups,
+  writeGroupsSnapshot,
+  registerGroup,
+  installSkillForUser,
+  deleteSkillForUser,
 });
 
 /**
@@ -1258,7 +1145,7 @@ async function runAgent(
       }
     : undefined;
 
-  ipcWatcherManager?.watchGroup(group.folder);
+  ipcRuntime.watchGroup(group.folder);
   try {
     const executionMode = group.executionMode || 'container';
 
@@ -1356,7 +1243,7 @@ async function runAgent(
     logger.error({ group: group.name, err }, 'Agent error');
     return { status: 'error', error: errorMsg };
   } finally {
-    ipcWatcherManager?.unwatchGroup(group.folder);
+    ipcRuntime.unwatchGroup(group.folder);
   }
 }
 
@@ -1425,1061 +1312,6 @@ async function sendMessage(
   } catch (err) {
     logger.error({ jid, err }, 'Failed to send message');
     return undefined;
-  }
-}
-
-/**
- * Check if a source group is authorized to send IPC messages to a target group.
- * - Admin home can send to any group.
- * - Non-home groups can only send to groups sharing the same folder.
- * - Member home groups can send to groups created by the same user.
- */
-function canSendCrossGroupMessage(
-  isAdminHome: boolean,
-  isHome: boolean,
-  sourceFolder: string,
-  sourceGroupEntry: RegisteredGroup | undefined,
-  targetGroup: RegisteredGroup | undefined,
-): boolean {
-  if (isAdminHome) return true;
-  if (targetGroup && targetGroup.folder === sourceFolder) return true;
-  if (
-    isHome &&
-    targetGroup &&
-    sourceGroupEntry?.created_by != null &&
-    targetGroup.created_by === sourceGroupEntry.created_by
-  )
-    return true;
-  return false;
-}
-
-function startIpcWatcher(): void {
-  if (ipcWatcherRunning) {
-    logger.debug('IPC watcher already running, skipping duplicate start');
-    return;
-  }
-  ipcWatcherRunning = true;
-
-  const ipcBaseDir = path.join(DATA_DIR, 'ipc');
-  fs.mkdirSync(ipcBaseDir, { recursive: true });
-
-  const fsp = fs.promises;
-
-  /**
-   * Broadcast a message to all connected IM channels of a user that haven't
-   * already received it. Used by scheduled tasks to fan out to all IM channels.
-   */
-  function broadcastToOwnerIMChannels(
-    userId: string,
-    sourceFolder: string,
-    alreadySentJids: Set<string>,
-    sendFn: (jid: string) => void,
-    notifyChannels?: string[] | null,
-  ): void {
-    const sentChannelTypes = new Set<string>();
-    for (const jid of alreadySentJids) {
-      const ct = getChannelType(jid);
-      if (ct) sentChannelTypes.add(ct);
-    }
-    const connectedTypes = imManager.getConnectedChannelTypes(userId);
-    const ownerGroups = getGroupsByOwner(userId);
-    for (const channelType of connectedTypes) {
-      if (sentChannelTypes.has(channelType)) continue;
-      // Filter by notify_channels if specified (null = all channels)
-      if (notifyChannels && !notifyChannels.includes(channelType)) continue;
-      const target = ownerGroups.find(
-        (g) =>
-          getChannelType(g.jid) === channelType && g.folder === sourceFolder,
-      );
-      if (target) {
-        sendFn(target.jid);
-        sentChannelTypes.add(channelType);
-      }
-    }
-  }
-
-  const processGroupIpc = async (sourceGroup: string) => {
-    if (shuttingDown) return;
-    // Determine if this IPC directory belongs to an admin home group
-    const sourceGroupEntry = Object.values(registeredGroups).find(
-      (g) => g.folder === sourceGroup,
-    );
-    const isAdminHome = !!(
-      sourceGroupEntry?.is_home && sourceGroup === MAIN_GROUP_FOLDER
-    );
-    const isHome = !!sourceGroupEntry?.is_home;
-
-    // Collect all IPC roots: main group dir + agents/*/ + tasks-run/*/
-    // Tag agent roots with their agentId so we can route messages to virtual JIDs.
-    const groupIpcRoot = path.join(ipcBaseDir, sourceGroup);
-    const ipcRoots: Array<{
-      path: string;
-      agentId: string | null;
-      taskId: string | null;
-    }> = [{ path: groupIpcRoot, agentId: null, taskId: null }];
-    try {
-      const agentsDir = path.join(groupIpcRoot, 'agents');
-      const agentEntries = await fsp.readdir(agentsDir, {
-        withFileTypes: true,
-      });
-      for (const entry of agentEntries) {
-        if (entry.isDirectory()) {
-          ipcRoots.push({
-            path: path.join(agentsDir, entry.name),
-            agentId: entry.name,
-            taskId: null,
-          });
-        }
-      }
-    } catch {
-      /* agents dir may not exist */
-    }
-    try {
-      const tasksRunDir = path.join(groupIpcRoot, 'tasks-run');
-      const taskRunEntries = await fsp.readdir(tasksRunDir, {
-        withFileTypes: true,
-      });
-      for (const entry of taskRunEntries) {
-        if (entry.isDirectory()) {
-          ipcRoots.push({
-            path: path.join(tasksRunDir, entry.name),
-            agentId: null,
-            taskId: entry.name,
-          });
-        }
-      }
-    } catch {
-      /* tasks-run dir may not exist */
-    }
-
-    for (const {
-      path: ipcRoot,
-      agentId: ipcAgentId,
-      taskId: ipcTaskId,
-    } of ipcRoots) {
-      const messagesDir = path.join(ipcRoot, 'messages');
-      const tasksDir = path.join(ipcRoot, 'tasks');
-
-      // Process messages from this group's IPC directory
-      try {
-        const messageEntries = await fsp.readdir(messagesDir);
-        const messageFiles = messageEntries.filter((f) => f.endsWith('.json'));
-        for (const file of messageFiles) {
-          const filePath = path.join(messagesDir, file);
-          try {
-            const raw = await fsp.readFile(filePath, 'utf-8');
-            const data = JSON.parse(raw);
-            if (data.type === 'message' && data.chatJid && data.text) {
-              const targetGroup = registeredGroups[data.chatJid];
-              if (
-                canSendCrossGroupMessage(
-                  isAdminHome,
-                  isHome,
-                  sourceGroup,
-                  sourceGroupEntry,
-                  targetGroup,
-                )
-              ) {
-                // Conversation agents: route to virtual JID so message appears
-                // in the agent tab, not the main conversation.
-                const effectiveChatJid = ipcAgentId
-                  ? `${data.chatJid}#agent:${ipcAgentId}`
-                  : data.chatJid;
-                await sendMessage(effectiveChatJid, data.text, {
-                  messageMeta: {
-                    sourceKind: 'sdk_send_message',
-                  },
-                });
-
-                // Forward to IM channel — but NOT for conversation agent messages.
-                // Conversation agents handle their own IM routing in
-                // processAgentConversation's wrappedOnOutput callback.
-                if (!ipcAgentId) {
-                  const ipcImRoute = activeImReplyRoutes.get(sourceGroup);
-                  if (
-                    ipcImRoute &&
-                    getChannelType(data.chatJid) === null &&
-                    ipcImRoute !== data.chatJid
-                  ) {
-                    const localImages = extractLocalImImagePaths(
-                      data.text,
-                      sourceGroup,
-                    );
-                    sendImWithFailTracking(ipcImRoute, data.text, localImages);
-                  }
-
-                  // Scheduled task: broadcast to all connected IM channels of the owner
-                  if (data.isScheduledTask && sourceGroupEntry?.created_by) {
-                    const alreadySent = new Set<string>(
-                      [data.chatJid, ipcImRoute].filter(Boolean) as string[],
-                    );
-                    const taskLocalImages = extractLocalImImagePaths(
-                      data.text,
-                      sourceGroup,
-                    );
-                    // Resolve notify_channels from the task
-                    let taskNotifyChannels: string[] | null | undefined;
-                    if (ipcTaskId) {
-                      const taskRecord = getTaskById(ipcTaskId);
-                      taskNotifyChannels = taskRecord?.notify_channels;
-                    }
-                    broadcastToOwnerIMChannels(
-                      sourceGroupEntry.created_by,
-                      sourceGroup,
-                      alreadySent,
-                      (jid) =>
-                        sendImWithFailTracking(jid, data.text, taskLocalImages),
-                      taskNotifyChannels,
-                    );
-                  }
-                }
-                logger.info(
-                  {
-                    chatJid: effectiveChatJid,
-                    sourceGroup,
-                    agentId: ipcAgentId,
-                  },
-                  'IPC message sent',
-                );
-              } else {
-                logger.warn(
-                  { chatJid: data.chatJid, sourceGroup },
-                  'Unauthorized IPC message attempt blocked',
-                );
-              }
-            } else if (
-              data.type === 'image' &&
-              data.chatJid &&
-              data.imageBase64
-            ) {
-              // Handle image IPC messages from send_image MCP tool
-              const targetGroup = registeredGroups[data.chatJid];
-              if (
-                canSendCrossGroupMessage(
-                  isAdminHome,
-                  isHome,
-                  sourceGroup,
-                  sourceGroupEntry,
-                  targetGroup,
-                )
-              ) {
-                try {
-                  const imageBuffer = Buffer.from(data.imageBase64, 'base64');
-                  const mimeType = data.mimeType || 'image/png';
-                  const caption = data.caption || undefined;
-                  const fileName = data.fileName || undefined;
-
-                  // Conversation agents: skip IM forwarding (handled in wrappedOnOutput).
-                  // Non-agent: route to IM via activeImReplyRoutes.
-                  const imgImRoute = ipcAgentId
-                    ? null
-                    : getChannelType(data.chatJid) !== null
-                      ? data.chatJid
-                      : (activeImReplyRoutes.get(sourceGroup) ?? null);
-                  if (imgImRoute) {
-                    await retryImOperation('send_image', imgImRoute, () =>
-                      imManager.sendImage(
-                        imgImRoute,
-                        imageBuffer,
-                        mimeType,
-                        caption,
-                        fileName,
-                      ),
-                    );
-                  }
-
-                  // Conversation agents: store in virtual JID (agent tab).
-                  const imgChatJid = ipcAgentId
-                    ? `${data.chatJid}#agent:${ipcAgentId}`
-                    : data.chatJid;
-
-                  // Persist image message to DB and broadcast to WebSocket (same as sendMessage flow)
-                  const displayText = caption
-                    ? `[图片: ${fileName || 'image'}]\n${caption}`
-                    : `[图片: ${fileName || 'image'}]`;
-                  const imgMsgId = crypto.randomUUID();
-                  const imgTimestamp = new Date().toISOString();
-                  ensureChatExists(imgChatJid);
-                  const persistedImgMsgId = storeMessageDirect(
-                    imgMsgId,
-                    imgChatJid,
-                    'happypaw-agent',
-                    ASSISTANT_NAME,
-                    displayText,
-                    imgTimestamp,
-                    true,
-                    { meta: { sourceKind: 'sdk_send_message' } },
-                  );
-                  broadcastNewMessage(imgChatJid, {
-                    id: persistedImgMsgId,
-                    chat_jid: imgChatJid,
-                    sender: 'happypaw-agent',
-                    sender_name: ASSISTANT_NAME,
-                    content: displayText,
-                    timestamp: imgTimestamp,
-                    is_from_me: true,
-                    turn_id: null,
-                    session_id: null,
-                    sdk_message_uuid: null,
-                    source_kind: 'sdk_send_message',
-                    finalization_reason: null,
-                  });
-                  broadcastToWebClients(imgChatJid, displayText);
-
-                  // Scheduled task: broadcast image to all connected IM channels
-                  // (not applicable for agent IPC)
-                  if (
-                    !ipcAgentId &&
-                    data.isScheduledTask &&
-                    sourceGroupEntry?.created_by
-                  ) {
-                    const alreadySent = new Set<string>(
-                      [data.chatJid, imgImRoute].filter(Boolean) as string[],
-                    );
-                    let imgTaskNotifyChannels: string[] | null | undefined;
-                    if (ipcTaskId) {
-                      const imgTaskRecord = getTaskById(ipcTaskId);
-                      imgTaskNotifyChannels = imgTaskRecord?.notify_channels;
-                    }
-                    broadcastToOwnerIMChannels(
-                      sourceGroupEntry.created_by,
-                      sourceGroup,
-                      alreadySent,
-                      (jid) =>
-                        imManager
-                          .sendImage(
-                            jid,
-                            imageBuffer,
-                            mimeType,
-                            caption,
-                            fileName,
-                          )
-                          .catch((err) =>
-                            logger.warn(
-                              { jid, err },
-                              'Failed to broadcast task image to IM',
-                            ),
-                          ),
-                      imgTaskNotifyChannels,
-                    );
-                  }
-
-                  logger.info(
-                    {
-                      chatJid: imgChatJid,
-                      sourceGroup,
-                      mimeType,
-                      size: imageBuffer.length,
-                      agentId: ipcAgentId,
-                    },
-                    'IPC image sent',
-                  );
-                } catch (err) {
-                  logger.error(
-                    { chatJid: data.chatJid, sourceGroup, err },
-                    'Failed to process IPC image',
-                  );
-                }
-              } else {
-                logger.warn(
-                  { chatJid: data.chatJid, sourceGroup },
-                  'Unauthorized IPC image attempt blocked',
-                );
-              }
-            }
-            await fsp.unlink(filePath);
-          } catch (err) {
-            logger.error(
-              { file, sourceGroup, err },
-              'Error processing IPC message',
-            );
-            const errorDir = path.join(ipcBaseDir, 'errors');
-            await fsp.mkdir(errorDir, { recursive: true });
-            try {
-              await fsp.rename(
-                filePath,
-                path.join(errorDir, `${sourceGroup}-${file}`),
-              );
-            } catch (renameErr) {
-              logger.error(
-                { file, sourceGroup, renameErr },
-                'Failed to move IPC message to error directory, deleting',
-              );
-              try {
-                await fsp.unlink(filePath);
-              } catch {
-                /* ignore */
-              }
-            }
-          }
-        }
-      } catch (err: any) {
-        if (err?.code !== 'ENOENT') {
-          logger.error(
-            { err, sourceGroup },
-            'Error reading IPC messages directory',
-          );
-        }
-      }
-
-      // Process tasks from this group's IPC directory
-      try {
-        const allEntries = await fsp.readdir(tasksDir, {
-          withFileTypes: true,
-        });
-
-        // 清理孤儿结果文件（容器崩溃或超时后残留，超过 10 分钟自动删除）
-        for (const entry of allEntries) {
-          if (
-            entry.isFile() &&
-            entry.name.endsWith('.json') &&
-            (entry.name.startsWith('install_skill_result_') ||
-              entry.name.startsWith('uninstall_skill_result_') ||
-              entry.name.startsWith('list_tasks_result_'))
-          ) {
-            try {
-              const filePath = path.join(tasksDir, entry.name);
-              const stat = await fsp.stat(filePath);
-              if (Date.now() - stat.mtimeMs > 10 * 60 * 1000) {
-                await fsp.unlink(filePath);
-                logger.debug(
-                  { sourceGroup, file: entry.name },
-                  'Cleaned up stale skill result file',
-                );
-              }
-            } catch {
-              /* ignore */
-            }
-          }
-        }
-
-        const taskFiles = allEntries
-          .filter(
-            (entry) =>
-              entry.isFile() &&
-              entry.name.endsWith('.json') &&
-              !entry.name.startsWith('install_skill_result_') &&
-              !entry.name.startsWith('uninstall_skill_result_') &&
-              !entry.name.startsWith('list_tasks_result_'),
-          )
-          .map((entry) => entry.name);
-        for (const file of taskFiles) {
-          const filePath = path.join(tasksDir, file);
-          try {
-            const raw = await fsp.readFile(filePath, 'utf-8');
-            const data = JSON.parse(raw);
-            // Pass source group identity to processTaskIpc for authorization
-            await processTaskIpc(
-              data,
-              sourceGroup,
-              isAdminHome,
-              isHome,
-              sourceGroupEntry,
-              ipcAgentId,
-            );
-            await fsp.unlink(filePath);
-          } catch (err) {
-            logger.error(
-              { file, sourceGroup, err },
-              'Error processing IPC task',
-            );
-            const errorDir = path.join(ipcBaseDir, 'errors');
-            await fsp.mkdir(errorDir, { recursive: true });
-            try {
-              await fsp.rename(
-                filePath,
-                path.join(errorDir, `${sourceGroup}-${file}`),
-              );
-            } catch (renameErr) {
-              logger.error(
-                { file, sourceGroup, renameErr },
-                'Failed to move IPC task to error directory, deleting',
-              );
-              try {
-                await fsp.unlink(filePath);
-              } catch {
-                /* ignore */
-              }
-            }
-          }
-        }
-      } catch (err: any) {
-        if (err?.code !== 'ENOENT') {
-          logger.error(
-            { err, sourceGroup },
-            'Error reading IPC tasks directory',
-          );
-        }
-      }
-    } // end for (const ipcRoot of ipcRoots)
-  };
-
-  const processIpcFilesFull = async () => {
-    if (shuttingDown) return;
-    let groupFolders: string[];
-    try {
-      const entries = await fsp.readdir(ipcBaseDir, { withFileTypes: true });
-      groupFolders = entries
-        .filter((e) => e.isDirectory() && e.name !== 'errors')
-        .map((e) => e.name);
-    } catch (err) {
-      logger.error({ err }, 'Error reading IPC base directory');
-      return;
-    }
-
-    for (const sourceGroup of groupFolders) {
-      // Route through the concurrency guard to prevent racing with event-driven triggers
-      ipcWatcherManager!.triggerProcess(sourceGroup);
-    }
-  };
-
-  // Initialize the event-driven IPC watcher manager
-  ipcWatcherManager = new IpcWatcherManager();
-  ipcWatcherManager.bind(processGroupIpc, processIpcFilesFull);
-
-  // Initial full scan
-  processIpcFilesFull().catch((err) => {
-    logger.error({ err }, 'Error in initial IPC scan');
-  });
-
-  // Start fallback polling (5s instead of 1s)
-  ipcWatcherManager.startFallback();
-
-  logger.info('IPC watcher started (event-driven + 5s fallback)');
-}
-
-async function processTaskIpc(
-  data: {
-    type: string;
-    taskId?: string;
-    prompt?: string;
-    schedule_type?: string;
-    schedule_value?: string;
-    context_mode?: string;
-    execution_type?: string;
-    script_command?: string;
-    groupFolder?: string;
-    chatJid?: string;
-    targetJid?: string;
-    // For register_group
-    jid?: string;
-    name?: string;
-    folder?: string;
-    containerConfig?: RegisteredGroup['containerConfig'];
-    executionMode?: string;
-    // For install_skill / uninstall_skill
-    package?: string;
-    requestId?: string;
-    skillId?: string;
-    // For send_file
-    filePath?: string;
-    fileName?: string;
-    // For list_tasks
-    isAdminHome?: boolean;
-  },
-  sourceGroup: string, // Verified identity from IPC directory
-  isAdminHome: boolean, // Whether source is admin home container
-  isHome: boolean, // Whether source is a home container
-  sourceGroupEntry: RegisteredGroup | undefined, // Source group's registered entry
-  ipcAgentId: string | null = null, // Non-null when IPC comes from a conversation agent
-): Promise<void> {
-  switch (data.type) {
-    case 'schedule_task':
-      if (data.schedule_type && data.schedule_value && data.targetJid) {
-        const execType =
-          data.execution_type === 'script'
-            ? ('script' as const)
-            : ('agent' as const);
-
-        // Script tasks require prompt OR script_command; agent tasks require prompt
-        if (execType === 'agent' && !data.prompt) {
-          logger.warn('schedule_task: agent mode requires prompt');
-          break;
-        }
-        if (execType === 'script' && !data.script_command) {
-          logger.warn('schedule_task: script mode requires script_command');
-          break;
-        }
-
-        // Only admin home can create script tasks
-        if (execType === 'script' && !isAdminHome) {
-          logger.warn(
-            { sourceGroup },
-            'Non-admin container attempted to create script task',
-          );
-          break;
-        }
-
-        // Resolve the target group from JID
-        const targetJid = data.targetJid as string;
-        const targetGroupEntry = registeredGroups[targetJid];
-
-        if (!targetGroupEntry) {
-          logger.warn(
-            { targetJid },
-            'Cannot schedule task: target group not registered',
-          );
-          break;
-        }
-
-        const targetFolder = targetGroupEntry.folder;
-
-        // Authorization: non-admin-home groups can only schedule for themselves
-        if (!isAdminHome && targetFolder !== sourceGroup) {
-          logger.warn(
-            { sourceGroup, targetFolder },
-            'Unauthorized schedule_task attempt blocked',
-          );
-          break;
-        }
-
-        const scheduleType = data.schedule_type as 'cron' | 'interval' | 'once';
-
-        let nextRun: string | null = null;
-        if (scheduleType === 'cron') {
-          try {
-            const interval = CronExpressionParser.parse(data.schedule_value, {
-              tz: TIMEZONE,
-            });
-            nextRun = interval.next().toISOString();
-          } catch {
-            logger.warn(
-              { scheduleValue: data.schedule_value },
-              'Invalid cron expression',
-            );
-            break;
-          }
-        } else if (scheduleType === 'interval') {
-          const ms = parseInt(data.schedule_value, 10);
-          if (isNaN(ms) || ms <= 0) {
-            logger.warn(
-              { scheduleValue: data.schedule_value },
-              'Invalid interval',
-            );
-            break;
-          }
-          nextRun = new Date(Date.now() + ms).toISOString();
-        } else if (scheduleType === 'once') {
-          const scheduled = new Date(data.schedule_value);
-          if (isNaN(scheduled.getTime())) {
-            logger.warn(
-              { scheduleValue: data.schedule_value },
-              'Invalid timestamp',
-            );
-            break;
-          }
-          nextRun = scheduled.toISOString();
-        }
-
-        const taskId = `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        const contextMode =
-          data.context_mode === 'group' || data.context_mode === 'isolated'
-            ? data.context_mode
-            : 'isolated';
-        createTask({
-          id: taskId,
-          group_folder: targetFolder,
-          chat_jid: targetJid,
-          prompt: data.prompt || '',
-          schedule_type: scheduleType,
-          schedule_value: data.schedule_value,
-          context_mode: contextMode,
-          execution_type: execType,
-          script_command: data.script_command ?? null,
-          next_run: nextRun,
-          status: 'active',
-          created_at: new Date().toISOString(),
-        });
-        logger.info(
-          { taskId, sourceGroup, targetFolder, contextMode, execType },
-          'Task created via IPC',
-        );
-      }
-      break;
-
-    case 'pause_task':
-      if (data.taskId) {
-        const task = getTaskById(data.taskId);
-        if (task && (isAdminHome || task.group_folder === sourceGroup)) {
-          updateTask(data.taskId, { status: 'paused' });
-          logger.info(
-            { taskId: data.taskId, sourceGroup },
-            'Task paused via IPC',
-          );
-        } else {
-          logger.warn(
-            { taskId: data.taskId, sourceGroup },
-            'Unauthorized task pause attempt',
-          );
-        }
-      }
-      break;
-
-    case 'resume_task':
-      if (data.taskId) {
-        const task = getTaskById(data.taskId);
-        if (task && (isAdminHome || task.group_folder === sourceGroup)) {
-          updateTask(data.taskId, { status: 'active' });
-          logger.info(
-            { taskId: data.taskId, sourceGroup },
-            'Task resumed via IPC',
-          );
-        } else {
-          logger.warn(
-            { taskId: data.taskId, sourceGroup },
-            'Unauthorized task resume attempt',
-          );
-        }
-      }
-      break;
-
-    case 'cancel_task':
-      if (data.taskId) {
-        const task = getTaskById(data.taskId);
-        if (task && (isAdminHome || task.group_folder === sourceGroup)) {
-          deleteTask(data.taskId);
-          logger.info(
-            { taskId: data.taskId, sourceGroup },
-            'Task cancelled via IPC',
-          );
-        } else {
-          logger.warn(
-            { taskId: data.taskId, sourceGroup },
-            'Unauthorized task cancel attempt',
-          );
-        }
-      }
-      break;
-
-    case 'list_tasks':
-      if (data.requestId) {
-        const requestId = data.requestId;
-        if (!SAFE_REQUEST_ID_RE.test(requestId)) {
-          logger.warn(
-            { sourceGroup, requestId },
-            'Rejected list_tasks request with invalid requestId',
-          );
-          break;
-        }
-        const listTasksDir = path.join(DATA_DIR, 'ipc', sourceGroup, 'tasks');
-        const listTasksDirResolved = path.resolve(listTasksDir);
-        const resultFileName = `list_tasks_result_${requestId}.json`;
-        const resultFilePath = path.resolve(listTasksDir, resultFileName);
-        if (!resultFilePath.startsWith(`${listTasksDirResolved}${path.sep}`)) {
-          logger.warn(
-            { sourceGroup, requestId, resultFilePath },
-            'Rejected list_tasks request with unsafe result file path',
-          );
-          break;
-        }
-
-        fs.mkdirSync(path.dirname(resultFilePath), { recursive: true });
-        try {
-          const allTasks = getAllTasks();
-          // Admin home sees all tasks, others only see their own group's tasks
-          const filteredTasks = isAdminHome
-            ? allTasks
-            : allTasks.filter((t) => t.group_folder === sourceGroup);
-          const taskList = filteredTasks.map((t) => ({
-            id: t.id,
-            groupFolder: t.group_folder,
-            prompt: t.prompt,
-            schedule_type: t.schedule_type,
-            schedule_value: t.schedule_value,
-            status: t.status,
-            next_run: t.next_run,
-          }));
-          const resultData = JSON.stringify({ success: true, tasks: taskList });
-          const tmpPath = `${resultFilePath}.tmp`;
-          fs.writeFileSync(tmpPath, resultData);
-          fs.renameSync(tmpPath, resultFilePath);
-          logger.debug(
-            { sourceGroup, taskCount: taskList.length },
-            'Task list sent via IPC',
-          );
-        } catch (err) {
-          const errorResult = JSON.stringify({
-            success: false,
-            error: err instanceof Error ? err.message : String(err),
-          });
-          const tmpPath = `${resultFilePath}.tmp`;
-          fs.writeFileSync(tmpPath, errorResult);
-          fs.renameSync(tmpPath, resultFilePath);
-          logger.error({ sourceGroup, err }, 'Failed to list tasks via IPC');
-        }
-      }
-      break;
-
-    case 'refresh_groups':
-      // Only admin home group can request a refresh
-      if (isAdminHome) {
-        logger.info(
-          { sourceGroup },
-          'Group metadata refresh requested via IPC',
-        );
-        await syncGroupMetadata(true);
-        // Write updated snapshot immediately
-        const availableGroups = getAvailableGroups();
-        writeGroupsSnapshot(
-          sourceGroup,
-          true,
-          availableGroups,
-          new Set(Object.keys(registeredGroups)),
-        );
-      } else {
-        logger.warn(
-          { sourceGroup },
-          'Unauthorized refresh_groups attempt blocked',
-        );
-      }
-      break;
-
-    case 'register_group':
-      // Only admin home group can register new groups
-      if (!isAdminHome) {
-        logger.warn(
-          { sourceGroup },
-          'Unauthorized register_group attempt blocked',
-        );
-        break;
-      }
-      if (data.jid && data.name && data.folder) {
-        // Inherit created_by from the source group so onNewChat won't re-route
-        const sourceEntry = Object.values(registeredGroups).find(
-          (g) => g.folder === sourceGroup,
-        );
-        const execMode =
-          data.executionMode === 'host' || data.executionMode === 'container'
-            ? data.executionMode
-            : undefined;
-        registerGroup(data.jid, {
-          name: data.name,
-          folder: data.folder,
-          added_at: new Date().toISOString(),
-          containerConfig: data.containerConfig,
-          created_by: sourceEntry?.created_by,
-          executionMode: execMode,
-        });
-      } else {
-        logger.warn(
-          { data },
-          'Invalid register_group request - missing required fields',
-        );
-      }
-      break;
-
-    case 'install_skill':
-      if (data.package && data.requestId) {
-        const pkg = data.package;
-        const requestId = data.requestId;
-        if (!SAFE_REQUEST_ID_RE.test(requestId)) {
-          logger.warn(
-            { sourceGroup, requestId },
-            'Rejected install_skill request with invalid requestId',
-          );
-          break;
-        }
-        const tasksDir = path.join(DATA_DIR, 'ipc', sourceGroup, 'tasks');
-        const tasksDirResolved = path.resolve(tasksDir);
-        const resultFileName = `install_skill_result_${requestId}.json`;
-        const resultFilePath = path.resolve(tasksDir, resultFileName);
-        if (!resultFilePath.startsWith(`${tasksDirResolved}${path.sep}`)) {
-          logger.warn(
-            { sourceGroup, requestId, resultFilePath },
-            'Rejected install_skill request with unsafe result file path',
-          );
-          break;
-        }
-
-        // Find the user who owns this group
-        const sourceGroupForSkill = Object.values(registeredGroups).find(
-          (g) => g.folder === sourceGroup,
-        );
-        const userId = sourceGroupForSkill?.created_by;
-
-        if (!userId) {
-          logger.warn(
-            { sourceGroup },
-            'Cannot install skill: no user associated with group',
-          );
-          const errorResult = JSON.stringify({
-            success: false,
-            error: 'No user associated with this group',
-          });
-          const tmpPath = `${resultFilePath}.tmp`;
-          fs.mkdirSync(path.dirname(resultFilePath), { recursive: true });
-          fs.writeFileSync(tmpPath, errorResult);
-          fs.renameSync(tmpPath, resultFilePath);
-          break;
-        }
-
-        try {
-          const result = await installSkillForUser(userId, pkg);
-          const tmpPath = `${resultFilePath}.tmp`;
-          fs.mkdirSync(path.dirname(resultFilePath), { recursive: true });
-          fs.writeFileSync(tmpPath, JSON.stringify(result));
-          fs.renameSync(tmpPath, resultFilePath);
-          logger.info(
-            { sourceGroup, userId, pkg, success: result.success },
-            'Skill installation via IPC completed',
-          );
-        } catch (err) {
-          const errorResult = JSON.stringify({
-            success: false,
-            error: err instanceof Error ? err.message : String(err),
-          });
-          const tmpPath = `${resultFilePath}.tmp`;
-          fs.mkdirSync(path.dirname(resultFilePath), { recursive: true });
-          fs.writeFileSync(tmpPath, errorResult);
-          fs.renameSync(tmpPath, resultFilePath);
-          logger.error(
-            { sourceGroup, userId, pkg, err },
-            'Skill installation via IPC failed',
-          );
-        }
-      } else {
-        logger.warn(
-          { data },
-          'Invalid install_skill request - missing required fields',
-        );
-      }
-      break;
-
-    case 'uninstall_skill':
-      if (data.skillId && data.requestId) {
-        const skillId = data.skillId;
-        const requestId = data.requestId;
-        if (!SAFE_REQUEST_ID_RE.test(requestId)) {
-          logger.warn(
-            { sourceGroup, requestId },
-            'Rejected uninstall_skill request with invalid requestId',
-          );
-          break;
-        }
-        const tasksDir = path.join(DATA_DIR, 'ipc', sourceGroup, 'tasks');
-        const tasksDirResolved = path.resolve(tasksDir);
-        const resultFileName = `uninstall_skill_result_${requestId}.json`;
-        const resultFilePath = path.resolve(tasksDir, resultFileName);
-        if (!resultFilePath.startsWith(`${tasksDirResolved}${path.sep}`)) {
-          logger.warn(
-            { sourceGroup, requestId, resultFilePath },
-            'Rejected uninstall_skill request with unsafe result file path',
-          );
-          break;
-        }
-
-        const sourceGroupForUninstall = Object.values(registeredGroups).find(
-          (g) => g.folder === sourceGroup,
-        );
-        const userId = sourceGroupForUninstall?.created_by;
-
-        if (!userId) {
-          logger.warn(
-            { sourceGroup },
-            'Cannot uninstall skill: no user associated with group',
-          );
-          const errorResult = JSON.stringify({
-            success: false,
-            error: 'No user associated with this group',
-          });
-          const tmpPath = `${resultFilePath}.tmp`;
-          fs.mkdirSync(path.dirname(resultFilePath), { recursive: true });
-          fs.writeFileSync(tmpPath, errorResult);
-          fs.renameSync(tmpPath, resultFilePath);
-          break;
-        }
-
-        const result = deleteSkillForUser(userId, skillId);
-        const tmpPath = `${resultFilePath}.tmp`;
-        fs.mkdirSync(path.dirname(resultFilePath), { recursive: true });
-        fs.writeFileSync(tmpPath, JSON.stringify(result));
-        fs.renameSync(tmpPath, resultFilePath);
-        logger.info(
-          { sourceGroup, userId, skillId, success: result.success },
-          'Skill uninstall via IPC completed',
-        );
-      } else {
-        logger.warn(
-          { data },
-          'Invalid uninstall_skill request - missing required fields',
-        );
-      }
-      break;
-
-    case 'send_file':
-      if (data.chatJid && data.filePath && data.fileName) {
-        // Cross-group authorization check (same as send_message)
-        const targetGroup = registeredGroups[data.chatJid];
-        if (
-          !canSendCrossGroupMessage(
-            isAdminHome,
-            isHome,
-            sourceGroup,
-            sourceGroupEntry,
-            targetGroup,
-          )
-        ) {
-          logger.warn(
-            { chatJid: data.chatJid, sourceGroup },
-            'Unauthorized IPC send_file attempt blocked',
-          );
-          break;
-        }
-
-        try {
-          // Resolve to workspace path - IPC sends relative paths from workspace/group
-          const fullPath = path.join(GROUPS_DIR, sourceGroup, data.filePath);
-
-          // Path traversal protection: ensure resolved path stays within workspace
-          const resolvedPath = path.resolve(fullPath);
-          const safeRoot = path.resolve(GROUPS_DIR, sourceGroup) + path.sep;
-          if (!resolvedPath.startsWith(safeRoot)) {
-            logger.warn(
-              { sourceGroup, filePath: data.filePath, resolvedPath },
-              'Path traversal attempt blocked in send_file IPC',
-            );
-            break;
-          }
-
-          // Route to IM: skip for conversation agents (they handle their own IM).
-          const fileImRoute = ipcAgentId
-            ? null
-            : getChannelType(data.chatJid) !== null
-              ? data.chatJid
-              : (activeImReplyRoutes.get(sourceGroup) ?? null);
-          if (fileImRoute) {
-            const imFileName = data.fileName || path.basename(resolvedPath);
-            await retryImOperation('send_file', fileImRoute, () =>
-              imManager.sendFile(fileImRoute, resolvedPath, imFileName),
-            );
-          } else {
-            logger.debug(
-              { chatJid: data.chatJid, sourceGroup },
-              'No IM route for send_file, skipped IM delivery',
-            );
-          }
-          logger.info(
-            {
-              sourceGroup,
-              chatJid: data.chatJid,
-              fileName: data.fileName,
-              imRoute: fileImRoute,
-            },
-            'File sent via IPC',
-          );
-        } catch (err) {
-          logger.error({ err, data }, 'Failed to send file via IPC');
-        }
-      } else {
-        logger.warn(
-          { data },
-          'Invalid send_file request - missing required fields',
-        );
-      }
-      break;
-
-    default:
-      logger.warn({ type: data.type }, 'Unknown IPC task type');
   }
 }
 
@@ -2977,7 +1809,7 @@ async function processAgentConversation(
     }
   };
 
-  ipcWatcherManager?.watchGroup(effectiveGroup.folder);
+  ipcRuntime.watchGroup(effectiveGroup.folder);
   try {
     const executionMode = effectiveGroup.executionMode || 'container';
     const onProcessCb = (proc: ChildProcess, identifier: string) => {
@@ -3285,7 +2117,7 @@ async function processAgentConversation(
       hadError ? lastError : undefined,
     );
 
-    ipcWatcherManager?.unwatchGroup(effectiveGroup.folder);
+    ipcRuntime.unwatchGroup(effectiveGroup.folder);
   }
 }
 
@@ -3606,7 +2438,7 @@ async function main(): Promise<void> {
     }
 
     try {
-      ipcWatcherManager?.closeAll();
+      ipcRuntime.closeAll();
     } catch (err) {
       logger.warn({ err }, 'Error closing IPC watchers');
     }
@@ -4245,7 +3077,7 @@ async function main(): Promise<void> {
       triggerTaskNow(taskId, schedulerDeps);
   }
 
-  startIpcWatcher();
+  ipcRuntime.startIpcWatcher();
   recoverStreamingBuffer();
   recoverPendingMessages();
   recoverConversationAgents();
