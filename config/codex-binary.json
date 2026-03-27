@@ -1,0 +1,9 @@
+{
+  "version": "0.116.0",
+  "releaseTag": "rust-v0.116.0",
+  "releaseRepo": "openai/codex",
+  "assetBasename": "codex",
+  "repoCacheDir": ".happypaw/cache/codex/repo",
+  "hostCacheDir": "data/cache/codex/host",
+  "containerExecutablePath": "/opt/happypaw/bin/codex"
+}

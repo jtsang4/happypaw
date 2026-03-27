@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -32,6 +33,12 @@ const {
   readCodexMcpServersFromSettings,
   mergeCodexMcpServers,
 } = codexConfigModule;
+const {
+  ensurePinnedCodexHostBinary,
+  getPinnedCodexContainerExecutablePath,
+  getPinnedCodexRepoCacheRoot,
+  HAPPYPAW_CODEX_EXECUTABLE_ENV,
+} = await import(path.join(repoRoot, 'dist', 'codex-binary.js'));
 const {
   initDatabase,
   setSession,
@@ -179,5 +186,56 @@ assert.deepEqual(getRuntimeSession('folder-a', 'agent-1'), {
 assert.deepEqual(getAllSessions(), {
   'folder-a': { sessionId: 'thread-123', runtime: 'codex_app_server' },
 });
+
+const hostCacheRoot = path.join(tempRoot, 'host-cache');
+const downloadLog = [];
+const pinnedBinaryFirst = ensurePinnedCodexHostBinary({
+  cacheRoot: hostCacheRoot,
+  downloadArchive: (_url, archivePath) => {
+    downloadLog.push(archivePath);
+    const fixtureArchive = path.join(tempRoot, 'fixture.tar.gz');
+    const fixtureBinary = path.join(tempRoot, 'codex');
+    fs.writeFileSync(fixtureBinary, '#!/bin/sh\necho pinned-codex\n', {
+      mode: 0o755,
+    });
+    execFileSync('tar', ['-czf', fixtureArchive, '-C', tempRoot, 'codex']);
+    fs.copyFileSync(fixtureArchive, archivePath);
+  },
+});
+assert.equal(downloadLog.length, 1);
+assert.equal(pinnedBinaryFirst.downloaded, true);
+assert.ok(fs.existsSync(pinnedBinaryFirst.executablePath));
+assert.match(pinnedBinaryFirst.assetName, /^codex-/);
+assert.ok(
+  pinnedBinaryFirst.executablePath.startsWith(hostCacheRoot),
+  pinnedBinaryFirst.executablePath,
+);
+assert.ok(fs.existsSync(path.join(pinnedBinaryFirst.cacheDir, 'metadata.json')));
+const hostEnv = {
+  [HAPPYPAW_CODEX_EXECUTABLE_ENV]: pinnedBinaryFirst.executablePath,
+};
+assert.equal(
+  hostEnv[HAPPYPAW_CODEX_EXECUTABLE_ENV],
+  pinnedBinaryFirst.executablePath,
+);
+const pinnedBinarySecond = ensurePinnedCodexHostBinary({
+  cacheRoot: hostCacheRoot,
+  downloadArchive: () => {
+    throw new Error('cache reuse should skip download');
+  },
+});
+assert.equal(pinnedBinarySecond.downloaded, false);
+assert.equal(
+  pinnedBinarySecond.executablePath,
+  pinnedBinaryFirst.executablePath,
+);
+assert.equal(
+  getPinnedCodexContainerExecutablePath(),
+  '/opt/happypaw/bin/codex',
+);
+assert.equal(
+  getPinnedCodexRepoCacheRoot(),
+  path.join(repoRoot, '.happypaw', 'cache', 'codex', 'repo'),
+);
 
 console.log('✅ codex home bootstrap checks passed');

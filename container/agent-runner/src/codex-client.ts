@@ -1,5 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 
+const HAPPYPAW_CODEX_EXECUTABLE_ENV = 'HAPPYPAW_CODEX_EXECUTABLE';
+
 export interface CodexJsonRpcError {
   code: number;
   message: string;
@@ -27,6 +29,16 @@ function createRpcError(method: string, error: CodexJsonRpcError): Error {
   const detail =
     error.data === undefined ? '' : ` (${JSON.stringify(error.data)})`;
   return new Error(`${method} failed: ${error.message}${detail}`);
+}
+
+function resolveManagedCodexExecutablePath(env: NodeJS.ProcessEnv | undefined): string {
+  const executablePath = env?.[HAPPYPAW_CODEX_EXECUTABLE_ENV]?.trim();
+  if (!executablePath) {
+    throw new Error(
+      `Missing ${HAPPYPAW_CODEX_EXECUTABLE_ENV}; HappyPaw requires a managed pinned Codex executable path.`,
+    );
+  }
+  return executablePath;
 }
 
 export class CodexAppServerClient {
@@ -57,7 +69,9 @@ export class CodexAppServerClient {
     this.log = options.log;
     this.onNotification = options.onNotification;
     this.onRequest = options.onRequest ?? null;
-    this.proc = spawn('codex', ['app-server'], {
+    const executablePath = resolveManagedCodexExecutablePath(options.env);
+    this.log(`[codex-app-server] executable=${executablePath}`);
+    this.proc = spawn(executablePath, ['app-server'], {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: options.env,
     });

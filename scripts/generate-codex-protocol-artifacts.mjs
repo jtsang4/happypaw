@@ -16,6 +16,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
+import { ensureRepoPinnedCodexBinary } from './pinned-codex-binary.mjs';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..');
@@ -43,9 +45,10 @@ const generatedTsDir = path.join(tempRoot, 'ts');
 const generatedSchemaDir = path.join(tempRoot, 'schema');
 
 try {
-  const codexVersion = runCommand(['--version']).stdout.trim();
-  runCommand(['app-server', 'generate-ts', '--out', generatedTsDir]);
-  runCommand(['app-server', 'generate-json-schema', '--out', generatedSchemaDir]);
+  const pinnedCodex = ensureRepoPinnedCodexBinary();
+  const codexVersion = runCommand(pinnedCodex.executablePath, ['--version']).stdout.trim();
+  runCommand(pinnedCodex.executablePath, ['app-server', 'generate-ts', '--out', generatedTsDir]);
+  runCommand(pinnedCodex.executablePath, ['app-server', 'generate-json-schema', '--out', generatedSchemaDir]);
 
   const metadata = buildMetadata({
     codexVersion,
@@ -116,8 +119,8 @@ try {
   rmSync(tempRoot, { recursive: true, force: true });
 }
 
-function runCommand(args) {
-  const result = spawnSync('codex', args, {
+function runCommand(executablePath, args) {
+  const result = spawnSync(executablePath, args, {
     cwd: repoRoot,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -129,7 +132,7 @@ function runCommand(args) {
     const stderr = result.stderr?.trim();
     const stdout = result.stdout?.trim();
     const detail = stderr || stdout || `exit code ${result.status}`;
-    throw new Error(`codex ${args.join(' ')} failed: ${detail}`);
+    throw new Error(`${executablePath} ${args.join(' ')} failed: ${detail}`);
   }
   return result;
 }

@@ -230,6 +230,7 @@ const child = spawn(
       PATH: `${binDir}:${process.env.PATH}`,
       HOME: homeDir,
       CODEX_HOME: codexHome,
+      HAPPYPAW_CODEX_EXECUTABLE: fakeCodexPath,
       HAPPYPAW_WORKSPACE_GROUP: groupDir,
       HAPPYPAW_WORKSPACE_GLOBAL: globalDir,
       HAPPYPAW_WORKSPACE_MEMORY: memoryDir,

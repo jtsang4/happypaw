@@ -23,6 +23,7 @@ endif
 
 dev: ## 启动前后端（首次自动安装依赖和构建容器镜像）
 	@if [ ! -d node_modules ] || [ package.json -nt node_modules ] || [ web/package.json -nt web/node_modules ] || [ container/agent-runner/package.json -nt container/agent-runner/node_modules ]; then echo "📦 依赖有更新，安装依赖..."; $(MAKE) install; fi
+	@$(PKG) run prepare:pinned-codex
 	@$(MAKE) _ensure-docker-image
 	@$(PKG) --prefix container/agent-runner run build --silent 2>/dev/null || $(PKG) --prefix container/agent-runner run build
 	@echo "🚀 使用 $(PKG) 启动..."
@@ -37,6 +38,7 @@ dev-web: ## 仅启动前端
 # ─── Build ───────────────────────────────────────────────────
 
 build: sync-types ## 编译前后端及 agent-runner
+	$(PKG) run prepare:pinned-codex
 	$(PKG) run build:all
 	@touch .build-sentinel
 
@@ -50,6 +52,7 @@ build-web: ## 仅编译前端
 
 start: ensure-latest-sdk ## 一键启动生产环境
 	@if [ ! -d node_modules ] || [ package.json -nt node_modules ] || [ web/package.json -nt web/node_modules ] || [ container/agent-runner/package.json -nt container/agent-runner/node_modules ]; then echo "📦 依赖有更新，安装依赖..."; $(MAKE) install; fi
+	@$(PKG) run prepare:pinned-codex
 	@$(MAKE) _ensure-docker-image
 ifeq ($(HAS_BUN),1)
 	@NEED_SYNC=0; \
@@ -190,6 +193,7 @@ ensure-latest-sdk: ## 启动前自动检测并更新 SDK（有新版才更新）
 
 install: ## 安装全部依赖并编译 agent-runner
 	$(PKG) install
+	$(PKG) run prepare:pinned-codex
 	@# node-pty 的 spawn-helper 预构建二进制可能缺少可执行权限，导致 PTY 模式失败
 	@chmod +x node_modules/node-pty/prebuilds/darwin-arm64/spawn-helper 2>/dev/null || true
 	cd container/agent-runner && $(PKG) install

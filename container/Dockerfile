@@ -3,6 +3,11 @@
 
 FROM node:22-slim
 
+ARG CODEX_VERSION=0.116.0
+ARG CODEX_RELEASE_TAG=rust-v0.116.0
+ARG CODEX_EXECUTABLE_PATH=/opt/happypaw/bin/codex
+ARG TARGETARCH
+
 # Copy uv from official image (multi-arch, no extra download)
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uvx /usr/local/bin/uvx
@@ -92,6 +97,7 @@ ENV LC_ALL=en_US.UTF-8
 # Set Chromium path for agent-browser
 ENV AGENT_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium
 ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
+ENV HAPPYPAW_CODEX_EXECUTABLE=${CODEX_EXECUTABLE_PATH}
 
 # Allow pip install without venv (Debian 12+ PEP 668) and add user bin to PATH
 ENV PIP_BREAK_SYSTEM_PACKAGES=1
@@ -106,12 +112,26 @@ COPY agent-runner/package.json ./
 # CACHEBUST after COPY ensures both global and local npm install are cache-busted
 # (COPY caches on file content hash, which blocks ARG invalidation propagation)
 ARG CACHEBUST=1
-RUN npm install -g agent-browser @openai/codex@0.116.0
+RUN npm install -g agent-browser
 RUN npm install
+
+RUN mkdir -p "$(dirname "${CODEX_EXECUTABLE_PATH}")" && \
+    case "${TARGETARCH:-$(dpkg --print-architecture)}" in \
+      arm64) CODEX_NPM_TAG="linux-arm64"; CODEX_VENDOR_TARGET="aarch64-unknown-linux-musl" ;; \
+      amd64) CODEX_NPM_TAG="linux-x64"; CODEX_VENDOR_TARGET="x86_64-unknown-linux-musl" ;; \
+      *) echo "Unsupported TARGETARCH for pinned Codex: ${TARGETARCH:-unknown}" >&2; exit 1 ;; \
+    esac && \
+    CODEX_EXTRACT_DIR="$(mktemp -d)" && \
+    curl -fsSL -o "${CODEX_EXTRACT_DIR}/codex.tgz" \
+      "https://github.com/openai/codex/releases/download/${CODEX_RELEASE_TAG}/codex-npm-${CODEX_NPM_TAG}-${CODEX_VERSION}.tgz" && \
+    tar -xzf "${CODEX_EXTRACT_DIR}/codex.tgz" -C "${CODEX_EXTRACT_DIR}" && \
+    cp "${CODEX_EXTRACT_DIR}/package/vendor/${CODEX_VENDOR_TARGET}/codex/codex" "${CODEX_EXECUTABLE_PATH}" && \
+    rm -rf "${CODEX_EXTRACT_DIR}" && \
+    chmod 755 "${CODEX_EXECUTABLE_PATH}" && \
+    "${CODEX_EXECUTABLE_PATH}" --version
 
 # Install feishu-cli (pre-compiled binary from GitHub Releases)
 # Non-fatal: GitHub API rate limits may cause transient failures
-ARG TARGETARCH
 RUN ARCH="${TARGETARCH:-$(dpkg --print-architecture)}"; \
     VERSION=$(curl -fsSL https://api.github.com/repos/riba2534/feishu-cli/releases/latest 2>/dev/null | jq -r .tag_name 2>/dev/null); \
     if [ -n "$VERSION" ] && [ "$VERSION" != "null" ]; then \

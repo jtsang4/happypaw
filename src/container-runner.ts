@@ -9,6 +9,11 @@ import path from 'path';
 
 import { CONTAINER_IMAGE, DATA_DIR, GROUPS_DIR } from './config.js';
 import {
+  ensurePinnedCodexHostBinary,
+  HAPPYPAW_CODEX_EXECUTABLE_ENV,
+  getPinnedCodexContainerExecutablePath,
+} from './codex-binary.js';
+import {
   prepareCodexHome,
   type PrepareCodexHomeOptions,
 } from './codex-config.js';
@@ -57,6 +62,9 @@ const REQUIRED_SETTINGS_ENV: Record<string, string> = {
   CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD: '1',
   CLAUDE_CODE_DISABLE_AUTO_MEMORY: '0',
 };
+
+const PINNED_CONTAINER_CODEX_EXECUTABLE =
+  getPinnedCodexContainerExecutablePath();
 
 /** Read existing settings.json, deep-merge required env keys and mcpServers, write only if changed */
 function ensureSettingsJson(settingsFile: string): void {
@@ -632,10 +640,11 @@ export async function runContainerAgent(
       {
         group: group.name,
         containerName,
+        codexExecutablePath: PINNED_CONTAINER_CODEX_EXECUTABLE,
         mountCount: mounts.length,
         isMain: input.isMain,
       },
-      'Spawning container agent',
+      'Spawning container agent with managed pinned Codex executable',
     );
 
     const logsDir = path.join(GROUPS_DIR, group.folder, 'logs');
@@ -1144,6 +1153,23 @@ export async function runHostAgent(
     hostEnv['HAPPYPAW_WORKSPACE_IPC'] = groupIpcDir;
     hostEnv['HAPPYCLAW_WORKSPACE_IPC'] = groupIpcDir;
     hostEnv['CODEX_HOME'] = groupCodexHomeDir;
+
+    const pinnedCodex = ensurePinnedCodexHostBinary({
+      logger: (message) =>
+        logger.info({ group: group.name, groupFolder: group.folder }, message),
+    });
+    hostEnv[HAPPYPAW_CODEX_EXECUTABLE_ENV] = pinnedCodex.executablePath;
+    logger.info(
+      {
+        group: group.name,
+        groupFolder: group.folder,
+        codexExecutablePath: pinnedCodex.executablePath,
+        codexDownloaded: pinnedCodex.downloaded,
+        codexAssetName: pinnedCodex.assetName,
+        codexVersion: pinnedCodex.version,
+      },
+      'Resolved managed pinned Codex host executable',
+    );
 
     // 6. 编译检查
     const projectRoot = process.cwd();

@@ -579,6 +579,7 @@ async function runScenario(name, sessionId, options = {}) {
   process.env.PATH = `${binDir}:${process.env.PATH}`;
   process.env.HOME = homeDir;
   process.env.CODEX_HOME = codeHome;
+  process.env.HAPPYPAW_CODEX_EXECUTABLE = fakeCodex;
   process.env.HAPPYPAW_WORKSPACE_GROUP = groupDir;
   process.env.HAPPYPAW_WORKSPACE_GLOBAL = globalDir;
   process.env.HAPPYPAW_WORKSPACE_MEMORY = memoryDir;
