@@ -28,6 +28,29 @@ function containerEnvPath(folder: string): string {
   return path.join(CONTAINER_ENV_DIR, `${folder}.json`);
 }
 
+function sanitizeContainerCustomEnv(
+  input: Record<string, string> | undefined,
+): Record<string, string> | undefined {
+  if (!input) return undefined;
+
+  const cleanEnv: Record<string, string> = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (!ENV_KEY_RE.test(key)) {
+      logger.warn({ key }, 'Skipping invalid env key in container custom env');
+      continue;
+    }
+    if (DANGEROUS_ENV_VARS.has(key)) {
+      logger.warn(
+        { key },
+        'Blocked reserved env variable in container custom env',
+      );
+      continue;
+    }
+    cleanEnv[key] = sanitizeEnvValue(value);
+  }
+  return cleanEnv;
+}
+
 export function getContainerEnvConfig(folder: string): ContainerEnvConfig {
   const filePath = containerEnvPath(folder);
   try {
@@ -45,6 +68,7 @@ export function getContainerEnvConfig(folder: string): ContainerEnvConfig {
         stored.anthropicModel = stored[legacyModelKey];
         delete stored[legacyModelKey];
       }
+      stored.customEnv = sanitizeContainerCustomEnv(stored.customEnv) ?? {};
       return stored;
     }
   } catch (err) {
@@ -75,20 +99,7 @@ export function saveContainerEnvConfig(
     );
   if (sanitized.anthropicModel)
     sanitized.anthropicModel = sanitizeEnvValue(sanitized.anthropicModel);
-  if (sanitized.customEnv) {
-    const cleanEnv: Record<string, string> = {};
-    for (const [k, v] of Object.entries(sanitized.customEnv)) {
-      if (DANGEROUS_ENV_VARS.has(k)) {
-        logger.warn(
-          { key: k },
-          'Rejected dangerous env variable in saveContainerEnvConfig',
-        );
-        continue;
-      }
-      cleanEnv[k] = sanitizeEnvValue(v);
-    }
-    sanitized.customEnv = cleanEnv;
-  }
+  sanitized.customEnv = sanitizeContainerCustomEnv(sanitized.customEnv) ?? {};
 
   fs.mkdirSync(CONTAINER_ENV_DIR, { recursive: true });
   const tmp = `${containerEnvPath(folder)}.tmp`;
@@ -124,7 +135,7 @@ export function toPublicContainerEnvConfig(
     anthropicApiKeyMasked: maskSecret(config.anthropicApiKey || ''),
     claudeCodeOauthTokenMasked: maskSecret(config.claudeCodeOauthToken || ''),
     anthropicModel: config.anthropicModel || '',
-    customEnv: config.customEnv || {},
+    customEnv: sanitizeContainerCustomEnv(config.customEnv) || {},
   };
 }
 
@@ -172,25 +183,10 @@ export function buildContainerEnvLines(
     );
   }
 
-  if (override.customEnv) {
-    for (const [key, value] of Object.entries(override.customEnv)) {
-      if (!key || value === undefined) continue;
-      if (!ENV_KEY_RE.test(key)) {
-        logger.warn(
-          { key },
-          'Skipping invalid env key in buildContainerEnvLines',
-        );
-        continue;
-      }
-      if (DANGEROUS_ENV_VARS.has(key)) {
-        logger.warn(
-          { key },
-          'Blocked dangerous env variable in buildContainerEnvLines',
-        );
-        continue;
-      }
-      const sanitized = value.replace(/[\r\n\0]/g, '');
-      lines.push(`${key}=${sanitized}`);
+  const safeCustomEnv = sanitizeContainerCustomEnv(override.customEnv);
+  if (safeCustomEnv) {
+    for (const [key, value] of Object.entries(safeCustomEnv)) {
+      lines.push(`${key}=${value}`);
     }
   }
 

@@ -22,11 +22,19 @@ const codexConfigModule = await import(
 );
 const dbModule = await import(path.join(repoRoot, 'dist', 'db.js'));
 
-const { getCodexProviderConfig } = runtimeConfigModule;
+const {
+  getClaudeProviderConfig,
+  getCodexProviderConfig,
+  buildContainerEnvLines,
+  getContainerEnvConfig,
+  saveContainerEnvConfig,
+  shellQuoteEnvLines,
+} = runtimeConfigModule;
 const {
   INTERNAL_MCP_BRIDGE_ID,
   CURRENT_PRODUCT_ID,
   LEGACY_PRODUCT_ID,
+  toLegacyProductEnvToken,
 } = await import(path.join(repoRoot, 'dist', 'legacy-product.js'));
 const {
   prepareCodexHome,
@@ -171,6 +179,68 @@ assert.ok(merged.userHttp);
 assert.ok(merged[INTERNAL_MCP_BRIDGE_ID]);
 assert.equal(merged[INTERNAL_MCP_BRIDGE_ID].command, 'node');
 assert.equal(merged[LEGACY_PRODUCT_ID], undefined);
+
+const legacyCodexExecutableEnv = toLegacyProductEnvToken(
+  HAPPYPAW_CODEX_EXECUTABLE_ENV,
+);
+saveContainerEnvConfig('folder-env', {
+  customEnv: {
+    SAFE_FLAG: '1',
+    [HAPPYPAW_CODEX_EXECUTABLE_ENV]: '/tmp/rogue-codex',
+    [legacyCodexExecutableEnv]: '/tmp/rogue-legacy-codex',
+  },
+});
+assert.deepEqual(getContainerEnvConfig('folder-env').customEnv, {
+  SAFE_FLAG: '1',
+});
+
+const inheritedReservedEnvFolder = 'legacy-reserved-env';
+const inheritedReservedEnvPath = path.join(
+  tempRoot,
+  'data',
+  'config',
+  'container-env',
+  `${inheritedReservedEnvFolder}.json`,
+);
+fs.mkdirSync(path.dirname(inheritedReservedEnvPath), { recursive: true });
+fs.writeFileSync(
+  inheritedReservedEnvPath,
+  JSON.stringify(
+    {
+      customEnv: {
+        SAFE_FLAG: '1',
+        [HAPPYPAW_CODEX_EXECUTABLE_ENV]: '/tmp/persisted-rogue-codex',
+        [legacyCodexExecutableEnv]: '/tmp/persisted-rogue-legacy-codex',
+      },
+    },
+    null,
+    2,
+  ),
+);
+const inheritedReservedEnv = getContainerEnvConfig(inheritedReservedEnvFolder);
+assert.deepEqual(inheritedReservedEnv.customEnv, {
+  SAFE_FLAG: '1',
+});
+const containerEnvLines = buildContainerEnvLines(
+  getClaudeProviderConfig(),
+  inheritedReservedEnv,
+  undefined,
+  providerConfig,
+);
+assert.ok(containerEnvLines.includes('SAFE_FLAG=1'));
+assert.ok(
+  !containerEnvLines.some((line) =>
+    line.startsWith(`${HAPPYPAW_CODEX_EXECUTABLE_ENV}=`),
+  ),
+);
+assert.ok(
+  !containerEnvLines.some((line) =>
+    line.startsWith(`${legacyCodexExecutableEnv}=`),
+  ),
+);
+const quotedContainerEnv = shellQuoteEnvLines(containerEnvLines).join('\n');
+assert.ok(!quotedContainerEnv.includes(HAPPYPAW_CODEX_EXECUTABLE_ENV));
+assert.ok(!quotedContainerEnv.includes(legacyCodexExecutableEnv));
 
 initDatabase();
 setSession('folder-a', 'thread-123', undefined, 'codex_app_server');

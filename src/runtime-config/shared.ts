@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import path from 'path';
 
 import { ASSISTANT_NAME, DATA_DIR } from '../config.js';
+import { HAPPYPAW_CODEX_EXECUTABLE_ENV } from '../codex-binary.js';
 import {
   LEGACY_PRODUCT_NAME,
   toLegacyProductEnvToken,
@@ -65,6 +66,18 @@ export const RESERVED_CLAUDE_ENV_KEYS = new Set([
   'ANTHROPIC_AUTH_TOKEN',
   'ANTHROPIC_MODEL',
 ]);
+export const RESERVED_INFRASTRUCTURE_ENV_VARS = new Set([
+  'HAPPYPAW_WORKSPACE_GROUP',
+  'HAPPYPAW_WORKSPACE_GLOBAL',
+  'HAPPYPAW_WORKSPACE_IPC',
+  'HAPPYPAW_WORKSPACE_MEMORY',
+  HAPPYPAW_CODEX_EXECUTABLE_ENV,
+  toLegacyProductEnvToken('HAPPYPAW_WORKSPACE_GROUP'),
+  toLegacyProductEnvToken('HAPPYPAW_WORKSPACE_GLOBAL'),
+  toLegacyProductEnvToken('HAPPYPAW_WORKSPACE_IPC'),
+  toLegacyProductEnvToken(HAPPYPAW_CODEX_EXECUTABLE_ENV),
+  'CLAUDE_CONFIG_DIR',
+]);
 export const DANGEROUS_ENV_VARS = new Set([
   'LD_PRELOAD',
   'LD_LIBRARY_PATH',
@@ -97,14 +110,7 @@ export const DANGEROUS_ENV_VARS = new Set([
   'TMPDIR',
   'TEMP',
   'TMP',
-  'HAPPYPAW_WORKSPACE_GROUP',
-  'HAPPYPAW_WORKSPACE_GLOBAL',
-  'HAPPYPAW_WORKSPACE_IPC',
-  'HAPPYPAW_WORKSPACE_MEMORY',
-  toLegacyProductEnvToken('HAPPYPAW_WORKSPACE_GROUP'),
-  toLegacyProductEnvToken('HAPPYPAW_WORKSPACE_GLOBAL'),
-  toLegacyProductEnvToken('HAPPYPAW_WORKSPACE_IPC'),
-  'CLAUDE_CONFIG_DIR',
+  ...RESERVED_INFRASTRUCTURE_ENV_VARS,
 ]);
 export const MAX_CUSTOM_ENV_ENTRIES = 50;
 export const MAX_THIRD_PARTY_PROFILES = 20;
