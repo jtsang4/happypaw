@@ -27,7 +27,15 @@ async function main() {
     'chat',
     'create-flow-options.ts',
   );
-  const chatStorePath = path.join(repoRoot, 'web', 'src', 'stores', 'chat.ts');
+  const groupActionsPath = path.join(
+    repoRoot,
+    'web',
+    'src',
+    'stores',
+    'chat',
+    'actions',
+    'group-actions.ts',
+  );
   const groupDetailPath = path.join(
     repoRoot,
     'web',
@@ -42,20 +50,20 @@ async function main() {
     groupsRouteSource,
     createDialogSource,
     createFlowOptionsSource,
-    chatStoreSource,
+    groupActionsSource,
     groupDetailSource,
   ] = await Promise.all([
     readFile(schemasPath, 'utf8'),
     readFile(groupsRoutePath, 'utf8'),
     readFile(createDialogPath, 'utf8'),
     readFile(createFlowOptionsPath, 'utf8'),
-    readFile(chatStorePath, 'utf8'),
+    readFile(groupActionsPath, 'utf8'),
     readFile(groupDetailPath, 'utf8'),
   ]);
 
   assert.match(
     schemasSource,
-    /runtime:\s*z\.enum\(\['claude_sdk', 'codex_app_server'\]\)\.nullable\(\)\.optional\(\)/,
+    /runtime:\s*z\.enum\(\['codex_app_server'\]\)\.nullable\(\)\.optional\(\)/,
     'GroupPatchSchema allows null to clear a runtime override',
   );
   assert.match(
@@ -84,7 +92,7 @@ async function main() {
     'buildCreateFlowOptions omits runtime when inheriting the system default',
   );
   assert.match(
-    chatStoreSource,
+    groupActionsSource,
     /if \(options\?\.runtime\) body\.runtime = options\.runtime;/,
     'chat store only sends runtime when an explicit override is chosen',
   );
