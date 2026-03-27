@@ -1048,6 +1048,46 @@ assert.ok(
   'runtime surfaces actionable status when the reserved bridge is missing required tools',
 );
 
+const nonHomeBridgeWithoutMemoryAppend = await runScenario(
+  'non-home-bridge-without-memory-append',
+  undefined,
+  {
+    mcpStatuses: [
+      {
+        name: 'happypaw',
+        authStatus: 'bearerToken',
+        tools: Object.fromEntries(
+          [
+            'cancel_task',
+            'get_context',
+            'list_tasks',
+            'memory_get',
+            'memory_search',
+            'pause_task',
+            'resume_task',
+            'schedule_task',
+            'send_file',
+            'send_image',
+            'send_message',
+          ].map((toolName) => [toolName, { name: toolName, inputSchema: {} }]),
+        ),
+        resources: [],
+        resourceTemplates: [],
+      },
+    ],
+  },
+);
+assert.equal(
+  nonHomeBridgeWithoutMemoryAppend.error,
+  undefined,
+  'non-home runtimes do not require memory_append during reserved bridge health checks',
+);
+assert.ok(
+  nonHomeBridgeWithoutMemoryAppend.requestOrder.includes('thread/start') &&
+    nonHomeBridgeWithoutMemoryAppend.requestOrder.includes('turn/start'),
+  'non-home runtimes continue into thread and turn startup when memory_append is absent',
+);
+
 const bridgeTempRoot = fs.mkdtempSync(
   path.join(os.tmpdir(), 'happypaw-codex-bridge-'),
 );

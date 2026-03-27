@@ -53,48 +53,8 @@ import {
   type CloseHandlerContext,
 } from './agent-output-parser.js';
 
-/**
- * Required env flags for settings.json — 每次容器/进程启动时强制写入，不可被用户覆盖。
- * 合并模式：仅覆盖这些 key，保留用户自定义的其他 key。
- */
-const REQUIRED_SETTINGS_ENV: Record<string, string> = {
-  CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
-  CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD: '1',
-  CLAUDE_CODE_DISABLE_AUTO_MEMORY: '0',
-};
-
 const PINNED_CONTAINER_CODEX_EXECUTABLE =
   getPinnedCodexContainerExecutablePath();
-
-/** Read existing settings.json, deep-merge required env keys and mcpServers, write only if changed */
-function ensureSettingsJson(settingsFile: string): void {
-  let existing: Record<string, unknown> = {};
-  try {
-    if (fs.existsSync(settingsFile)) {
-      existing = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
-    }
-  } catch {
-    /* ignore parse errors, overwrite */
-  }
-
-  const existingEnv = (existing.env as Record<string, string>) || {};
-  const mergedEnv = { ...existingEnv, ...REQUIRED_SETTINGS_ENV };
-  const merged: Record<string, unknown> = { ...existing, env: mergedEnv };
-
-  const newContent = JSON.stringify(merged, null, 2) + '\n';
-
-  // Only write when content actually changed
-  try {
-    if (fs.existsSync(settingsFile)) {
-      const current = fs.readFileSync(settingsFile, 'utf8');
-      if (current === newContent) return;
-    }
-  } catch {
-    /* write anyway */
-  }
-
-  fs.writeFileSync(settingsFile, newContent, { mode: 0o644 });
-}
 
 export interface ContainerInput {
   prompt: string;
@@ -244,14 +204,17 @@ function buildCodexBridgeCommand(executionMode: 'container' | 'host'): {
   };
 }
 
-function getWorkspaceSettingsPath(workspaceRoot: string): string {
-  return path.join(workspaceRoot, '.claude', 'settings.json');
+function getExistingWorkspaceSettingsPath(
+  workspaceRoot: string,
+): string | undefined {
+  const settingsPath = path.join(workspaceRoot, '.claude', 'settings.json');
+  return fs.existsSync(settingsPath) ? settingsPath : undefined;
 }
 
 function ensureCodexSessionHome(
   group: RegisteredGroup,
   runtimeWorkspaceDir: string,
-  workspaceSettingsPath: string,
+  workspaceSettingsPath: string | undefined,
   codexHomeDir: string,
   executionMode: 'container' | 'host',
   bridgeContext: {
@@ -419,12 +382,15 @@ function buildVolumeMounts(
   });
 
   const groupCodexHomeDir = runtimeScopePaths.codexHomeDir;
+  const workspaceSettingsPath =
+    getExistingWorkspaceSettingsPath(workspaceHostDir);
   mkdirForContainer(groupCodexHomeDir);
-  ensureSettingsJson(getWorkspaceSettingsPath(workspaceHostDir));
   ensureCodexSessionHome(
     group,
     '/workspace/group',
-    '/workspace/group/.claude/settings.json',
+    workspaceSettingsPath
+      ? '/workspace/group/.claude/settings.json'
+      : undefined,
     groupCodexHomeDir,
     'container',
     {
@@ -598,6 +564,8 @@ export async function runContainerAgent(
 
   const groupDir = path.join(GROUPS_DIR, group.folder);
   mkdirForContainer(groupDir);
+  const logsDir = path.join(groupDir, 'logs');
+  fs.mkdirSync(logsDir, { recursive: true });
 
   // ─── Provider Pool selection ───
   const poolResult = trySelectPoolProvider(group.folder);
@@ -646,9 +614,6 @@ export async function runContainerAgent(
       },
       'Spawning container agent with managed pinned Codex executable',
     );
-
-    const logsDir = path.join(GROUPS_DIR, group.folder, 'logs');
-    fs.mkdirSync(logsDir, { recursive: true });
 
     const result = await new Promise<ContainerOutput>((resolve) => {
       const container = spawn('docker', containerArgs, {
@@ -1024,12 +989,12 @@ export async function runHostAgent(
   const groupCodexHomeDir = runtimeScopePaths.codexHomeDir;
   fs.mkdirSync(groupCodexHomeDir, { recursive: true });
 
-  // 3. 确保工作区 settings.json 存在，并生成隔离的 Codex home
-  ensureSettingsJson(getWorkspaceSettingsPath(groupDir));
+  // 3. 生成隔离的 Codex home；仅在工作区显式配置了 legacy settings.json 时读取其 MCP 定义
+  const workspaceSettingsPath = getExistingWorkspaceSettingsPath(groupDir);
   ensureCodexSessionHome(
     group,
     groupDir,
-    getWorkspaceSettingsPath(groupDir),
+    workspaceSettingsPath,
     groupCodexHomeDir,
     'host',
     {

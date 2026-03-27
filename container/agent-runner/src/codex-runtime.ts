@@ -20,11 +20,10 @@ const LEGACY_MCP_SERVER_NAME = ['happy', 'claw'].join('');
 const LEGACY_MCP_TOOL_PREFIX = ['mcp', LEGACY_MCP_SERVER_NAME].join('__');
 const INTERNAL_MCP_BRIDGE_STATUS_NAME =
   process.env.HAPPYPAW_MCP_SERVER_ID?.trim() || INTERNAL_MCP_BRIDGE_ID;
-const REQUIRED_MCP_BRIDGE_TOOLS = [
+const REQUIRED_MCP_BRIDGE_BASE_TOOLS = [
   'cancel_task',
   'get_context',
   'list_tasks',
-  'memory_append',
   'memory_get',
   'memory_search',
   'pause_task',
@@ -34,6 +33,7 @@ const REQUIRED_MCP_BRIDGE_TOOLS = [
   'send_image',
   'send_message',
 ];
+const REQUIRED_MCP_BRIDGE_HOME_ONLY_TOOLS = ['memory_append'];
 const MCP_SERVER_STATUS_PAGE_LIMIT = 100;
 const MCP_SERVER_STATUS_PAGE_MAX = 20;
 
@@ -820,7 +820,11 @@ async function verifyInternalMcpBridgeHealth(options: {
     throw new Error(message);
   }
 
-  const missingTools = REQUIRED_MCP_BRIDGE_TOOLS.filter(
+  const requiredTools = [
+    ...REQUIRED_MCP_BRIDGE_BASE_TOOLS,
+    ...(containerInput.isHome ? REQUIRED_MCP_BRIDGE_HOME_ONLY_TOOLS : []),
+  ];
+  const missingTools = requiredTools.filter(
     (toolName) => !bridgeStatus.tools.includes(toolName),
   );
   if (missingTools.length > 0) {
