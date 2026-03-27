@@ -123,6 +123,15 @@ interface ClaudeConfigAuditEntry {
   metadata?: Record<string, unknown>;
 }
 
+function sanitizeProviderCustomEnv(
+  customEnv: Record<string, string>,
+): Record<string, string> {
+  return sanitizeCustomEnvMap(customEnv, {
+    skipReservedClaudeKeys: true,
+    skipReservedInfrastructureKeys: true,
+  });
+}
+
 function normalizeConfig(
   input: Omit<ClaudeProviderConfig, 'updatedAt'>,
 ): Omit<ClaudeProviderConfig, 'updatedAt'> {
@@ -171,9 +180,7 @@ function readLegacyConfig(
 function toStoredProfile(
   profile: ClaudeThirdPartyProfile,
 ): StoredClaudeThirdPartyProfileV1 {
-  const sanitizedEnv = sanitizeCustomEnvMap(profile.customEnv || {}, {
-    skipReservedClaudeKeys: true,
-  });
+  const sanitizedEnv = sanitizeProviderCustomEnv(profile.customEnv || {});
   return {
     id: normalizeProfileId(profile.id),
     name: normalizeProfileName(profile.name),
@@ -212,9 +219,7 @@ function fromStoredProfile(
         '',
     ),
     updatedAt: stored.updatedAt || null,
-    customEnv: sanitizeCustomEnvMap(stored.customEnv || {}, {
-      skipReservedClaudeKeys: true,
-    }),
+    customEnv: sanitizeProviderCustomEnv(stored.customEnv || {}),
   };
 }
 
@@ -280,9 +285,9 @@ function normalizeStoredState(
 
   const officialSecrets = normalizeOfficialSecrets(state.officialSecrets);
   const officialMode = isOfficialClaudeMode(state.activeProfileId);
-  let officialCustomEnv = sanitizeCustomEnvMap(state.officialCustomEnv || {}, {
-    skipReservedClaudeKeys: true,
-  });
+  let officialCustomEnv = sanitizeProviderCustomEnv(
+    state.officialCustomEnv || {},
+  );
 
   const allEmpty =
     Object.keys(officialCustomEnv).length === 0 &&
@@ -295,9 +300,7 @@ function normalizeStoredState(
         const parsed = JSON.parse(
           fs.readFileSync(CLAUDE_CUSTOM_ENV_FILE, 'utf-8'),
         ) as { customEnv?: Record<string, string> };
-        const legacyEnv = sanitizeCustomEnvMap(parsed.customEnv || {}, {
-          skipReservedClaudeKeys: true,
-        });
+        const legacyEnv = sanitizeProviderCustomEnv(parsed.customEnv || {});
         if (Object.keys(legacyEnv).length > 0) {
           if (officialMode) {
             officialCustomEnv = legacyEnv;
@@ -488,9 +491,7 @@ function toStoredProviderV4(provider: UnifiedProvider): StoredProviderV4 {
     claudeCodeOauthToken: provider.claudeCodeOauthToken || '',
     claudeOAuthCredentials: provider.claudeOAuthCredentials ?? null,
   };
-  const sanitizedEnv = sanitizeCustomEnvMap(provider.customEnv || {}, {
-    skipReservedClaudeKeys: true,
-  });
+  const sanitizedEnv = sanitizeProviderCustomEnv(provider.customEnv || {});
   return {
     id: provider.id,
     name: provider.name,
@@ -521,9 +522,7 @@ function fromStoredProviderV4(stored: StoredProviderV4): UnifiedProvider {
     anthropicApiKey: secrets.anthropicApiKey || '',
     claudeCodeOauthToken: secrets.claudeCodeOauthToken || '',
     claudeOAuthCredentials: secrets.claudeOAuthCredentials ?? null,
-    customEnv: sanitizeCustomEnvMap(stored.customEnv || {}, {
-      skipReservedClaudeKeys: true,
-    }),
+    customEnv: sanitizeProviderCustomEnv(stored.customEnv || {}),
     updatedAt: stored.updatedAt || '',
   };
 }
@@ -759,9 +758,7 @@ export function createProvider(input: {
       ? normalizeSecret(input.claudeCodeOauthToken, 'claudeCodeOauthToken')
       : '',
     claudeOAuthCredentials: input.claudeOAuthCredentials ?? null,
-    customEnv: sanitizeCustomEnvMap(input.customEnv || {}, {
-      skipReservedClaudeKeys: true,
-    }),
+    customEnv: sanitizeProviderCustomEnv(input.customEnv || {}),
     updatedAt: now,
   };
 
@@ -800,9 +797,7 @@ export function updateProvider(
       : {}),
     ...(patch.customEnv !== undefined
       ? {
-          customEnv: sanitizeCustomEnvMap(patch.customEnv, {
-            skipReservedClaudeKeys: true,
-          }),
+          customEnv: sanitizeProviderCustomEnv(patch.customEnv),
         }
       : {}),
     ...(patch.weight !== undefined
@@ -1327,9 +1322,7 @@ export function createClaudeThirdPartyProfile(input: {
     ),
     anthropicModel: normalizeModel(input.anthropicModel ?? ''),
     updatedAt: now,
-    customEnv: sanitizeCustomEnvMap(input.customEnv || {}, {
-      skipReservedClaudeKeys: true,
-    }),
+    customEnv: sanitizeProviderCustomEnv(input.customEnv || {}),
   };
 
   const merged = buildConfig(
@@ -1392,9 +1385,7 @@ export function updateClaudeThirdPartyProfile(
         : decoded.anthropicModel,
     customEnv:
       patch.customEnv !== undefined
-        ? sanitizeCustomEnvMap(patch.customEnv, {
-            skipReservedClaudeKeys: true,
-          })
+        ? sanitizeProviderCustomEnv(patch.customEnv)
         : decoded.customEnv,
     updatedAt: new Date().toISOString(),
   };
@@ -1573,7 +1564,9 @@ export function buildClaudeEnvLines(
     );
   }
 
-  const customEnv = profileCustomEnv ?? getActiveProfileCustomEnv();
+  const customEnv = sanitizeProviderCustomEnv(
+    profileCustomEnv ?? getActiveProfileCustomEnv(),
+  );
   for (const [key, value] of Object.entries(customEnv)) {
     lines.push(`${key}=${value.replace(/[\r\n\0]/g, '')}`);
   }
@@ -1588,9 +1581,7 @@ export function getActiveProfileCustomEnv(): Record<string, string> {
   const enabled = state.providers.find((p) => p.enabled) || state.providers[0];
   if (!enabled) return {};
 
-  return sanitizeCustomEnvMap(enabled.customEnv || {}, {
-    skipReservedClaudeKeys: true,
-  });
+  return sanitizeProviderCustomEnv(enabled.customEnv || {});
 }
 
 export function resolveProfileToConfig(
@@ -1637,9 +1628,7 @@ export function getCustomEnvForProfile(
   if (!state) return {};
 
   if (isOfficialClaudeMode(profileId)) {
-    return sanitizeCustomEnvMap(state.officialCustomEnv || {}, {
-      skipReservedClaudeKeys: true,
-    });
+    return sanitizeProviderCustomEnv(state.officialCustomEnv || {});
   }
 
   const exact = state.profiles.find((p) => p.id === profileId);
@@ -1653,9 +1642,7 @@ export function getCustomEnvForProfile(
   if (!profile) return {};
 
   const resolved = fromStoredProfile(profile);
-  return sanitizeCustomEnvMap(resolved.customEnv || {}, {
-    skipReservedClaudeKeys: true,
-  });
+  return sanitizeProviderCustomEnv(resolved.customEnv || {});
 }
 
 export function resolveProfileFull(profileId: string): {
@@ -1668,9 +1655,7 @@ export function resolveProfileFull(profileId: string): {
 export function saveOfficialCustomEnv(
   customEnv: Record<string, string>,
 ): Record<string, string> {
-  const sanitized = sanitizeCustomEnvMap(customEnv, {
-    skipReservedClaudeKeys: true,
-  });
+  const sanitized = sanitizeProviderCustomEnv(customEnv);
   const state = readStoredState();
   if (!state) throw new Error('Claude 配置不存在');
   writeStoredState({

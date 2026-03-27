@@ -25,10 +25,15 @@ const dbModule = await import(path.join(repoRoot, 'dist', 'db.js'));
 const {
   getClaudeProviderConfig,
   getCodexProviderConfig,
+  buildClaudeEnvLines,
+  createProvider,
+  getEnabledProviders,
   buildContainerEnvLines,
   getContainerEnvConfig,
+  saveOfficialCustomEnv,
   saveContainerEnvConfig,
   shellQuoteEnvLines,
+  updateProvider,
 } = runtimeConfigModule;
 const {
   INTERNAL_MCP_BRIDGE_ID,
@@ -47,12 +52,8 @@ const {
   getPinnedCodexRepoCacheRoot,
   HAPPYPAW_CODEX_EXECUTABLE_ENV,
 } = await import(path.join(repoRoot, 'dist', 'codex-binary.js'));
-const {
-  initDatabase,
-  setSession,
-  getRuntimeSession,
-  getAllSessions,
-} = dbModule;
+const { initDatabase, setSession, getRuntimeSession, getAllSessions } =
+  dbModule;
 
 const workspaceDir = path.join(tempRoot, 'workspace');
 const workspaceClaudeDir = path.join(workspaceDir, '.claude');
@@ -155,9 +156,18 @@ assert.match(prepared.configToml, /HAPPYPAW_GROUP_FOLDER = "demo"/);
 assert.match(prepared.configToml, /HAPPYPAW_CHAT_JID = "telegram:demo"/);
 assert.match(prepared.configToml, /HAPPYPAW_OWNER_ID = "u1"/);
 assert.match(prepared.configToml, /HAPPYPAW_PRODUCT_ID = "happypaw"/);
-assert.match(prepared.configToml, /HAPPYPAW_WORKSPACE_GLOBAL = "\/workspace\/global"/);
-assert.match(prepared.configToml, /HAPPYPAW_WORKSPACE_MEMORY = "\/workspace\/memory"/);
-assert.match(prepared.configToml, /HAPPYPAW_WORKSPACE_IPC = "\/workspace\/ipc"/);
+assert.match(
+  prepared.configToml,
+  /HAPPYPAW_WORKSPACE_GLOBAL = "\/workspace\/global"/,
+);
+assert.match(
+  prepared.configToml,
+  /HAPPYPAW_WORKSPACE_MEMORY = "\/workspace\/memory"/,
+);
+assert.match(
+  prepared.configToml,
+  /HAPPYPAW_WORKSPACE_IPC = "\/workspace\/ipc"/,
+);
 assert.match(prepared.configToml, /command = "node"/);
 
 const workspaceServers = readCodexMcpServersFromSettings(
@@ -183,6 +193,73 @@ assert.equal(merged[LEGACY_PRODUCT_ID], undefined);
 const legacyCodexExecutableEnv = toLegacyProductEnvToken(
   HAPPYPAW_CODEX_EXECUTABLE_ENV,
 );
+const createdProvider = createProvider({
+  name: 'Pinned Provider',
+  type: 'third_party',
+  anthropicBaseUrl: 'https://provider.example.com',
+  anthropicAuthToken: 'provider-secret-token',
+  enabled: true,
+  customEnv: {
+    SAFE_PROVIDER_FLAG: '1',
+    [HAPPYPAW_CODEX_EXECUTABLE_ENV]: '/tmp/provider-rogue-codex',
+    [legacyCodexExecutableEnv]: '/tmp/provider-rogue-legacy-codex',
+  },
+});
+assert.deepEqual(createdProvider.customEnv, {
+  SAFE_PROVIDER_FLAG: '1',
+});
+const routeUpdatedProvider = updateProvider(getEnabledProviders()[0].id, {
+  customEnv: {
+    SAFE_PROVIDER_FLAG: '2',
+    EXTRA_SAFE_FLAG: 'yes',
+    [HAPPYPAW_CODEX_EXECUTABLE_ENV]: '/tmp/provider-route-rogue-codex',
+    [legacyCodexExecutableEnv]: '/tmp/provider-route-rogue-legacy-codex',
+  },
+});
+assert.deepEqual(routeUpdatedProvider.customEnv, {
+  SAFE_PROVIDER_FLAG: '2',
+  EXTRA_SAFE_FLAG: 'yes',
+});
+const activeProviderEnvLines = buildClaudeEnvLines(getClaudeProviderConfig());
+assert.ok(activeProviderEnvLines.includes('SAFE_PROVIDER_FLAG=2'));
+assert.ok(activeProviderEnvLines.includes('EXTRA_SAFE_FLAG=yes'));
+assert.ok(
+  !activeProviderEnvLines.some((line) =>
+    line.startsWith(`${HAPPYPAW_CODEX_EXECUTABLE_ENV}=`),
+  ),
+);
+assert.ok(
+  !activeProviderEnvLines.some((line) =>
+    line.startsWith(`${legacyCodexExecutableEnv}=`),
+  ),
+);
+const explicitProviderEnvLines = buildClaudeEnvLines(
+  getClaudeProviderConfig(),
+  {
+    SAFE_PROVIDER_FLAG: '3',
+    [HAPPYPAW_CODEX_EXECUTABLE_ENV]: '/tmp/direct-rogue-codex',
+    [legacyCodexExecutableEnv]: '/tmp/direct-rogue-legacy-codex',
+  },
+);
+assert.ok(explicitProviderEnvLines.includes('SAFE_PROVIDER_FLAG=3'));
+assert.ok(
+  !explicitProviderEnvLines.some((line) =>
+    line.startsWith(`${HAPPYPAW_CODEX_EXECUTABLE_ENV}=`),
+  ),
+);
+assert.ok(
+  !explicitProviderEnvLines.some((line) =>
+    line.startsWith(`${legacyCodexExecutableEnv}=`),
+  ),
+);
+const officialCustomEnv = saveOfficialCustomEnv({
+  SAFE_OFFICIAL_FLAG: '1',
+  [HAPPYPAW_CODEX_EXECUTABLE_ENV]: '/tmp/official-rogue-codex',
+  [legacyCodexExecutableEnv]: '/tmp/official-rogue-legacy-codex',
+});
+assert.deepEqual(officialCustomEnv, {
+  SAFE_OFFICIAL_FLAG: '1',
+});
 saveContainerEnvConfig('folder-env', {
   customEnv: {
     SAFE_FLAG: '1',
@@ -280,7 +357,9 @@ assert.ok(
   pinnedBinaryFirst.executablePath.startsWith(hostCacheRoot),
   pinnedBinaryFirst.executablePath,
 );
-assert.ok(fs.existsSync(path.join(pinnedBinaryFirst.cacheDir, 'metadata.json')));
+assert.ok(
+  fs.existsSync(path.join(pinnedBinaryFirst.cacheDir, 'metadata.json')),
+);
 const hostEnv = {
   [HAPPYPAW_CODEX_EXECUTABLE_ENV]: pinnedBinaryFirst.executablePath,
 };
