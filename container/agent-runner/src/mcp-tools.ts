@@ -19,6 +19,9 @@ import { CronExpressionParser } from 'cron-parser';
 export interface McpContext {
   chatJid: string;
   groupFolder: string;
+  ownerId?: string;
+  runtime?: string;
+  productId?: string;
   isHome: boolean;
   isAdminHome: boolean;
   isScheduledTask?: boolean;
@@ -190,6 +193,16 @@ function buildUnsupportedOutboundMessage(
   return `Error: ${toolName} is only supported for ${supportedChannels.join('/')} channels. Current channel "${channel}" is unsupported.`;
 }
 
+function buildContextText(ctx: McpContext): string {
+  return [
+    `groupFolder=${ctx.groupFolder}`,
+    `workspace=${ctx.workspaceGroup}`,
+    `ownerId=${ctx.ownerId || ''}`,
+    `runtime=${ctx.runtime || ''}`,
+    `productId=${ctx.productId || ''}`,
+  ].join('\n');
+}
+
 /**
  * Create all HappyPaw MCP tool definitions for in-process SDK MCP server.
  */
@@ -200,6 +213,16 @@ export function createMcpTools(ctx: McpContext): SdkMcpToolDefinition<any>[] {
   const toRelativePath = createToRelativePath(ctx);
 
   const tools: SdkMcpToolDefinition<any>[] = [
+    // --- get_context ---
+    tool(
+      'get_context',
+      'Return bridge context sourced from the active HappyPaw runtime scope.',
+      {},
+      async () => ({
+        content: [{ type: 'text' as const, text: buildContextText(ctx) }],
+      }),
+    ),
+
     // --- send_message ---
     tool(
       'send_message',
