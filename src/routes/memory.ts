@@ -22,14 +22,13 @@ const memoryRoutes = new Hono<{ Variables: Variables }>();
 // --- Constants ---
 
 const USER_GLOBAL_DIR = path.join(GROUPS_DIR, 'user-global');
-const MAIN_MEMORY_DIR = path.join(GROUPS_DIR, 'main');
-const MAIN_MEMORY_FILE = path.join(MAIN_MEMORY_DIR, 'CLAUDE.md');
 const MEMORY_DATA_DIR = path.join(DATA_DIR, 'memory');
 const SESSIONS_DIR = path.join(DATA_DIR, 'sessions');
 const MAX_GLOBAL_MEMORY_LENGTH = 200_000;
 const MAX_MEMORY_FILE_LENGTH = 500_000;
 const MEMORY_LIST_LIMIT = 500;
 const MEMORY_SEARCH_LIMIT = 120;
+const MEMORY_LOCATOR_PREFIX = 'memory://';
 const MEMORY_SOURCE_EXTENSIONS = new Set([
   '.md',
   '.txt',
@@ -66,6 +65,218 @@ function normalizeRelativePath(input: unknown): string {
     throw new Error('Invalid memory path');
   }
   return normalized;
+}
+
+function normalizeLocator(input: unknown): string {
+  if (typeof input !== 'string') {
+    throw new Error('locator must be a string');
+  }
+  const normalized = input.trim();
+  if (!normalized.startsWith(MEMORY_LOCATOR_PREFIX)) {
+    throw new Error('Invalid memory locator');
+  }
+  if (normalized.includes('\0')) {
+    throw new Error('Invalid memory locator');
+  }
+  return normalized;
+}
+
+function encodeLocator(...segments: string[]): string {
+  return `${MEMORY_LOCATOR_PREFIX}${segments
+    .map((segment) => encodeURIComponent(segment))
+    .join('/')}`;
+}
+
+function decodeLocator(locator: string): string[] {
+  const normalized = normalizeLocator(locator);
+  const remainder = normalized.slice(MEMORY_LOCATOR_PREFIX.length);
+  const parts = remainder
+    .split('/')
+    .filter(Boolean)
+    .map((segment) => decodeURIComponent(segment));
+  if (
+    parts.length === 0 ||
+    parts.some((part) => !part || part === '.' || part === '..')
+  ) {
+    throw new Error('Invalid memory locator');
+  }
+  return parts;
+}
+
+function workspaceScope(folder: string): MemorySource['scope'] {
+  return folder === 'main' ? 'main' : 'flow';
+}
+
+function workspaceLabel(folder: string): string {
+  return folder === 'main' ? '主会话' : folder;
+}
+
+function sessionRuntimeFlavor(runtimeDir: string): 'managed' | 'legacy' {
+  return runtimeDir === '.codex' ? 'managed' : 'legacy';
+}
+
+function runtimeDirForFlavor(flavor: string): '.codex' | '.claude' {
+  return flavor === 'legacy' ? '.claude' : '.codex';
+}
+
+function buildSessionMemoryDescriptor(
+  folder: string,
+  sessionParts: string[],
+): Pick<MemorySource, 'locator' | 'scope' | 'kind' | 'label'> {
+  const workspace = workspaceLabel(folder);
+  const runtimeDirs = new Set(['.claude', '.codex']);
+
+  if (runtimeDirs.has(sessionParts[0] ?? '')) {
+    const flavor = sessionRuntimeFlavor(sessionParts[0] as string);
+    const runtimePath = sessionParts.slice(1).join('/') || 'settings.json';
+    return {
+      locator: encodeLocator('session', folder, 'root', flavor, ...sessionParts.slice(1)),
+      scope: 'session',
+      kind: 'session',
+      label: `${workspace} / 自动记忆 / ${runtimePath}`,
+    };
+  }
+
+  if (
+    sessionParts[0] === 'agents' &&
+    runtimeDirs.has(sessionParts[2] ?? '')
+  ) {
+    const agentId = sessionParts[1] || 'unknown-agent';
+    const flavor = sessionRuntimeFlavor(sessionParts[2] as string);
+    const runtimePath = sessionParts.slice(3).join('/') || 'settings.json';
+    return {
+      locator: encodeLocator(
+        'session',
+        folder,
+        'agents',
+        agentId,
+        flavor,
+        ...sessionParts.slice(3),
+      ),
+      scope: 'session',
+      kind: 'session',
+      label: `${workspace} / Agent ${agentId} / 自动记忆 / ${runtimePath}`,
+    };
+  }
+
+  if (
+    sessionParts[0] === 'tasks' &&
+    runtimeDirs.has(sessionParts[2] ?? '')
+  ) {
+    const taskId = sessionParts[1] || 'unknown-task';
+    const flavor = sessionRuntimeFlavor(sessionParts[2] as string);
+    const runtimePath = sessionParts.slice(3).join('/') || 'settings.json';
+    return {
+      locator: encodeLocator(
+        'session',
+        folder,
+        'tasks',
+        taskId,
+        flavor,
+        ...sessionParts.slice(3),
+      ),
+      scope: 'session',
+      kind: 'session',
+      label: `${workspace} / 任务 ${taskId} / 自动记忆 / ${runtimePath}`,
+    };
+  }
+
+  return {
+    locator: encodeLocator('session', folder, 'files', ...sessionParts),
+    scope: 'session',
+    kind: 'session',
+    label: `${workspace} / 运行时文件 / ${sessionParts.join('/')}`,
+  };
+}
+
+function toPublicLocator(relativePath: string): string {
+  const parts = relativePath.split('/');
+
+  if (
+    parts[0] === 'data' &&
+    parts[1] === 'groups' &&
+    parts[2] === 'user-global'
+  ) {
+    const userId = parts[3] || 'unknown-user';
+    const name = parts.slice(4);
+    if (name.length === 1 && name[0] === 'CLAUDE.md') {
+      return encodeLocator('user-global', userId, 'primary');
+    }
+    return encodeLocator('user-global', userId, 'files', ...name);
+  }
+
+  if (parts[0] === 'data' && parts[1] === 'groups') {
+    const folder = parts[2] || 'unknown';
+    const name = parts.slice(3);
+    if (name.length === 1 && name[0] === 'CLAUDE.md') {
+      return encodeLocator('workspace', folder, 'primary');
+    }
+    return encodeLocator('workspace', folder, 'files', ...name);
+  }
+
+  if (parts[0] === 'data' && parts[1] === 'memory') {
+    const folder = parts[2] || 'unknown';
+    return encodeLocator('workspace', folder, 'daily', ...parts.slice(3));
+  }
+
+  if (parts[0] === 'data' && parts[1] === 'sessions') {
+    const folder = parts[2] || 'unknown';
+    const sessionParts = parts.slice(3);
+    return buildSessionMemoryDescriptor(folder, sessionParts).locator;
+  }
+
+  throw new Error('Unsupported memory path');
+}
+
+function locatorToRelativePath(locator: string): string {
+  const parts = decodeLocator(locator);
+
+  if (parts[0] === 'user-global' && parts.length >= 3) {
+    const userId = parts[1];
+    if (parts[2] === 'primary' && parts.length === 3) {
+      return `data/groups/user-global/${userId}/CLAUDE.md`;
+    }
+    if (parts[2] === 'files' && parts.length >= 4) {
+      return `data/groups/user-global/${userId}/${parts.slice(3).join('/')}`;
+    }
+  }
+
+  if (parts[0] === 'workspace' && parts.length >= 3) {
+    const folder = parts[1];
+    if (parts[2] === 'primary' && parts.length === 3) {
+      return `data/groups/${folder}/CLAUDE.md`;
+    }
+    if (parts[2] === 'files' && parts.length >= 4) {
+      return `data/groups/${folder}/${parts.slice(3).join('/')}`;
+    }
+    if (parts[2] === 'daily' && parts.length >= 4) {
+      return `data/memory/${folder}/${parts.slice(3).join('/')}`;
+    }
+  }
+
+  if (parts[0] === 'session' && parts.length >= 4) {
+    const folder = parts[1];
+    if (parts[2] === 'root' && parts.length >= 5) {
+      return `data/sessions/${folder}/${runtimeDirForFlavor(parts[3])}/${parts.slice(4).join('/')}`;
+    }
+    if (parts[2] === 'agents' && parts.length >= 6) {
+      return `data/sessions/${folder}/agents/${parts[3]}/${runtimeDirForFlavor(parts[4])}/${parts.slice(5).join('/')}`;
+    }
+    if (parts[2] === 'tasks' && parts.length >= 6) {
+      return `data/sessions/${folder}/tasks/${parts[3]}/${runtimeDirForFlavor(parts[4])}/${parts.slice(5).join('/')}`;
+    }
+    if (parts[2] === 'files' && parts.length >= 4) {
+      return `data/sessions/${folder}/${parts.slice(3).join('/')}`;
+    }
+  }
+
+  throw new Error('Unsupported memory locator');
+}
+
+function resolveMemoryInput(input: string): string {
+  return input.startsWith(MEMORY_LOCATOR_PREFIX)
+    ? locatorToRelativePath(input)
+    : normalizeRelativePath(input);
 }
 
 function resolveMemoryPath(
@@ -143,7 +354,7 @@ function isUserOwnedFolder(
 
 function classifyMemorySource(
   relativePath: string,
-): Pick<MemorySource, 'scope' | 'kind' | 'label' | 'ownerName'> {
+): Pick<MemorySource, 'locator' | 'scope' | 'kind' | 'label' | 'ownerName'> {
   const parts = relativePath.split('/');
   // data/groups/user-global/{userId}/CLAUDE.md
   if (
@@ -157,6 +368,9 @@ function classifyMemorySource(
     const ownerLabel = owner ? owner.display_name || owner.username : userId;
     const isPrimaryMemory = name === 'CLAUDE.md';
     return {
+      locator: isPrimaryMemory
+        ? encodeLocator('user-global', userId, 'primary')
+        : encodeLocator('user-global', userId, 'files', ...parts.slice(4)),
       scope: 'user-global',
       kind: 'primary',
       label: isPrimaryMemory
@@ -167,16 +381,22 @@ function classifyMemorySource(
   }
   // data/groups/main/CLAUDE.md
   if (relativePath === 'data/groups/main/CLAUDE.md') {
-    return { scope: 'main', kind: 'primary', label: '主会话主记忆' };
+    return {
+      locator: encodeLocator('workspace', 'main', 'primary'),
+      scope: 'main',
+      kind: 'primary',
+      label: '主会话主记忆',
+    };
   }
   // data/memory/{folder}/...
   if (parts[0] === 'data' && parts[1] === 'memory') {
     const folder = parts[2] || 'unknown';
     const name = parts.slice(3).join('/') || 'memory';
     return {
-      scope: folder === 'main' ? 'main' : 'flow',
+      locator: encodeLocator('workspace', folder, 'daily', ...parts.slice(3)),
+      scope: workspaceScope(folder),
       kind: 'note' as const,
-      label: `${folder} / 日期记忆 / ${name}`,
+      label: `${workspaceLabel(folder)} / 日期记忆 / ${name}`,
     };
   }
   // data/groups/{folder}/... (non user-global)
@@ -186,32 +406,33 @@ function classifyMemorySource(
     const isPrimaryMemory = name === 'CLAUDE.md';
     const kind = isPrimaryMemory ? 'primary' : 'note';
     return {
-      scope: folder === 'main' ? 'main' : 'flow',
+      locator: isPrimaryMemory
+        ? encodeLocator('workspace', folder, 'primary')
+        : encodeLocator('workspace', folder, 'files', ...parts.slice(3)),
+      scope: workspaceScope(folder),
       kind,
-      label: isPrimaryMemory ? `${folder} / 主记忆` : `${folder} / ${name}`,
+      label: isPrimaryMemory
+        ? `${workspaceLabel(folder)} / 主记忆`
+        : `${workspaceLabel(folder)} / ${name}`,
     };
   }
-  // data/sessions/{folder}/.claude/...
-  const sessionRel = parts.slice(2).join('/');
-  return {
-    scope: 'session',
-    kind: 'session',
-    label: `会话自动记忆 / ${sessionRel}`,
-  };
+  // data/sessions/{folder}/...
+  const folder = parts[2] || 'unknown';
+  return buildSessionMemoryDescriptor(folder, parts.slice(3));
 }
 
 function readMemoryFile(
-  relativePath: string,
+  requestedPath: string,
   user: AuthUser,
 ): MemoryFilePayload {
-  const normalized = normalizeRelativePath(relativePath);
+  const normalized = resolveMemoryInput(requestedPath);
   const { absolutePath, writable } = resolveMemoryPath(normalized, user);
   if (!fs.existsSync(absolutePath)) {
     if (!writable) {
       throw new Error('Memory file not found');
     }
     return {
-      path: normalized,
+      locator: toPublicLocator(normalized),
       content: '',
       updatedAt: null,
       size: 0,
@@ -221,7 +442,7 @@ function readMemoryFile(
   const content = fs.readFileSync(absolutePath, 'utf-8');
   const stat = fs.statSync(absolutePath);
   return {
-    path: normalized,
+    locator: toPublicLocator(normalized),
     content,
     updatedAt: stat.mtime.toISOString(),
     size: Buffer.byteLength(content, 'utf-8'),
@@ -244,11 +465,11 @@ function isBlockedMemoryPath(normalizedPath: string): boolean {
 }
 
 function writeMemoryFile(
-  relativePath: string,
+  requestedPath: string,
   content: string,
   user: AuthUser,
 ): MemoryFilePayload {
-  const normalized = normalizeRelativePath(relativePath);
+  const normalized = resolveMemoryInput(requestedPath);
   const { absolutePath, writable } = resolveMemoryPath(normalized, user);
   if (!writable) {
     throw new Error('Memory file is read-only');
@@ -267,7 +488,7 @@ function writeMemoryFile(
 
   const stat = fs.statSync(absolutePath);
   return {
-    path: normalized,
+    locator: toPublicLocator(normalized),
     content,
     updatedAt: stat.mtime.toISOString(),
     size: Buffer.byteLength(content, 'utf-8'),
@@ -408,7 +629,6 @@ function listMemorySources(user: AuthUser): MemorySource[] {
 
     const classified = classifyMemorySource(relativePath);
     sources.push({
-      path: relativePath,
       writable,
       exists,
       updatedAt,
@@ -434,7 +654,7 @@ function listMemorySources(user: AuthUser): MemorySource[] {
       return scopeRank[a.scope] - scopeRank[b.scope];
     if (kindRank[a.kind] !== kindRank[b.kind])
       return kindRank[a.kind] - kindRank[b.kind];
-    return a.path.localeCompare(b.path, 'zh-CN');
+    return a.locator.localeCompare(b.locator, 'zh-CN');
   });
 
   return sources.slice(0, MEMORY_LIST_LIMIT);
@@ -471,7 +691,7 @@ function searchMemorySources(
     if (source.size > MAX_MEMORY_FILE_LENGTH) continue;
 
     try {
-      const payload = readMemoryFile(source.path, user);
+      const payload = readMemoryFile(source.locator, user);
       const lower = payload.content.toLowerCase();
       const firstIndex = lower.indexOf(normalizedKeyword);
       if (firstIndex === -1) continue;
@@ -533,11 +753,11 @@ memoryRoutes.get('/search', authMiddleware, (c) => {
 });
 
 memoryRoutes.get('/file', authMiddleware, (c) => {
-  const filePath = c.req.query('path');
-  if (!filePath) return c.json({ error: 'Missing path' }, 400);
+  const requested = c.req.query('locator') ?? c.req.query('path');
+  if (!requested) return c.json({ error: 'Missing locator' }, 400);
   try {
     const user = c.get('user') as AuthUser;
-    return c.json(readMemoryFile(filePath, user));
+    return c.json(readMemoryFile(requested, user));
   } catch (err) {
     const message =
       err instanceof Error ? err.message : 'Failed to read memory file';
@@ -558,7 +778,11 @@ memoryRoutes.put('/file', authMiddleware, async (c) => {
   try {
     const user = c.get('user') as AuthUser;
     return c.json(
-      writeMemoryFile(validation.data.path, validation.data.content, user),
+      writeMemoryFile(
+        validation.data.locator ?? validation.data.path ?? '',
+        validation.data.content,
+        user,
+      ),
     );
   } catch (err) {
     const message =

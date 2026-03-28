@@ -9,7 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 interface MemorySource {
-  path: string;
+  locator: string;
   label: string;
   scope: 'user-global' | 'main' | 'flow' | 'session';
   kind: 'primary' | 'note' | 'session';
@@ -21,7 +21,7 @@ interface MemorySource {
 }
 
 interface MemoryFile {
-  path: string;
+  locator: string;
   content: string;
   updatedAt: string | null;
   size: number;
@@ -29,7 +29,7 @@ interface MemoryFile {
 }
 
 interface MemorySearchHit {
-  path: string;
+  locator: string;
   hits: number;
   snippet: string;
 }
@@ -81,7 +81,8 @@ export function MemoryPage() {
     const text = keyword.trim().toLowerCase();
     if (!text) return sources;
     return sources.filter((s) =>
-      `${s.label} ${s.path}`.toLowerCase().includes(text) || Boolean(searchHits[s.path]),
+      `${s.label} ${s.locator}`.toLowerCase().includes(text) ||
+      Boolean(searchHits[s.locator]),
     );
   }, [sources, keyword, searchHits]);
 
@@ -98,13 +99,13 @@ export function MemoryPage() {
     return groups;
   }, [filteredSources]);
 
-  const loadFile = useCallback(async (path: string) => {
+  const loadFile = useCallback(async (locator: string) => {
     setLoadingFile(true);
     try {
       const data = await api.get<MemoryFile>(
-        `/api/memory/file?${new URLSearchParams({ path })}`,
+        `/api/memory/file?${new URLSearchParams({ locator })}`,
       );
-      setSelectedPath(path);
+      setSelectedPath(locator);
       setContent(data.content);
       setInitialContent(data.content);
       setFileMeta(data);
@@ -121,15 +122,15 @@ export function MemoryPage() {
       const data = await api.get<{ sources: MemorySource[] }>('/api/memory/sources');
       setSources(data.sources);
 
-      const available = new Set(data.sources.map((s) => s.path));
+      const available = new Set(data.sources.map((s) => s.locator));
       let nextSelected = selectedPath && available.has(selectedPath) ? selectedPath : null;
 
       if (!nextSelected) {
         // Default: first user-global primary memory, then main, then first available
         nextSelected =
-          data.sources.find((s) => s.scope === 'user-global' && s.kind === 'primary')?.path ||
-          data.sources.find((s) => s.scope === 'main' && s.kind === 'primary')?.path ||
-          data.sources[0]?.path ||
+          data.sources.find((s) => s.scope === 'user-global' && s.kind === 'primary')?.locator ||
+          data.sources.find((s) => s.scope === 'main' && s.kind === 'primary')?.locator ||
+          data.sources[0]?.locator ||
           null;
       }
 
@@ -168,7 +169,7 @@ export function MemoryPage() {
         );
         const next: Record<string, MemorySearchHit> = {};
         for (const hit of data.hits) {
-          next[hit.path] = hit;
+          next[hit.locator] = hit;
         }
         setSearchHits(next);
       } catch {
@@ -183,17 +184,17 @@ export function MemoryPage() {
     };
   }, [keyword]);
 
-  const handleSelectSource = async (path: string) => {
-    if (path === selectedPath && isMobile) {
+  const handleSelectSource = async (locator: string) => {
+    if (locator === selectedPath && isMobile) {
       // Mobile: re-tap selected item to show content panel
       setShowContent(true);
       return;
     }
-    if (path === selectedPath) return;
+    if (locator === selectedPath) return;
     if (dirty && !confirm('当前有未保存修改，切换会丢失。是否继续？')) {
       return;
     }
-    await loadFile(path);
+    await loadFile(locator);
     if (isMobile) setShowContent(true);
   };
 
@@ -203,7 +204,7 @@ export function MemoryPage() {
     setSaving(true);
     try {
       const data = await api.put<MemoryFile>('/api/memory/file', {
-        path: selectedPath,
+        locator: selectedPath,
         content,
       });
       setContent(data.content);
@@ -262,7 +263,7 @@ export function MemoryPage() {
                 type="text"
                 value={keyword}
                 onChange={(e) => setKeyword(e.target.value)}
-                placeholder="搜索记忆源（路径 + 全文）"
+                placeholder="搜索记忆源（定位符 + 全文）"
               />
               <div className="mt-1 text-[11px] text-muted-foreground">
                 {keyword.trim()
@@ -284,12 +285,12 @@ export function MemoryPage() {
                     </div>
                     <div className="space-y-1">
                       {items.map((source) => {
-                        const active = source.path === selectedPath;
-                        const hit = searchHits[source.path];
+                        const active = source.locator === selectedPath;
+                        const hit = searchHits[source.locator];
                         return (
                           <button
-                            key={source.path}
-                            onClick={() => handleSelectSource(source.path)}
+                            key={source.locator}
+                            onClick={() => handleSelectSource(source.locator)}
                             className={`w-full text-left rounded-lg border px-3 py-2 transition-colors ${
                               active
                                 ? 'border-primary bg-brand-50'
@@ -300,7 +301,7 @@ export function MemoryPage() {
                               {source.label}
                             </div>
                             <div className="text-[11px] text-muted-foreground truncate mt-0.5">
-                              {source.path}
+                              {source.locator}
                             </div>
                             <div className="text-[11px] mt-1 text-muted-foreground">
                               {source.writable ? '可编辑' : '只读'} · {source.exists ? `${source.size} B` : '文件不存在'}
@@ -341,7 +342,9 @@ export function MemoryPage() {
                     </button>
                   )}
                   <div className="mb-3">
-                    <div className="text-sm font-semibold text-foreground break-all">{selectedPath}</div>
+                    <div className="text-sm font-semibold text-foreground break-all">
+                      {selectedPath}
+                    </div>
                     <div className="text-xs text-muted-foreground mt-1">
                       最近更新时间: {updatedText} · 字节数: {new TextEncoder().encode(content).length} · {fileMeta?.writable ? '可编辑' : '只读'}
                     </div>

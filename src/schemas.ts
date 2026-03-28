@@ -134,10 +134,21 @@ export const GroupMemberAddSchema = z.object({
   user_id: z.string().min(1),
 });
 
-export const MemoryFileSchema = z.object({
-  path: z.string().min(1),
-  content: z.string(),
-});
+export const MemoryFileSchema = z
+  .object({
+    locator: z.string().min(1).optional(),
+    path: z.string().min(1).optional(),
+    content: z.string(),
+  })
+  .superRefine((data, ctx) => {
+    if (!data.locator && !data.path) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['locator'],
+        message: 'locator or path is required',
+      });
+    }
+  });
 
 export const MemoryGlobalSchema = z.object({
   content: z.string(),
@@ -574,7 +585,7 @@ export const RedeemCodeSchema = z.object({
 
 // Memory types
 export interface MemorySource {
-  path: string;
+  locator: string;
   label: string;
   scope: 'user-global' | 'main' | 'flow' | 'session';
   kind: 'primary' | 'note' | 'session';
@@ -586,7 +597,7 @@ export interface MemorySource {
 }
 
 export interface MemoryFilePayload {
-  path: string;
+  locator: string;
   content: string;
   updatedAt: string | null;
   size: number;

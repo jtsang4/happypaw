@@ -1,6 +1,6 @@
 .PHONY: dev dev-backend dev-web build build-backend build-web start \
        typecheck typecheck-backend typecheck-web typecheck-agent-runner \
-       format format-check install clean reset-init update-sdk ensure-latest-sdk sync-types \
+       format format-check install clean reset-init update-runner-sdk ensure-latest-runner-sdk sync-types \
        backup restore help _ensure-docker-image
 
 # ─── Runtime Detection ──────────────────────────────────────
@@ -18,6 +18,8 @@ else
   RUNNER  := npx tsx src/index.ts
   PKG_PFX  = npm --prefix $(1) install
 endif
+
+RUNNER_SDK_PKG := $(shell node -p "const pkg=require('./container/agent-runner/package.json'); const deps={...(pkg.dependencies||{}), ...(pkg.devDependencies||{})}; Object.keys(deps).find((name)=>name.includes('agent-sdk')) || ''" 2>/dev/null)
 
 # ─── Development ─────────────────────────────────────────────
 
@@ -50,7 +52,7 @@ build-web: ## 仅编译前端
 
 # ─── Production ──────────────────────────────────────────────
 
-start: ensure-latest-sdk ## 一键启动生产环境
+start: ensure-latest-runner-sdk ## 一键启动生产环境
 	@if [ ! -d node_modules ] || [ package.json -nt node_modules ] || [ web/package.json -nt web/node_modules ] || [ container/agent-runner/package.json -nt container/agent-runner/node_modules ]; then echo "📦 依赖有更新，安装依赖..."; $(MAKE) install; fi
 	@$(PKG) run prepare:pinned-codex
 	@$(MAKE) _ensure-docker-image
@@ -172,21 +174,22 @@ _ensure-docker-image: ## (内部) 检测 Docker 镜像是否需要构建/重建
 sync-types: ## 同步 shared/ 下的类型定义到各子项目
 	@./scripts/sync-stream-event.sh
 
-# ─── SDK ─────────────────────────────────────────────────────
+# ─── Agent Runner Dependency Maintenance ─────────────────────
 
-update-sdk: ## 更新 agent-runner 的底层 Agent SDK 到最新版本
-	cd container/agent-runner && $(PKG) update @anthropic-ai/claude-agent-sdk && $(PKG) run build
-	@echo "SDK updated. Run 'make typecheck' to verify."
+update-runner-sdk: ## 更新 agent-runner 的底层运行时依赖到最新版本
+	cd container/agent-runner && $(PKG) update $(RUNNER_SDK_PKG) && $(PKG) run build
+	@echo "Agent runner dependency updated. Run 'make typecheck' to verify."
 
-ensure-latest-sdk: ## 启动前自动检测并更新 SDK（有新版才更新）
-	@LOCAL=$$(node -p "require('./container/agent-runner/node_modules/@anthropic-ai/claude-agent-sdk/package.json').version" 2>/dev/null || echo "0.0.0"); \
-	LATEST=$$(npm view @anthropic-ai/claude-agent-sdk version --fetch-timeout=5000 2>/dev/null || echo "$$LOCAL"); \
+ensure-latest-runner-sdk: ## 启动前自动检测并更新 agent-runner 运行时依赖（有新版才更新）
+	@PKG_NAME="$(RUNNER_SDK_PKG)"; \
+	LOCAL=$$(node -p "const pkgName=process.argv[1]; if (!pkgName) process.exit(1); require('./container/agent-runner/node_modules/' + pkgName + '/package.json').version" "$$PKG_NAME" 2>/dev/null || echo "0.0.0"); \
+	LATEST=$$(npm view "$$PKG_NAME" version --fetch-timeout=5000 2>/dev/null || echo "$$LOCAL"); \
 	if [ "$$LOCAL" != "$$LATEST" ]; then \
-		echo "🔄 Agent SDK 有新版本: $$LOCAL → $$LATEST，正在更新..."; \
-		cd container/agent-runner && $(PKG) update @anthropic-ai/claude-agent-sdk && $(PKG) run build; \
-		echo "✅ SDK 更新完成（内置运行时依赖已同步）"; \
+		echo "🔄 Agent runner 运行时依赖有新版本: $$LOCAL → $$LATEST，正在更新..."; \
+		cd container/agent-runner && $(PKG) update "$$PKG_NAME" && $(PKG) run build; \
+		echo "✅ Agent runner 运行时依赖更新完成"; \
 	else \
-		echo "✅ Agent SDK 已是最新 ($$LOCAL)"; \
+		echo "✅ Agent runner 运行时依赖已是最新 ($$LOCAL)"; \
 	fi
 
 # ─── Setup ───────────────────────────────────────────────────
