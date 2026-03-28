@@ -308,7 +308,7 @@ html.theme-orange .floating-nav-item.active::before {
 }
 
 /* =====================================================
-   Anthropic font style — serif AI responses
+   Serif font style — serif AI responses
    Uses direct font-family overrides because @theme inline
    bakes values into utilities at build time.
    ===================================================== */

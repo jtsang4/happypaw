@@ -78,6 +78,23 @@ interface ChatViewProps {
   headerLeft?: React.ReactNode;
 }
 
+interface ImStatus {
+  feishu: boolean;
+  telegram: boolean;
+  qq: boolean;
+  wechat: boolean;
+}
+
+const IM_CHANNEL_LABELS: Array<{
+  key: keyof ImStatus;
+  label: string;
+}> = [
+  { key: 'feishu', label: '飞书' },
+  { key: 'telegram', label: 'Telegram' },
+  { key: 'qq', label: 'QQ' },
+  { key: 'wechat', label: '微信' },
+];
+
 export function ChatView({ groupJid, onBack, headerLeft }: ChatViewProps) {
   const { mode: displayMode, toggle: toggleDisplayMode } = useDisplayMode();
   const { theme, toggle: toggleTheme } = useTheme();
@@ -100,10 +117,7 @@ export function ChatView({ groupJid, onBack, headerLeft }: ChatViewProps) {
     agentId: string;
     name: string;
   } | null>(null);
-  const [imStatus, setImStatus] = useState<{
-    feishu: boolean;
-    telegram: boolean;
-  } | null>(null);
+  const [imStatus, setImStatus] = useState<ImStatus | null>(null);
   const [imBannerDismissed, setImBannerDismissed] = useState(
     () => localStorage.getItem('im-banner-dismissed') === '1',
   );
@@ -169,6 +183,10 @@ export function ChatView({ groupJid, onBack, headerLeft }: ChatViewProps) {
     isHome &&
     ((!!group?.created_by && group.created_by === currentUser?.id) ||
       (currentUser?.role === 'admin' && group?.folder === 'main'));
+  const connectedImChannels = imStatus
+    ? IM_CHANNEL_LABELS.filter(({ key }) => imStatus[key])
+    : [];
+  const hasConnectedImChannel = connectedImChannels.length > 0;
   useEffect(() => {
     if (!isOwnHome) {
       setImStatus(null);
@@ -177,9 +195,7 @@ export function ChatView({ groupJid, onBack, headerLeft }: ChatViewProps) {
     let active = true;
     const fetchStatus = () => {
       api
-        .get<{ feishu: boolean; telegram: boolean }>(
-          '/api/config/user-im/status',
-        )
+        .get<ImStatus>('/api/config/user-im/status')
         .then((data) => {
           if (active) setImStatus(data);
         })
@@ -521,21 +537,18 @@ export function ChatView({ groupJid, onBack, headerLeft }: ChatViewProps) {
             )}
             {isOwnHome &&
               imStatus &&
-              (imStatus.feishu || imStatus.telegram) && (
+              hasConnectedImChannel && (
                 <>
                   <span className="text-muted-foreground/40">·</span>
-                  {imStatus.feishu && (
-                    <span className="inline-flex items-center gap-0.5">
+                  {connectedImChannels.map(({ key, label }) => (
+                    <span
+                      key={key}
+                      className="inline-flex items-center gap-0.5"
+                    >
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                      飞书
+                      {label}
                     </span>
-                  )}
-                  {imStatus.telegram && (
-                    <span className="inline-flex items-center gap-0.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                      Telegram
-                    </span>
-                  )}
+                  ))}
                 </>
               )}
           </div>
@@ -611,13 +624,12 @@ export function ChatView({ groupJid, onBack, headerLeft }: ChatViewProps) {
       {/* IM channel setup banner for home container without IM */}
       {isOwnHome &&
         imStatus &&
-        !imStatus.feishu &&
-        !imStatus.telegram &&
+        !hasConnectedImChannel &&
         !imBannerDismissed && (
           <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border-b border-amber-200 text-amber-800 text-sm">
             <Link className="w-4 h-4 flex-shrink-0" />
             <span className="flex-1 min-w-0">
-              未配置 IM 渠道，飞书 / Telegram 消息无法与主工作区互通
+              未配置 IM 渠道，飞书、Telegram、QQ、微信消息无法与主工作区互通
             </span>
             <button
               onClick={() => navigate('/setup/channels')}
