@@ -34,7 +34,7 @@ export interface ContainerConfig {
 }
 
 export type ExecutionMode = 'container' | 'host';
-export type RuntimeType = 'claude_sdk' | 'codex_app_server';
+export type RuntimeType = 'codex_app_server';
 
 export interface RegisteredGroup {
   name: string;

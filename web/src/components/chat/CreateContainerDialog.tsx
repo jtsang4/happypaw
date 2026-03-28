@@ -19,20 +19,10 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { DirectoryBrowser } from '../shared/DirectoryBrowser';
 import { useChatStore } from '../../stores/chat';
 import { useAuthStore } from '../../stores/auth';
-import {
-  buildCreateFlowOptions,
-  type RuntimeOverrideSelection,
-} from './create-flow-options';
+import { buildCreateFlowOptions } from './create-flow-options';
 
 interface CreateContainerDialogProps {
   open: boolean;
@@ -49,7 +39,6 @@ export function CreateContainerDialog({
   const [loading, setLoading] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [executionMode, setExecutionMode] = useState<'container' | 'host'>('container');
-  const [runtime, setRuntime] = useState<RuntimeOverrideSelection>('__default__');
   const [customCwd, setCustomCwd] = useState('');
   const [initMode, setInitMode] = useState<'empty' | 'local' | 'git'>('empty');
   const [initSourcePath, setInitSourcePath] = useState('');
@@ -62,7 +51,6 @@ export function CreateContainerDialog({
     setName('');
     setAdvancedOpen(false);
     setExecutionMode('container');
-    setRuntime('__default__');
     setCustomCwd('');
     setInitMode('empty');
     setInitSourcePath('');
@@ -82,7 +70,6 @@ export function CreateContainerDialog({
     try {
       const options = buildCreateFlowOptions({
         executionMode,
-        runtimeSelection: runtime,
         customCwd,
         initMode,
         initSourcePath,
@@ -134,27 +121,6 @@ export function CreateContainerDialog({
             </button>
             {advancedOpen && (
               <div className="px-3 pb-3 space-y-3 border-t">
-                {/* Execution mode */}
-                <div className="pt-3">
-                  <label className="block text-sm font-medium mb-2">运行时</label>
-                  <Select
-                    value={runtime}
-                    onValueChange={(value: RuntimeOverrideSelection) => setRuntime(value)}
-                  >
-                    <SelectTrigger className="w-full h-10">
-                      <SelectValue placeholder="选择运行时" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__default__">继承系统默认</SelectItem>
-                      <SelectItem value="claude_sdk">Claude</SelectItem>
-                      <SelectItem value="codex_app_server">Codex</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    默认继承系统运行时；仅在这里显式选择时才会写入群组级覆盖，且与 Docker / 宿主机执行模式独立保存。
-                  </p>
-                </div>
-
                 <div className="pt-1">
                   <label className="block text-sm font-medium mb-2">执行模式</label>
                   <div className="space-y-2">

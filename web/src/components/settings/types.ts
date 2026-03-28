@@ -88,7 +88,6 @@ export interface SessionInfo {
 }
 
 export interface SystemSettings {
-  defaultRuntime: 'claude_sdk' | 'codex_app_server';
   containerTimeout: number;
   idleTimeout: number;
   containerMaxOutputSize: number;
@@ -107,7 +106,7 @@ export interface SystemSettings {
   billingCurrencyRate: number;
 }
 
-export type SettingsTab = 'claude' | 'registration' | 'appearance' | 'system' | 'profile' | 'my-channels' | 'security' | 'groups' | 'memory' | 'skills' | 'mcp-servers' | 'agent-definitions' | 'users' | 'about' | 'bindings';
+export type SettingsTab = 'codex' | 'registration' | 'appearance' | 'system' | 'profile' | 'my-channels' | 'security' | 'groups' | 'memory' | 'skills' | 'mcp-servers' | 'agent-definitions' | 'users' | 'about' | 'bindings';
 
 export interface CodexConfigPublic {
   hasOpenaiBaseUrl: boolean;
@@ -122,7 +121,6 @@ export interface CodexConfigPublic {
 export interface SetupStatus {
   needsSetup: boolean;
   providerConfigured: boolean;
-  claudeConfigured: boolean;
   codexConfigured: boolean;
   feishuConfigured: boolean;
 }

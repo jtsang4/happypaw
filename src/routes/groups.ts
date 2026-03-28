@@ -165,13 +165,10 @@ interface GroupPayloadItem {
   member_count?: number;
   pinned_at?: string;
   activation_mode?: 'auto' | 'always' | 'when_mentioned' | 'disabled';
-  runtime?: RuntimeType;
-  effective_runtime?: RuntimeType;
 }
 
 function buildGroupsPayload(user: AuthUser): Record<string, GroupPayloadItem> {
   const groups = getAllRegisteredGroups();
-  const defaultRuntime = getSystemSettings().defaultRuntime;
   const chats = new Map(getAllChats().map((chat) => [chat.jid, chat]));
   const isAdmin = hasHostExecutionPermission(user);
   const homeFolders = new Set(
@@ -268,8 +265,6 @@ function buildGroupsPayload(user: AuthUser): Record<string, GroupPayloadItem> {
         chats.get(jid)?.last_message_time ||
         group.added_at,
       execution_mode: group.executionMode || 'container',
-      runtime: group.runtime,
-      effective_runtime: group.runtime ?? defaultRuntime,
       custom_cwd: isAdmin ? group.customCwd : undefined,
       is_home: isHome || undefined,
       is_my_home: (isHome && group.created_by === user.id) || undefined,
@@ -352,7 +347,6 @@ groupRoutes.post('/', authMiddleware, async (c) => {
   const executionMode =
     validation.data.execution_mode ||
     ((await isDockerAvailable()) ? 'container' : 'host');
-  const runtime = validation.data.runtime;
   const customCwd = validation.data.custom_cwd; // Schema already trims and converts empty to undefined
   const initSourcePath = validation.data.init_source_path;
   const initGitUrl = validation.data.init_git_url;
@@ -572,7 +566,6 @@ groupRoutes.post('/', authMiddleware, async (c) => {
     folder,
     added_at: now,
     executionMode: executionMode as ExecutionMode,
-    runtime,
     customCwd: executionMode === 'host' ? customCwd : undefined,
     initSourcePath: executionMode !== 'host' ? initSourcePath : undefined,
     initGitUrl: executionMode !== 'host' ? initGitUrl : undefined,
@@ -640,8 +633,6 @@ groupRoutes.post('/', authMiddleware, async (c) => {
       folder: group.folder,
       added_at: group.added_at,
       execution_mode: group.executionMode || 'container',
-      runtime: group.runtime,
-      effective_runtime: group.runtime ?? getSystemSettings().defaultRuntime,
       custom_cwd: hasHostExecutionPermission(authUser)
         ? group.customCwd
         : undefined,
@@ -678,13 +669,8 @@ groupRoutes.patch('/:jid', authMiddleware, async (c) => {
     name: rawName,
     is_pinned,
     activation_mode,
-    runtime,
     execution_mode,
   } = validation.data;
-  const hasRuntimeField = Object.prototype.hasOwnProperty.call(
-    validation.data,
-    'runtime',
-  );
   const name = rawName ? normalizeGroupName(rawName) : undefined;
 
   // 至少需要提供一个字段
@@ -692,7 +678,6 @@ groupRoutes.patch('/:jid', authMiddleware, async (c) => {
     !name &&
     is_pinned === undefined &&
     activation_mode === undefined &&
-    !hasRuntimeField &&
     execution_mode === undefined
   ) {
     return c.json({ error: 'No fields to update' }, 400);
@@ -719,7 +704,6 @@ groupRoutes.patch('/:jid', authMiddleware, async (c) => {
     is_pinned !== undefined &&
     !name &&
     activation_mode === undefined &&
-    !hasRuntimeField &&
     execution_mode === undefined;
   if (isPinOnly) {
     if (
@@ -766,7 +750,6 @@ groupRoutes.patch('/:jid', authMiddleware, async (c) => {
   if (
     name ||
     activation_mode !== undefined ||
-    hasRuntimeField ||
     execution_mode !== undefined
   ) {
     const updated: RegisteredGroup = {
@@ -778,7 +761,7 @@ groupRoutes.patch('/:jid', authMiddleware, async (c) => {
         execution_mode !== undefined
           ? (execution_mode as ExecutionMode)
           : existing.executionMode,
-      runtime: hasRuntimeField ? (runtime ?? undefined) : existing.runtime,
+      runtime: existing.runtime,
       customCwd: existing.customCwd,
       initSourcePath: existing.initSourcePath,
       initGitUrl: existing.initGitUrl,

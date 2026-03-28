@@ -60,7 +60,7 @@ export function SetupPage() {
             </div>
           </div>
           <h1 className="text-2xl font-bold text-foreground mb-1">HappyPaw 初始设置</h1>
-          <p className="text-sm text-muted-foreground">先创建管理员账号，完成后进入后台继续配置飞书和 AI 运行时提供商</p>
+          <p className="text-sm text-muted-foreground">先创建管理员账号，完成后进入后台继续配置 Codex 默认接入参数和可选消息通道</p>
         </div>
 
         {/* Step card */}

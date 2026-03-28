@@ -37,6 +37,11 @@ import {
   type ConfigRoutesApp,
 } from './shared.js';
 
+function toPublicSystemSettings() {
+  const { defaultRuntime: _defaultRuntime, ...rest } = getSystemSettings();
+  return rest;
+}
+
 export function registerLegacyAndSystemRoutes(
   configRoutes: ConfigRoutesApp,
 ): void {
@@ -357,7 +362,7 @@ export function registerLegacyAndSystemRoutes(
 
   configRoutes.get('/system', authMiddleware, systemConfigMiddleware, (c) => {
     try {
-      return c.json(getSystemSettings());
+      return c.json(toPublicSystemSettings());
     } catch (err) {
       logger.error({ err }, 'Failed to load system settings');
       return c.json({ error: 'Failed to load system settings' }, 500);
@@ -381,7 +386,8 @@ export function registerLegacyAndSystemRoutes(
       try {
         const saved = saveSystemSettings(validation.data);
         clearBillingEnabledCache();
-        return c.json(saved);
+        const { defaultRuntime: _defaultRuntime, ...publicSettings } = saved;
+        return c.json(publicSettings);
       } catch (err) {
         const message =
           err instanceof Error

@@ -77,7 +77,6 @@ export interface StreamingState {
 
 export interface CreateFlowOptions {
   execution_mode?: 'container' | 'host';
-  runtime?: 'claude_sdk' | 'codex_app_server';
   custom_cwd?: string;
   init_source_path?: string;
   init_git_url?: string;
@@ -129,7 +128,6 @@ export interface ChatState {
   deleteMessage: (jid: string, messageId: string) => Promise<boolean>;
   createFlow: (name: string, options?: CreateFlowOptions) => Promise<{ jid: string; folder: string } | null>;
   renameFlow: (jid: string, name: string) => Promise<void>;
-  updateFlowRuntime: (jid: string, runtime: 'claude_sdk' | 'codex_app_server' | null) => Promise<void>;
   togglePin: (jid: string) => Promise<void>;
   deleteFlow: (jid: string) => Promise<void>;
   handleStreamEvent: (chatJid: string, event: StreamEvent, agentId?: string) => void;

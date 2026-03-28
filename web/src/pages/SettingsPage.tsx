@@ -4,7 +4,7 @@ import { Menu } from 'lucide-react';
 
 import { useAuthStore } from '../stores/auth';
 import { SettingsNav } from '../components/settings/SettingsNav';
-import { ClaudeProviderSection } from '../components/settings/ClaudeProviderSection';
+import { CodexProviderSection } from '../components/settings/CodexProviderSection';
 import { RegistrationSection } from '../components/settings/RegistrationSection';
 import { ProfileSection } from '../components/settings/ProfileSection';
 import { SecuritySection } from '../components/settings/SecuritySection';
@@ -22,8 +22,8 @@ import { BindingsSection } from '../components/settings/BindingsSection';
 import { Card, CardContent } from '@/components/ui/card';
 import type { SettingsTab } from '../components/settings/types';
 
-const VALID_TABS: SettingsTab[] = ['claude', 'registration', 'appearance', 'system', 'profile', 'my-channels', 'security', 'groups', 'memory', 'skills', 'mcp-servers', 'agent-definitions', 'users', 'about', 'bindings'];
-const SYSTEM_TABS: SettingsTab[] = ['claude', 'registration', 'appearance', 'system'];
+const VALID_TABS: SettingsTab[] = ['codex', 'registration', 'appearance', 'system', 'profile', 'my-channels', 'security', 'groups', 'memory', 'skills', 'mcp-servers', 'agent-definitions', 'users', 'about', 'bindings'];
+const SYSTEM_TABS: SettingsTab[] = ['codex', 'registration', 'appearance', 'system'];
 const FULLPAGE_TABS: SettingsTab[] = ['groups', 'memory', 'skills', 'mcp-servers', 'agent-definitions', 'users', 'bindings'];
 
 export function SettingsPage() {
@@ -41,7 +41,7 @@ export function SettingsPage() {
     !!currentUser?.permissions.includes('manage_invites') ||
     !!currentUser?.permissions.includes('view_audit_log');
 
-  const defaultTab: SettingsTab = canManageSystemConfig ? 'claude' : 'profile';
+  const defaultTab: SettingsTab = canManageSystemConfig ? 'codex' : 'profile';
 
   const activeTab = useMemo((): SettingsTab => {
     if (mustChangePassword) return 'profile';
@@ -65,7 +65,7 @@ export function SettingsPage() {
     tabs.push({ key: 'my-channels', label: '消息通道' });
     tabs.push({ key: 'security', label: '安全' });
     if (canManageSystemConfig) {
-      tabs.push({ key: 'claude', label: 'Claude' });
+      tabs.push({ key: 'codex', label: 'Codex' });
       tabs.push({ key: 'registration', label: '注册' });
       tabs.push({ key: 'appearance', label: '全局外观' });
       tabs.push({ key: 'system', label: '系统' });
@@ -95,7 +95,7 @@ export function SettingsPage() {
   }, [activeTab]);
 
   const sectionTitle: Record<SettingsTab, string> = {
-    claude: 'AI 提供商',
+    codex: 'Codex 配置',
     registration: '注册管理',
     appearance: '全局外观',
     system: '系统参数',
@@ -193,7 +193,7 @@ export function SettingsPage() {
 
               <Card>
                 <CardContent>
-                  {activeTab === 'claude' && <ClaudeProviderSection setNotice={() => {}} setError={() => {}} />}
+                  {activeTab === 'codex' && <CodexProviderSection />}
                   {activeTab === 'registration' && <RegistrationSection />}
                   {activeTab === 'appearance' && <AppearanceSection />}
                   {activeTab === 'system' && <SystemSettingsSection />}

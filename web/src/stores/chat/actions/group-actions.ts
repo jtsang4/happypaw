@@ -8,7 +8,6 @@ type GroupActions = Pick<
   | 'selectGroup'
   | 'createFlow'
   | 'renameFlow'
-  | 'updateFlowRuntime'
   | 'togglePin'
   | 'deleteFlow'
 >;
@@ -59,7 +58,6 @@ export function createGroupActions(set: ChatStoreSet, get: ChatStoreGet): GroupA
       try {
         const body: Record<string, string> = { name };
         if (options?.execution_mode) body.execution_mode = options.execution_mode;
-        if (options?.runtime) body.runtime = options.runtime;
         if (options?.custom_cwd) body.custom_cwd = options.custom_cwd;
         if (options?.init_source_path) body.init_source_path = options.init_source_path;
         if (options?.init_git_url) body.init_git_url = options.init_git_url;
@@ -103,31 +101,6 @@ export function createGroupActions(set: ChatStoreSet, get: ChatStoreGet): GroupA
         });
       } catch (err) {
         set({ error: err instanceof Error ? err.message : String(err) });
-      }
-    },
-
-    updateFlowRuntime: async (jid: string, runtime: 'claude_sdk' | 'codex_app_server' | null) => {
-      try {
-        await api.patch<{ success: boolean }>(`/api/groups/${encodeURIComponent(jid)}`, { runtime });
-        set((s) => {
-          const group = s.groups[jid];
-          if (!group) return s;
-          return {
-            groups: {
-              ...s.groups,
-              [jid]: {
-                ...group,
-                runtime: runtime ?? undefined,
-                effective_runtime: runtime ?? group.effective_runtime,
-              },
-            },
-            error: null,
-          };
-        });
-        await get().loadGroups();
-      } catch (err) {
-        set({ error: err instanceof Error ? err.message : String(err) });
-        throw err;
       }
     },
 

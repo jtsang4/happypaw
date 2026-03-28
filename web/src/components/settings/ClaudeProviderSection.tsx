@@ -256,7 +256,7 @@ export function ClaudeProviderSection({ setNotice, setError }: ClaudeProviderSec
             <div>
               <div className="text-sm font-medium text-foreground">Codex 运行时配置</div>
               <div className="text-xs text-muted-foreground">
-                使用系统默认运行时选择为 Codex 时生效，密钥和 Base URL 仅显示脱敏信息。
+                当前产品固定使用 Codex，密钥和 Base URL 仅显示脱敏信息。
               </div>
             </div>
           </div>

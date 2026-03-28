@@ -218,7 +218,6 @@ export function SystemSettingsSection() {
         throw new Error('系统参数尚未加载完成');
       }
       const payload: Partial<SystemSettings> = {
-        defaultRuntime: settings.defaultRuntime,
         billingEnabled,
         billingMode: 'wallet_first',
         billingMinStartBalanceUsd,
@@ -290,53 +289,6 @@ export function SystemSettingsSection() {
       <p className="text-sm text-muted-foreground">
         调整容器运行参数和安全限制。修改后无需重启，新参数对后续创建的容器/进程立即生效。
       </p>
-
-      <div className="space-y-5 rounded-xl border border-border p-4">
-        <div>
-          <h3 className="text-sm font-semibold text-foreground">默认运行时</h3>
-          <p className="text-xs text-muted-foreground mt-1">
-            运行时选择独立于 Docker / 宿主机执行模式；群组可单独覆盖默认值。
-          </p>
-        </div>
-        <div className="grid gap-2 sm:grid-cols-2">
-          <button
-            type="button"
-            onClick={() =>
-              setSettings((prev) =>
-                prev ? { ...prev, defaultRuntime: 'claude_sdk' } : prev,
-              )
-            }
-            className={`rounded-lg border px-4 py-3 text-left transition-colors ${
-              settings.defaultRuntime === 'claude_sdk'
-                ? 'border-primary bg-primary/5'
-                : 'border-border hover:bg-muted'
-            }`}
-          >
-            <div className="text-sm font-medium text-foreground">Claude</div>
-            <div className="text-xs text-muted-foreground mt-1">
-              使用现有 Claude SDK / 提供商池配置。
-            </div>
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              setSettings((prev) =>
-                prev ? { ...prev, defaultRuntime: 'codex_app_server' } : prev,
-              )
-            }
-            className={`rounded-lg border px-4 py-3 text-left transition-colors ${
-              settings.defaultRuntime === 'codex_app_server'
-                ? 'border-primary bg-primary/5'
-                : 'border-border hover:bg-muted'
-            }`}
-          >
-            <div className="text-sm font-medium text-foreground">Codex</div>
-            <div className="text-xs text-muted-foreground mt-1">
-              使用 Codex app-server，且不会修改执行模式。
-            </div>
-          </button>
-        </div>
-      </div>
 
       <div className="space-y-5 rounded-xl border border-border p-4">
         <div>
