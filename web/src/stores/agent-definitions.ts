@@ -1,8 +1,6 @@
 import { create } from 'zustand';
 import { api } from '../api/client';
 
-export type AgentDefinitionStorageMode = 'project' | 'global';
-
 export interface AgentDefinition {
   id: string;
   name: string;
@@ -17,13 +15,11 @@ export interface AgentDefinitionDetail extends AgentDefinition {
 
 interface AgentDefinitionsResponse {
   agents: AgentDefinition[];
-  storageMode: AgentDefinitionStorageMode;
   storagePath: string;
 }
 
 interface AgentDefinitionDetailResponse {
   agent: AgentDefinitionDetail;
-  storageMode: AgentDefinitionStorageMode;
   storagePath: string;
 }
 
@@ -32,81 +28,64 @@ interface AgentDefinitionsState {
   loading: boolean;
   error: string | null;
   storagePath: string;
-  storageMode: AgentDefinitionStorageMode;
 
-  loadAgents: (storageMode?: AgentDefinitionStorageMode) => Promise<void>;
-  getAgentDetail: (
-    id: string,
-    storageMode?: AgentDefinitionStorageMode,
-  ) => Promise<AgentDefinitionDetail>;
-  updateAgent: (
-    id: string,
-    content: string,
-    storageMode?: AgentDefinitionStorageMode,
-  ) => Promise<void>;
-  createAgent: (
-    name: string,
-    content: string,
-    storageMode?: AgentDefinitionStorageMode,
-  ) => Promise<string>;
-  deleteAgent: (id: string, storageMode?: AgentDefinitionStorageMode) => Promise<void>;
+  loadAgents: () => Promise<void>;
+  getAgentDetail: (id: string) => Promise<AgentDefinitionDetail>;
+  updateAgent: (id: string, content: string) => Promise<void>;
+  createAgent: (name: string, content: string) => Promise<string>;
+  deleteAgent: (id: string) => Promise<void>;
 }
 
 export const useAgentDefinitionsStore = create<AgentDefinitionsState>((set, get) => ({
   agents: [],
   loading: false,
   error: null,
-  storagePath: '.codex/agents',
-  storageMode: 'project',
+  storagePath: '~/.codex/agents',
 
-  loadAgents: async (storageMode = 'project') => {
+  loadAgents: async () => {
     set({ loading: true });
     try {
-      const data = await api.get<AgentDefinitionsResponse>(
-        `/api/agent-definitions?storageMode=${storageMode}`,
-      );
+      const data = await api.get<AgentDefinitionsResponse>('/api/agent-definitions');
       set({
         agents: data.agents,
         loading: false,
         error: null,
         storagePath: data.storagePath,
-        storageMode: data.storageMode,
       });
     } catch (err) {
       set({ loading: false, error: err instanceof Error ? err.message : String(err) });
     }
   },
 
-  getAgentDetail: async (id: string, storageMode = get().storageMode) => {
+  getAgentDetail: async (id: string) => {
     const data = await api.get<AgentDefinitionDetailResponse>(
-      `/api/agent-definitions/${id}?storageMode=${storageMode}`,
+      `/api/agent-definitions/${id}`,
     );
-    set({ storagePath: data.storagePath, storageMode: data.storageMode });
+    set({ storagePath: data.storagePath });
     return data.agent;
   },
 
-  updateAgent: async (id: string, content: string, storageMode = get().storageMode) => {
+  updateAgent: async (id: string, content: string) => {
     try {
-      await api.put(`/api/agent-definitions/${id}?storageMode=${storageMode}`, {
+      await api.put(`/api/agent-definitions/${id}`, {
         content,
-        storageMode,
       });
       set({ error: null });
-      await get().loadAgents(storageMode);
+      await get().loadAgents();
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err) });
       throw err;
     }
   },
 
-  createAgent: async (name: string, content: string, storageMode = get().storageMode) => {
+  createAgent: async (name: string, content: string) => {
     try {
       const data = await api.post<{ success: boolean; id: string }>(
-        `/api/agent-definitions?storageMode=${storageMode}`,
-        { name, content, storageMode },
+        '/api/agent-definitions',
+        { name, content },
       );
       set({ error: null });
-      await get().loadAgents(storageMode);
+      await get().loadAgents();
       return data.id;
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err) });
@@ -114,11 +93,11 @@ export const useAgentDefinitionsStore = create<AgentDefinitionsState>((set, get)
     }
   },
 
-  deleteAgent: async (id: string, storageMode = get().storageMode) => {
+  deleteAgent: async (id: string) => {
     try {
-      await api.delete(`/api/agent-definitions/${id}?storageMode=${storageMode}`);
+      await api.delete(`/api/agent-definitions/${id}`);
       set({ error: null });
-      await get().loadAgents(storageMode);
+      await get().loadAgents();
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err) });
       throw err;

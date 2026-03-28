@@ -86,13 +86,13 @@ assert.match(
 );
 assert.match(
   agentDefinitionsSource,
-  /process\.cwd\(\), '\.codex', 'agents'/u,
-  'agent definition management should default to workspace-local Codex agent storage',
-);
-assert.match(
-  agentDefinitionsSource,
   /os\.homedir\(\), '\.codex', 'agents'/u,
-  'agent definition management should support optional user-global Codex agent storage only when selected',
+  'agent definition management should default to user-global Codex agent storage',
+);
+assert.doesNotMatch(
+  agentDefinitionsSource,
+  /process\.cwd\(\), '\.codex', 'agents'|storageMode/u,
+  'agent definition management should not keep project-local default semantics or a storage-mode toggle',
 );
 assert.doesNotMatch(
   agentDefinitionsSource,
@@ -151,12 +151,17 @@ assert.match(
 );
 assert.match(
   agentDefinitionsPage,
-  /不会自动探测或接管/u,
-  'agent definition UI should explain the explicit opt-in global toggle semantics',
+  /默认直接读写/u,
+  'agent definition UI should explain the direct default-global Codex agent semantics',
+);
+assert.match(
+  agentDefinitionsPage,
+  /临时 HOME 沙箱/u,
+  'agent definition UI should mention sandboxed validation guidance for the default-global path',
 );
 assert.doesNotMatch(
   agentDefinitionsPage,
-  /Droid|subagent_type/u,
+  /Droid|subagent_type|globalModeEnabled|用户全局 Agent 目录|工作区目录/u,
   'agent definition UI should stay Agent-branded and avoid Task/droid product copy',
 );
 assert.match(

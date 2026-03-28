@@ -1,7 +1,7 @@
 // Agent definitions management routes.
-// HappyPaw stores Codex custom-agent definitions as TOML files, defaulting to
-// workspace-local .codex/agents/*.toml. Optional user-global
-// ~/.codex/agents/*.toml access is available only when explicitly requested.
+// HappyPaw stores Codex custom-agent definitions directly in the operator's
+// user-global ~/.codex/agents/*.toml directory. Development and validation
+// must sandbox HOME instead of touching the real operator home.
 
 import { Hono } from 'hono';
 import fs from 'fs';
@@ -12,7 +12,6 @@ import { authMiddleware, systemConfigMiddleware } from '../middleware/auth.js';
 import { logger } from '../logger.js';
 
 const agentDefinitionsRoutes = new Hono<{ Variables: Variables }>();
-type AgentStorageMode = 'project' | 'global';
 
 const TOML_AGENT_HINT_PATTERN =
   /^\s*(name|description|model|tools|prompt)\s*=/mu;
@@ -33,14 +32,8 @@ interface AgentDefinitionDetail extends AgentDefinition {
 
 // --- Utility Functions ---
 
-function resolveStorageMode(raw: unknown): AgentStorageMode {
-  return raw === 'global' ? 'global' : 'project';
-}
-
-function getAgentDefinitionsDir(storageMode: AgentStorageMode): string {
-  return storageMode === 'global'
-    ? path.join(os.homedir(), '.codex', 'agents')
-    : path.join(process.cwd(), '.codex', 'agents');
+function getAgentDefinitionsDir(): string {
+  return path.join(os.homedir(), '.codex', 'agents');
 }
 
 function validateAgentId(id: string): boolean {
@@ -109,8 +102,8 @@ function parseTomlAgentDefinition(
   };
 }
 
-function discoverAgents(storageMode: AgentStorageMode): AgentDefinition[] {
-  const agentsDir = getAgentDefinitionsDir(storageMode);
+function discoverAgents(): AgentDefinition[] {
+  const agentsDir = getAgentDefinitionsDir();
   if (!fs.existsSync(agentsDir)) return [];
 
   const agents: AgentDefinition[] = [];
@@ -143,13 +136,10 @@ function discoverAgents(storageMode: AgentStorageMode): AgentDefinition[] {
   return agents;
 }
 
-function getAgentDetail(
-  id: string,
-  storageMode: AgentStorageMode,
-): AgentDefinitionDetail | null {
+function getAgentDetail(id: string): AgentDefinitionDetail | null {
   if (!validateAgentId(id)) return null;
 
-  const filePath = path.join(getAgentDefinitionsDir(storageMode), `${id}.toml`);
+  const filePath = path.join(getAgentDefinitionsDir(), `${id}.toml`);
   if (!fs.existsSync(filePath)) return null;
 
   try {
@@ -206,30 +196,31 @@ function ensureTomlAgentContent(content: string, id: string): string {
 // --- Routes ---
 
 // List all agent definitions
-agentDefinitionsRoutes.get('/', authMiddleware, (c) => {
-  const storageMode = resolveStorageMode(c.req.query('storageMode'));
-  const agents = discoverAgents(storageMode);
+agentDefinitionsRoutes.get('/', authMiddleware, systemConfigMiddleware, (c) => {
+  const agents = discoverAgents();
   return c.json({
     agents,
-    storageMode,
-    storagePath: getAgentDefinitionsDir(storageMode),
+    storagePath: getAgentDefinitionsDir(),
   });
 });
 
 // Get single agent detail
-agentDefinitionsRoutes.get('/:id', authMiddleware, (c) => {
-  const id = c.req.param('id');
-  const storageMode = resolveStorageMode(c.req.query('storageMode'));
-  const agent = getAgentDetail(id, storageMode);
-  if (!agent) {
-    return c.json({ error: 'Agent definition not found' }, 404);
-  }
-  return c.json({
-    agent,
-    storageMode,
-    storagePath: getAgentDefinitionsDir(storageMode),
-  });
-});
+agentDefinitionsRoutes.get(
+  '/:id',
+  authMiddleware,
+  systemConfigMiddleware,
+  (c) => {
+    const id = c.req.param('id');
+    const agent = getAgentDetail(id);
+    if (!agent) {
+      return c.json({ error: 'Agent definition not found' }, 404);
+    }
+    return c.json({
+      agent,
+      storagePath: getAgentDefinitionsDir(),
+    });
+  },
+);
 
 // Update agent content
 agentDefinitionsRoutes.put(
@@ -244,18 +235,11 @@ agentDefinitionsRoutes.put(
 
     const body = await c.req.json().catch(() => ({}));
     const { content } = body as { content: string };
-    const storageMode = resolveStorageMode(
-      c.req.query('storageMode') ??
-        (body as { storageMode?: unknown }).storageMode,
-    );
     if (typeof content !== 'string') {
       return c.json({ error: 'content must be a string' }, 400);
     }
 
-    const filePath = path.join(
-      getAgentDefinitionsDir(storageMode),
-      `${id}.toml`,
-    );
+    const filePath = path.join(getAgentDefinitionsDir(), `${id}.toml`);
     try {
       fs.accessSync(filePath);
       fs.writeFileSync(filePath, ensureTomlAgentContent(content, id), 'utf-8');
@@ -267,8 +251,7 @@ agentDefinitionsRoutes.put(
     }
     return c.json({
       success: true,
-      storageMode,
-      storagePath: getAgentDefinitionsDir(storageMode),
+      storagePath: getAgentDefinitionsDir(),
     });
   },
 );
@@ -281,10 +264,6 @@ agentDefinitionsRoutes.post(
   async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const { name, content } = body as { name: string; content: string };
-    const storageMode = resolveStorageMode(
-      c.req.query('storageMode') ??
-        (body as { storageMode?: unknown }).storageMode,
-    );
 
     if (!name || typeof name !== 'string') {
       return c.json({ error: 'name is required' }, 400);
@@ -303,7 +282,7 @@ agentDefinitionsRoutes.post(
       return c.json({ error: 'Invalid agent name' }, 400);
     }
 
-    const agentsDir = getAgentDefinitionsDir(storageMode);
+    const agentsDir = getAgentDefinitionsDir();
     fs.mkdirSync(agentsDir, { recursive: true });
 
     const filePath = path.join(agentsDir, `${id}.toml`);
@@ -321,7 +300,6 @@ agentDefinitionsRoutes.post(
     return c.json({
       success: true,
       id,
-      storageMode,
       storagePath: agentsDir,
     });
   },
@@ -334,15 +312,11 @@ agentDefinitionsRoutes.delete(
   systemConfigMiddleware,
   (c) => {
     const id = c.req.param('id');
-    const storageMode = resolveStorageMode(c.req.query('storageMode'));
     if (!validateAgentId(id)) {
       return c.json({ error: 'Invalid agent ID' }, 400);
     }
 
-    const filePath = path.join(
-      getAgentDefinitionsDir(storageMode),
-      `${id}.toml`,
-    );
+    const filePath = path.join(getAgentDefinitionsDir(), `${id}.toml`);
     try {
       fs.unlinkSync(filePath);
     } catch (err: unknown) {
@@ -353,8 +327,7 @@ agentDefinitionsRoutes.delete(
     }
     return c.json({
       success: true,
-      storageMode,
-      storagePath: getAgentDefinitionsDir(storageMode),
+      storagePath: getAgentDefinitionsDir(),
     });
   },
 );

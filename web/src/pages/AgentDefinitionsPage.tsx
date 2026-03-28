@@ -5,12 +5,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import {
   useAgentDefinitionsStore,
   type AgentDefinitionDetail,
-  type AgentDefinitionStorageMode,
 } from '../stores/agent-definitions';
 
 export function AgentDefinitionsPage() {
@@ -20,7 +18,6 @@ export function AgentDefinitionsPage() {
     error: listError,
     loadAgents,
     createAgent,
-    storageMode,
     storagePath,
   } =
     useAgentDefinitionsStore();
@@ -44,7 +41,6 @@ export function AgentDefinitionsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [createName, setCreateName] = useState('');
   const [creating, setCreating] = useState(false);
-  const [globalModeEnabled, setGlobalModeEnabled] = useState(false);
 
   // Notice
   const [notice, setNotice] = useState<string | null>(null);
@@ -65,20 +61,16 @@ export function AgentDefinitionsPage() {
     );
   }, [agents, searchQuery]);
 
-  const effectiveStorageMode: AgentDefinitionStorageMode = globalModeEnabled
-    ? 'global'
-    : 'project';
-
   useEffect(() => {
-    loadAgents(effectiveStorageMode);
-  }, [effectiveStorageMode, loadAgents]);
+    loadAgents();
+  }, [loadAgents]);
 
   const loadDetail = useCallback(async (id: string) => {
     setLoadingDetail(true);
     setDetailError(null);
     setNotice(null);
     try {
-      const data = await getAgentDetail(id, effectiveStorageMode);
+      const data = await getAgentDetail(id);
       setDetail(data);
       setContent(data.content);
       setInitialContent(data.content);
@@ -89,7 +81,7 @@ export function AgentDefinitionsPage() {
     } finally {
       setLoadingDetail(false);
     }
-  }, [effectiveStorageMode, getAgentDetail]);
+  }, [getAgentDetail]);
 
   useEffect(() => {
     setSelectedId(null);
@@ -99,7 +91,7 @@ export function AgentDefinitionsPage() {
     setDetailError(null);
     setNotice(null);
     if (isMobile) setShowContent(false);
-  }, [effectiveStorageMode, isMobile]);
+  }, [isMobile]);
 
   const handleSelectAgent = async (id: string) => {
     if (id === selectedId && isMobile) {
@@ -118,7 +110,7 @@ export function AgentDefinitionsPage() {
     setNotice(null);
     setDetailError(null);
     try {
-      await updateAgent(detail.id, content, effectiveStorageMode);
+      await updateAgent(detail.id, content);
       // updateAgent already calls loadAgents() internally to sync the list.
       // Just update local state with the saved content — no extra fetch needed.
       setInitialContent(content);
@@ -135,7 +127,7 @@ export function AgentDefinitionsPage() {
     if (!confirm(`确认删除 Agent「${detail.name}」？`)) return;
     setDeleting(true);
     try {
-      await deleteAgent(detail.id, effectiveStorageMode);
+      await deleteAgent(detail.id);
       setSelectedId(null);
       setDetail(null);
       setContent('');
@@ -164,11 +156,7 @@ prompt = """
 （在此编写 Agent 定义）
 """
 `;
-      const id = await createAgent(
-        createName.trim(),
-        defaultContent,
-        effectiveStorageMode,
-      );
+      const id = await createAgent(createName.trim(), defaultContent);
       setCreateName('');
       setShowCreate(false);
       await loadDetail(id);
@@ -185,7 +173,7 @@ prompt = """
     : '未记录';
 
   const handleRefresh = () => {
-    void loadAgents(effectiveStorageMode);
+    void loadAgents();
   };
 
   return (
@@ -202,7 +190,7 @@ prompt = """
               <div>
                 <h1 className="text-2xl font-bold text-foreground">Agent 管理</h1>
                 <p className="text-sm text-muted-foreground mt-0.5">
-                  默认将个人 Agent 定义保存到工作区 `.codex/agents/*.toml`。只有在你显式开启时，才会改为使用 `~/.codex/agents/*.toml`。
+                  默认直接读写 `~/.codex/agents/*.toml`。开发与验证环境必须通过隔离的临时 HOME 沙箱来验证这一路径，避免触碰操作者真实主目录。
                 </p>
               </div>
             </div>
@@ -217,30 +205,12 @@ prompt = """
               </Button>
             </div>
           </div>
-            <div className="mt-4 flex flex-col gap-3 rounded-lg border border-border/70 bg-muted/20 p-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1">
-                  <div className="text-sm font-medium text-foreground">使用用户全局 Agent 目录</div>
-                  <p className="text-xs text-muted-foreground">
-                    默认仅使用当前工作区 `.codex/agents/*.toml`。开启后才会读写 `~/.codex/agents/*.toml`，不会自动探测或接管你真实全局目录。
-                  </p>
-                </div>
-                <Switch
-                  checked={globalModeEnabled}
-                  onCheckedChange={setGlobalModeEnabled}
-                  aria-label="切换 Agent 全局目录模式"
-                />
-              </div>
-              <div className="text-xs text-muted-foreground">
-                当前模式：
-                <span className="font-medium text-foreground">
-                  {storageMode === 'global' ? ' 用户全局目录' : ' 工作区目录'}
-                </span>
-                {' · '}
-                <code className="rounded bg-muted px-1 py-0.5 text-[11px]">
-                  {storagePath}
-                </code>
-              </div>
+            <div className="mt-4 rounded-lg border border-border/70 bg-muted/20 p-3 text-xs text-muted-foreground">
+              当前默认目录：
+              {' '}
+              <code className="rounded bg-muted px-1 py-0.5 text-[11px]">
+                {storagePath}
+              </code>
             </div>
             <div className="text-xs text-muted-foreground">
               已加载 Agent: {agents.length}

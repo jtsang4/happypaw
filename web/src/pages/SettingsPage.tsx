@@ -74,7 +74,9 @@ export function SettingsPage() {
     tabs.push({ key: 'memory', label: '记忆' });
     tabs.push({ key: 'skills', label: '技能' });
     tabs.push({ key: 'mcp-servers', label: 'MCP' });
-    tabs.push({ key: 'agent-definitions', label: 'Agent' });
+    if (canManageSystemConfig) {
+      tabs.push({ key: 'agent-definitions', label: 'Agent' });
+    }
     tabs.push({ key: 'bindings', label: 'IM 绑定' });
     if (canManageUsers) {
       tabs.push({ key: 'users', label: '用户' });

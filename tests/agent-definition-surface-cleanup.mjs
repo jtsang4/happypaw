@@ -58,9 +58,30 @@ createUser({
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
 });
+createUser({
+  id: 'member-user',
+  username: 'member',
+  password_hash: passwordHash,
+  display_name: 'Member',
+  role: 'member',
+  status: 'active',
+  must_change_password: false,
+  notes: '',
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+});
 createUserSession({
   id: 'session-token',
   user_id: 'admin-user',
+  ip_address: '127.0.0.1',
+  user_agent: 'test-agent',
+  created_at: new Date().toISOString(),
+  expires_at: sessionExpiresAt(),
+  last_active_at: new Date().toISOString(),
+});
+createUserSession({
+  id: 'member-session-token',
+  user_id: 'member-user',
   ip_address: '127.0.0.1',
   user_agent: 'test-agent',
   created_at: new Date().toISOString(),
@@ -77,7 +98,6 @@ const initialBody = '# Ops Helper\n\nHandle operator workflows.\n';
 const updatedBody = '# Ops Helper\n\nUpdated instructions.\n';
 const projectAgentsDir = path.join(tempRoot, '.codex', 'agents');
 const globalAgentsDir = path.join(tempHome, '.codex', 'agents');
-const expectedProjectFilePath = path.join(projectAgentsDir, `${agentId}.toml`);
 const expectedGlobalFilePath = path.join(globalAgentsDir, 'global-helper.toml');
 
 fs.mkdirSync(projectAgentsDir, { recursive: true });
@@ -102,11 +122,12 @@ fs.writeFileSync(
 async function request(
   targetPath,
   init = {},
+  sessionToken = 'session-token',
 ) {
   return app.request(targetPath, {
     ...init,
     headers: {
-      Cookie: `${SESSION_COOKIE_NAME_PLAIN}=session-token`,
+      Cookie: `${SESSION_COOKIE_NAME_PLAIN}=${sessionToken}`,
       ...(init.headers ?? {}),
     },
   });
@@ -120,38 +141,37 @@ const createResponse = await request('/api/agent-definitions', {
 assert.equal(createResponse.status, 200, 'create should succeed');
 const createPayload = await createResponse.json();
 assert.equal(createPayload.id, agentId, 'create should slugify the agent name');
-assert.equal(
-  createPayload.storageMode,
-  'project',
-  'project mode should be the default storage mode',
-);
 
+const createdAgentPath = path.join(globalAgentsDir, `${agentId}.toml`);
 assert.ok(
-  fs.existsSync(expectedProjectFilePath),
-  'create should write the stored file into workspace-local .codex/agents',
+  fs.existsSync(createdAgentPath),
+  'create should write the stored file into sandboxed ~/.codex/agents',
 );
-const createdContent = fs.readFileSync(expectedProjectFilePath, 'utf8');
+assert.deepEqual(
+  fs.readdirSync(projectAgentsDir),
+  [],
+  'default-global behavior should not create workspace-local agent files',
+);
+const createdContent = fs.readFileSync(createdAgentPath, 'utf8');
 assert.match(
   createdContent,
   /^name = "ops-helper"\ndescription = ""\nmodel = "inherit"\ntools = \[\]\n\nprompt = """\n# Ops Helper/m,
-  'create should inject compatible TOML content for project-scoped definitions',
+  'create should inject compatible TOML content for default-global definitions',
 );
 
 const listResponse = await request('/api/agent-definitions');
 assert.equal(listResponse.status, 200, 'list should succeed');
 const listPayload = await listResponse.json();
-assert.equal(listPayload.agents.length, 1, 'list should include the created definition');
-assert.equal(listPayload.agents[0].id, agentId);
-assert.equal(listPayload.agents[0].name, agentId);
+assert.equal(listPayload.agents.length, 2, 'list should include both the created and preseeded global definitions');
 assert.equal(
-  listPayload.storageMode,
-  'project',
-  'default list should stay on project storage mode',
+  listPayload.agents.some((agent) => agent.id === agentId),
+  true,
+  'list should include the created agent by id',
 );
 assert.equal(
   fs.realpathSync(listPayload.storagePath),
-  fs.realpathSync(projectAgentsDir),
-  'default list should point at the workspace-local Codex agent directory',
+  fs.realpathSync(globalAgentsDir),
+  'default list should point at the sandboxed user-global Codex agent directory',
 );
 
 const detailResponse = await request(`/api/agent-definitions/${agentId}`);
@@ -170,38 +190,29 @@ const updateResponse = await request(`/api/agent-definitions/${agentId}`, {
   body: JSON.stringify({ content: updatedBody }),
 });
 assert.equal(updateResponse.status, 200, 'update should succeed');
-const updatedContent = fs.readFileSync(expectedProjectFilePath, 'utf8');
+const updatedContent = fs.readFileSync(createdAgentPath, 'utf8');
 assert.match(
   updatedContent,
   /^name = "ops-helper"\ndescription = ""\nmodel = "inherit"\ntools = \[\]\n\nprompt = """\n# Ops Helper\n\nUpdated instructions\./m,
   'update should preserve required TOML fields when overwriting content',
 );
 
-const defaultDoesNotAutoAdoptGlobal = await request('/api/agent-definitions');
-const defaultPayload = await defaultDoesNotAutoAdoptGlobal.json();
+const defaultListPayload = await (await request('/api/agent-definitions')).json();
 assert.equal(
-  defaultPayload.agents.some((agent) => agent.id === 'global-helper'),
-  false,
-  'default project mode must not auto-detect real or temp global Codex agents',
+  defaultListPayload.agents.some((agent) => agent.id === 'global-helper'),
+  true,
+  'default shipped behavior should read user-global Codex agents from the sandbox home',
 );
 
-const globalListResponse = await request('/api/agent-definitions?storageMode=global');
-assert.equal(globalListResponse.status, 200, 'global list should succeed when explicitly enabled');
-const globalListPayload = await globalListResponse.json();
-assert.equal(
-  globalListPayload.storageMode,
-  'global',
-  'explicit global list should report global storage mode',
+const memberListResponse = await request(
+  '/api/agent-definitions',
+  {},
+  'member-session-token',
 );
 assert.equal(
-  fs.realpathSync(globalListPayload.storagePath),
-  fs.realpathSync(globalAgentsDir),
-  'explicit global list should point at the sandboxed home Codex agent directory',
-);
-assert.equal(
-  globalListPayload.agents.some((agent) => agent.id === 'global-helper'),
-  true,
-  'explicit global mode should read user-global Codex agents from the sandbox home',
+  memberListResponse.status,
+  403,
+  'non-system-config users should not be able to enumerate the operator agent directory',
 );
 
 const agentDefinitionsPage = fs.readFileSync(
@@ -220,13 +231,23 @@ assert.match(
 );
 assert.match(
   agentDefinitionsPage,
-  /不会自动探测或接管/u,
-  'settings surface should explain that global mode is explicit and never auto-adopted',
+  /默认直接读写/u,
+  'settings surface should explain that default behavior writes directly to the global Codex agent directory',
+);
+assert.match(
+  agentDefinitionsPage,
+  /临时 HOME 沙箱/u,
+  'settings surface should mention sandboxed validation guidance for the default-global path',
 );
 assert.doesNotMatch(
   agentDefinitionsPage,
   /Droid|subagent_type/u,
   'settings surface should not ship Droid-branded or Task guidance copy',
+);
+assert.doesNotMatch(
+  agentDefinitionsPage,
+  /Switch|globalModeEnabled|storageMode === 'global'|工作区目录|用户全局 Agent 目录/u,
+  'settings surface should not ship a storage-mode toggle or project-local default copy',
 );
 
 console.log('✅ agent-definition-surface-cleanup assertions passed');
