@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { api } from '../../api/client';
+import { extractErrorMessage } from '../../utils/error';
 import { showToast } from '../../utils/toast';
 
 interface Group {
@@ -160,7 +161,7 @@ export function CreateTaskForm({ groups, onSubmit, onClose, isAdmin, homeFolder 
       });
       setParsedTask(result.parsed);
     } catch (err) {
-      setParseError(err instanceof Error ? err.message : '任务解析失败，请重试');
+      setParseError(extractErrorMessage(err));
     } finally {
       setParsing(false);
     }
