@@ -8,11 +8,37 @@ import Database from 'better-sqlite3';
 
 const repoRoot = '/Users/jtsang/Documents/workspace/github/jtsang4/happypaw';
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'happypaw-monitor-status-'));
+const fakeBinDir = path.join(tempRoot, 'bin');
 
 process.chdir(tempRoot);
 process.env.OPENAI_API_KEY = 'env-api-key';
 process.env.OPENAI_BASE_URL = 'https://env.example.com/v1';
 process.env.OPENAI_MODEL = 'gpt-5.1-mini';
+fs.mkdirSync(fakeBinDir, { recursive: true });
+fs.writeFileSync(
+  path.join(fakeBinDir, 'docker'),
+  `#!/bin/sh
+if [ "$1" = "image" ] && [ "$2" = "inspect" ] && [ "$3" = "happypaw-agent:latest" ]; then
+  echo '[{"Id":"sha256:test-image"}]'
+  exit 0
+fi
+echo "unexpected docker invocation: $*" >&2
+exit 1
+`,
+  { mode: 0o755 },
+);
+fs.writeFileSync(
+  path.join(fakeBinDir, 'gh'),
+  `#!/bin/sh
+if [ "$1" = "auth" ] && [ "$2" = "status" ]; then
+  exit 0
+fi
+echo "unexpected gh invocation: $*" >&2
+exit 1
+`,
+  { mode: 0o755 },
+);
+process.env.PATH = `${fakeBinDir}:${process.env.PATH}`;
 
 const [
   { Hono },
@@ -127,6 +153,11 @@ assert.equal(
   'status payload should not expose claudeCodeVersions',
 );
 assert.ok(payload.codexDiagnostics, 'status payload should include codexDiagnostics');
+assert.equal(
+  payload.dockerImageExists,
+  true,
+  'status payload should report the pinned container image as available when docker inspect succeeds',
+);
 assert.equal(payload.codexDiagnostics.pinnedVersion, '0.116.0');
 assert.match(
   payload.codexDiagnostics.releaseSource,
@@ -144,6 +175,11 @@ assert.match(
   payload.codexDiagnostics.containerBundle.executablePath,
   /\/opt\/happypaw\/bin\/codex/u,
   'container diagnostics should point at the bundled pinned Codex path',
+);
+assert.equal(
+  payload.codexDiagnostics.containerBundle.imageReady,
+  true,
+  'container diagnostics should stay ready even when no container-mode groups currently exist',
 );
 
 const monitorPageSource = fs.readFileSync(

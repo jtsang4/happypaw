@@ -14,11 +14,7 @@ import {
   canAccessGroup,
   getWebDeps,
 } from '../web-context.js';
-import {
-  getRegisteredGroup,
-  getRouterState,
-  hasContainerModeGroups,
-} from '../db.js';
+import { getRegisteredGroup, getRouterState } from '../db.js';
 import {
   getPinnedCodexBinaryConfig,
   getPinnedCodexContainerExecutablePath,
@@ -62,9 +58,10 @@ interface CodexDiagnostics {
   };
 }
 
-let cachedGithubIssueSubmission:
-  | { info: HelperReadinessInfo; fetchedAt: number }
-  | null = null;
+let cachedGithubIssueSubmission: {
+  info: HelperReadinessInfo;
+  fetchedAt: number;
+} | null = null;
 const GITHUB_HELPER_CACHE_TTL = 5 * 60 * 1000;
 
 function describePinnedCodexBinary(cacheRoot?: string): {
@@ -245,15 +242,11 @@ monitorRoutes.get('/health', async (c) => {
 });
 
 async function checkDockerImageExists(): Promise<boolean> {
-  // Skip Docker check entirely when no groups use container mode
-  if (!hasContainerModeGroups()) return false;
   try {
-    const { stdout } = await execFileAsync(
-      'docker',
-      ['images', CONTAINER_IMAGE, '--format', '{{.ID}}'],
-      { timeout: 10000 },
-    );
-    return stdout.trim().length > 0;
+    await execFileAsync('docker', ['image', 'inspect', CONTAINER_IMAGE], {
+      timeout: 10000,
+    });
+    return true;
   } catch {
     return false;
   }
