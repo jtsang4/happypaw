@@ -46,7 +46,7 @@ function checkCooldown(
 let capCache: {
   ghAvailable: boolean;
   ghUsername: string | null;
-  claudeAvailable: boolean;
+  codexConfigured: boolean;
   checkedAt: number;
 } | null = null;
 const CAP_CACHE_TTL = 5 * 60 * 1000;
@@ -54,22 +54,25 @@ const CAP_CACHE_TTL = 5 * 60 * 1000;
 async function checkCapabilities(): Promise<{
   ghAvailable: boolean;
   ghUsername: string | null;
-  claudeAvailable: boolean;
+  codexConfigured: boolean;
 }> {
   if (capCache && Date.now() - capCache.checkedAt < CAP_CACHE_TTL) {
     return {
       ghAvailable: capCache.ghAvailable,
       ghUsername: capCache.ghUsername,
-      claudeAvailable: capCache.claudeAvailable,
+      codexConfigured: capCache.codexConfigured,
     };
   }
 
-  const [gh, claude] = await Promise.all([
+  const [gh, codexConfigured] = await Promise.all([
     execFileAsync('gh', ['auth', 'status'], { timeout: 5000 })
       .then(() => true)
       .catch(() => false),
-    execFileAsync('claude', ['--version'], { timeout: 5000 })
-      .then(() => true)
+    import('../runtime-config.js')
+      .then(({ getCodexProviderConfigWithSource }) => {
+        const { config } = getCodexProviderConfigWithSource();
+        return !!config.openaiApiKey.trim();
+      })
       .catch(() => false),
   ]);
 
@@ -91,10 +94,10 @@ async function checkCapabilities(): Promise<{
   capCache = {
     ghAvailable: gh,
     ghUsername,
-    claudeAvailable: claude,
+    codexConfigured,
     checkedAt: Date.now(),
   };
-  return { ghAvailable: gh, ghUsername, claudeAvailable: claude };
+  return { ghAvailable: gh, ghUsername, codexConfigured };
 }
 
 // --- Helpers ---
@@ -296,7 +299,7 @@ bugReportRoutes.get('/capabilities', authMiddleware, async (c) => {
 
 /**
  * POST /api/bug-report/generate
- * Analyze the bug with Claude and generate a structured report
+ * Analyze the bug and generate a structured report
  */
 bugReportRoutes.post('/generate', authMiddleware, async (c) => {
   const user = c.get('user') as AuthUser;
@@ -344,11 +347,11 @@ bugReportRoutes.post('/generate', authMiddleware, async (c) => {
   const rawLogs = readRecentLogs(folder);
   const logs = sanitizeLogs(rawLogs);
 
-  // Try Claude analysis
+  // Try Codex-backed analysis
   const caps = await checkCapabilities();
-  if (!caps.claudeAvailable) {
+  if (!caps.codexConfigured) {
     logger.info(
-      'bug-report: claude CLI not available, using fallback template',
+      'bug-report: Codex config unavailable, using fallback template',
     );
     const fallback = buildFallbackReport(description, systemInfo, logs);
     return c.json({ ...fallback, systemInfo });
