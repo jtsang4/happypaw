@@ -130,17 +130,20 @@ function buildSessionMemoryDescriptor(
     const flavor = sessionRuntimeFlavor(sessionParts[0] as string);
     const runtimePath = sessionParts.slice(1).join('/') || 'settings.json';
     return {
-      locator: encodeLocator('session', folder, 'root', flavor, ...sessionParts.slice(1)),
+      locator: encodeLocator(
+        'session',
+        folder,
+        'root',
+        flavor,
+        ...sessionParts.slice(1),
+      ),
       scope: 'session',
       kind: 'session',
       label: `${workspace} / 自动记忆 / ${runtimePath}`,
     };
   }
 
-  if (
-    sessionParts[0] === 'agents' &&
-    runtimeDirs.has(sessionParts[2] ?? '')
-  ) {
+  if (sessionParts[0] === 'agents' && runtimeDirs.has(sessionParts[2] ?? '')) {
     const agentId = sessionParts[1] || 'unknown-agent';
     const flavor = sessionRuntimeFlavor(sessionParts[2] as string);
     const runtimePath = sessionParts.slice(3).join('/') || 'settings.json';
@@ -159,10 +162,7 @@ function buildSessionMemoryDescriptor(
     };
   }
 
-  if (
-    sessionParts[0] === 'tasks' &&
-    runtimeDirs.has(sessionParts[2] ?? '')
-  ) {
+  if (sessionParts[0] === 'tasks' && runtimeDirs.has(sessionParts[2] ?? '')) {
     const taskId = sessionParts[1] || 'unknown-task';
     const flavor = sessionRuntimeFlavor(sessionParts[2] as string);
     const runtimePath = sessionParts.slice(3).join('/') || 'settings.json';
@@ -257,13 +257,19 @@ function locatorToRelativePath(locator: string): string {
   if (parts[0] === 'session' && parts.length >= 4) {
     const folder = parts[1];
     if (parts[2] === 'root' && parts.length >= 5) {
-      return `data/sessions/${folder}/${runtimeDirForFlavor(parts[3])}/${parts.slice(4).join('/')}`;
+      return `data/sessions/${folder}/${runtimeDirForFlavor(parts[3])}/${parts
+        .slice(4)
+        .join('/')}`;
     }
     if (parts[2] === 'agents' && parts.length >= 6) {
-      return `data/sessions/${folder}/agents/${parts[3]}/${runtimeDirForFlavor(parts[4])}/${parts.slice(5).join('/')}`;
+      return `data/sessions/${folder}/agents/${parts[3]}/${runtimeDirForFlavor(
+        parts[4],
+      )}/${parts.slice(5).join('/')}`;
     }
     if (parts[2] === 'tasks' && parts.length >= 6) {
-      return `data/sessions/${folder}/tasks/${parts[3]}/${runtimeDirForFlavor(parts[4])}/${parts.slice(5).join('/')}`;
+      return `data/sessions/${folder}/tasks/${parts[3]}/${runtimeDirForFlavor(
+        parts[4],
+      )}/${parts.slice(5).join('/')}`;
     }
     if (parts[2] === 'files' && parts.length >= 4) {
       return `data/sessions/${folder}/${parts.slice(3).join('/')}`;
