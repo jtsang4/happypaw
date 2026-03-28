@@ -593,7 +593,7 @@ scripts/                      # 构建辅助脚本
 - **Issue / PR 规范**见下方 §10.1
 - 系统路径不可通过文件 API 操作：`logs/`、`CLAUDE.md`、`.claude/`、`conversations/`
 - StreamEvent 类型以 `shared/stream-event.ts` 为单一真相源，修改后运行 `make sync-types` 同步（`make build` 自动触发，`make typecheck` 校验一致性）
-- HappyPaw 当前产品面只支持 Codex；新增说明或示例时不要再把 Claude 配置 / 运行时写成当前行为
+- HappyPaw 当前产品面只支持 Codex；新增说明或示例时不要再把旧版配置 / 运行时写成当前行为
 - 容器内以 `node` 非 root 用户运行，需注意文件权限
 - **关闭服务时禁止 `lsof -ti:PORT | xargs kill`**，该命令会杀掉所有连接到该端口的进程（包括 OrbStack/Docker 网络代理），导致 Docker daemon 崩溃。正确做法：`lsof -ti:PORT -sTCP:LISTEN | xargs kill`（仅杀监听进程）
 

@@ -19,12 +19,12 @@ assert.match(
 assert.doesNotMatch(
   bugReportSource,
   /claude\s+--print|execFile\(\s*['"]claude['"]/u,
-  'bug report generation should not shell out to Claude CLI',
+  'bug report generation should not shell out to the removed CLI',
 );
 assert.doesNotMatch(
   bugReportSource,
   /claudeAvailable/u,
-  'bug report capabilities should not expose legacy Claude availability',
+  'bug report capabilities should not expose legacy runtime availability',
 );
 
 const workspaceConfigSource = read('src/routes/workspace-config.ts');
@@ -41,7 +41,7 @@ assert.match(
 assert.doesNotMatch(
   workspaceConfigSource,
   /\.claude/u,
-  'workspace config routes should no longer reference legacy Claude workspace storage',
+  'workspace config routes should no longer reference legacy workspace storage',
 );
 
 const skillsSource = read('src/routes/skills.ts');
@@ -53,7 +53,7 @@ assert.match(
 assert.doesNotMatch(
   skillsSource,
   /\.claude\/skills/u,
-  'skill routes should not reference legacy Claude skill storage',
+  'skill routes should not reference legacy skill storage',
 );
 assert.doesNotMatch(
   skillsSource,
@@ -70,7 +70,7 @@ assert.match(
 assert.doesNotMatch(
   mcpServersSource,
   /\.claude|\.claude\.json/u,
-  'host MCP sync should no longer import Claude config files',
+  'host MCP sync should no longer import legacy config files',
 );
 
 const agentDefinitionsSource = read('src/routes/agent-definitions.ts');
@@ -97,7 +97,7 @@ assert.doesNotMatch(
 assert.doesNotMatch(
   agentDefinitionsSource,
   /\.claude', 'agents'|\.factory', 'droids'/u,
-  'agent definition management should not use Claude or Factory droid storage',
+  'agent definition management should not use legacy or Factory droid storage',
 );
 
 const containerRunnerSource = read('src/container-runner.ts');
@@ -126,10 +126,12 @@ assert.match(
 assert.doesNotMatch(
   containerEntrypointSource,
   /\.claude\/skills/u,
-  'container startup should not link mounted skills through the legacy Claude home',
+  'container startup should not link mounted skills through the legacy runtime home',
 );
 
-const workspaceSkillsPanel = read('web/src/components/chat/WorkspaceSkillsPanel.tsx');
+const workspaceSkillsPanel = read(
+  'web/src/components/chat/WorkspaceSkillsPanel.tsx',
+);
 assert.match(
   workspaceSkillsPanel,
   /\.happypaw\/skills\//u,

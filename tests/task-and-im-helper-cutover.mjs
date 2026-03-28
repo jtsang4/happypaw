@@ -192,7 +192,7 @@ assert.equal(parsePayload.parsed.prompt, '整理最新科技新闻并输出摘�
 assert.equal(
   capturedRequest.url,
   'https://runtime.example.com/v1/responses',
-  'task helper should call Codex responses endpoint instead of Claude CLI',
+  'task helper should call Codex responses endpoint instead of the removed CLI',
 );
 assert.equal(capturedRequest.method, 'POST');
 assert.equal(
@@ -207,7 +207,7 @@ assert.match(
 assert.doesNotMatch(
   JSON.stringify(capturedRequest.body),
   /claude/iu,
-  'task helper request payload should not mention Claude',
+  'task helper request payload should not mention the removed runtime',
 );
 
 const helperUnavailable = getRecallCommandUnavailableMessage();

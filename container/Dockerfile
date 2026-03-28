@@ -1,5 +1,5 @@
 # HappyPaw Agent Container
-# Runs Claude Agent SDK in isolated Linux VM with full toolchain
+# Runs the HappyPaw agent runtime in an isolated Linux VM with full toolchain
 
 FROM node:22-slim
 

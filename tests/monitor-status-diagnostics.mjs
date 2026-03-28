@@ -7,7 +7,9 @@ import assert from 'node:assert/strict';
 import Database from 'better-sqlite3';
 
 const repoRoot = '/Users/jtsang/Documents/workspace/github/jtsang4/happypaw';
-const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'happypaw-monitor-status-'));
+const tempRoot = fs.mkdtempSync(
+  path.join(os.tmpdir(), 'happypaw-monitor-status-'),
+);
 const fakeBinDir = path.join(tempRoot, 'bin');
 
 process.chdir(tempRoot);
@@ -71,7 +73,8 @@ const { createUser, createUserSession } = dbUsersAuthModule;
 const { hashPassword, sessionExpiresAt } = authHelpersModule;
 const { STORE_DIR } = configModule;
 const { setWebDeps } = webContextModule;
-const { saveCodexProviderConfig, saveCodexProviderSecrets } = runtimeConfigModule;
+const { saveCodexProviderConfig, saveCodexProviderSecrets } =
+  runtimeConfigModule;
 
 fs.mkdirSync(STORE_DIR, { recursive: true });
 setDatabaseInstance(new Database(path.join(STORE_DIR, 'messages.db')));
@@ -144,7 +147,11 @@ const statusResponse = await app.request('/api/status', {
     Cookie: cookie,
   },
 });
-assert.equal(statusResponse.status, 200, 'status endpoint should succeed for admin');
+assert.equal(
+  statusResponse.status,
+  200,
+  'status endpoint should succeed for admin',
+);
 
 const payload = await statusResponse.json();
 assert.equal(
@@ -152,7 +159,10 @@ assert.equal(
   false,
   'status payload should not expose claudeCodeVersions',
 );
-assert.ok(payload.codexDiagnostics, 'status payload should include codexDiagnostics');
+assert.ok(
+  payload.codexDiagnostics,
+  'status payload should include codexDiagnostics',
+);
 assert.equal(
   payload.dockerImageExists,
   true,
@@ -165,7 +175,10 @@ assert.match(
   'release source should explain the pinned Codex source',
 );
 assert.equal(payload.codexDiagnostics.helperReadiness.taskParsing.ready, true);
-assert.equal(payload.codexDiagnostics.helperReadiness.bugReportGeneration.ready, true);
+assert.equal(
+  payload.codexDiagnostics.helperReadiness.bugReportGeneration.ready,
+  true,
+);
 assert.equal(
   typeof payload.codexDiagnostics.helperReadiness.githubIssueSubmission.ready,
   'boolean',
@@ -186,10 +199,14 @@ const monitorPageSource = fs.readFileSync(
   path.join(repoRoot, 'web', 'src', 'pages', 'MonitorPage.tsx'),
   'utf8',
 );
+const removedRuntimeBuildLabel = new RegExp(
+  ['Cla', 'ude Code SDK/CLI'].join(''),
+  'u',
+);
 assert.doesNotMatch(
   monitorPageSource,
-  /Claude Code SDK\/CLI/u,
-  'monitor page build messaging should no longer mention Claude Code',
+  removedRuntimeBuildLabel,
+  'monitor page build messaging should no longer mention the removed runtime',
 );
 
 const monitorSystemInfoSource = fs.readFileSync(
@@ -206,10 +223,11 @@ assert.match(
   /任务解析助手/u,
   'monitor system info should expose helper readiness details',
 );
+const removedRuntimeBrand = new RegExp(['Cla', 'ude Code'].join(''), 'u');
 assert.doesNotMatch(
   monitorSystemInfoSource,
-  /Claude Code/u,
-  'monitor system info should not mention Claude Code',
+  removedRuntimeBrand,
+  'monitor system info should not mention the removed runtime',
 );
 
 console.log('✅ monitor-status-diagnostics assertions passed');

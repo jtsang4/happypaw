@@ -29,7 +29,7 @@ import {
 } from './mount-security.js';
 import {
   buildContainerEnvLines,
-  getClaudeProviderConfig,
+  getLegacyProviderConfig,
   getContainerEnvConfig,
   getEnabledProviders,
   getBalancingConfig,
@@ -44,7 +44,7 @@ import {
   getWorkspaceMcpConfigPathFromRoot,
   getWorkspaceSkillsDirFromRoot,
 } from './workspace-config-storage.js';
-import type { ClaudeProviderConfig } from './runtime-config.js';
+import type { LegacyProviderConfig } from './runtime-config.js';
 import { RegisteredGroup, RuntimeType, StreamEvent } from './types.js';
 import {
   attachStderrHandler,
@@ -183,7 +183,7 @@ function mkdirForContainer(dirPath: string): void {
 }
 
 interface ResolvedProvider {
-  config: ClaudeProviderConfig;
+  config: LegacyProviderConfig;
   customEnv: Record<string, string>;
 }
 
@@ -482,7 +482,7 @@ function buildVolumeMounts(
   // Global config merged with per-container overrides.
   const envDir = path.join(DATA_DIR, 'env', group.folder);
   fs.mkdirSync(envDir, { recursive: true });
-  const globalConfig = resolvedProvider?.config ?? getClaudeProviderConfig();
+  const globalConfig = resolvedProvider?.config ?? getLegacyProviderConfig();
   const codexProviderConfig = getCodexProviderConfig();
   const containerOverride = getContainerEnvConfig(group.folder);
   const envLines = buildContainerEnvLines(
@@ -517,20 +517,20 @@ function buildVolumeMounts(
   // Only for admin-created workspaces (ownerHomeFolder === 'main').
   const isCreatorAdmin = ownerHomeFolder === 'main';
   if (isCreatorAdmin) {
-    const hostClaudeDir = path.join(os.homedir(), '.claude');
-    const hostClaudeMd = path.join(hostClaudeDir, 'CLAUDE.md');
-    const hostRulesDir = path.join(hostClaudeDir, 'rules');
+    const hostMemoryDir = path.join(os.homedir(), '.claude');
+    const hostMemoryFile = path.join(hostMemoryDir, 'CLAUDE.md');
+    const hostMemoryRulesDir = path.join(hostMemoryDir, 'rules');
 
-    if (fs.existsSync(hostClaudeMd)) {
+    if (fs.existsSync(hostMemoryFile)) {
       mounts.push({
-        hostPath: hostClaudeMd,
+        hostPath: hostMemoryFile,
         containerPath: '/workspace/CLAUDE.md',
         readonly: true,
       });
     }
-    if (fs.existsSync(hostRulesDir)) {
+    if (fs.existsSync(hostMemoryRulesDir)) {
       mounts.push({
-        hostPath: hostRulesDir,
+        hostPath: hostMemoryRulesDir,
         containerPath: '/workspace/.claude/rules',
         readonly: true,
       });
@@ -898,7 +898,7 @@ export async function runHostAgent(
   const defaultGroupDir = path.join(GROUPS_DIR, group.folder);
   if (!group.customCwd) {
     fs.mkdirSync(defaultGroupDir, { recursive: true });
-    // 确保 group 目录是独立 git root，防止 Claude Code 向上找到父项目的 .git
+    // 确保 group 目录是独立 git root，防止 Codex 运行时向上找到父项目的 .git
     const gitDir = path.join(defaultGroupDir, '.git');
     if (!fs.existsSync(gitDir)) {
       try {
@@ -1088,7 +1088,7 @@ export async function runHostAgent(
   const hostPoolResult = trySelectPoolProvider(group.folder);
   const hostSelectedProfileId = hostPoolResult?.profileId ?? null;
   const globalConfig =
-    hostPoolResult?.resolved.config ?? getClaudeProviderConfig();
+    hostPoolResult?.resolved.config ?? getLegacyProviderConfig();
 
   try {
     // 配置层环境变量

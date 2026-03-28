@@ -81,7 +81,7 @@ conn.close()
 "
 ```
 
-### 第四步：重置 Claude 会话（关键：清除 token 上下文）
+### 第四步：重置 Codex 会话（关键：清除 token 上下文）
 
 ```python3
 python3 -c "
@@ -108,7 +108,7 @@ git diff --stat
 
 ## 注意事项
 
-- **必须重置 session**：仅删除 DB 消息不够，Claude session 文件中仍保存着历史上下文，下次激活时依然消耗 token
+- **必须重置 session**：仅删除 DB 消息不够，Codex session 文件中仍保存着历史上下文，下次激活时依然消耗 token
 - **容器名与 folder 的对应关系**：容器名格式为 `happypaw-{folder}-{timestamp}`，可通过 `ls data/ipc/` 查看所有 folder
 - **删除消息前仔细核对**：通过 `is_from_me` 和内容确认，避免误删正常业务消息
 - **data/ 目录的修改不影响 git**：SQLite 和 IPC 文件均在 `data/` 下，不纳入版本控制
@@ -117,5 +117,5 @@ git diff --stat
 
 - [ ] 无残留测试容器在运行（`docker ps`）
 - [ ] 测试消息已从 DB 删除
-- [ ] Claude session ID 已重置为新 UUID
+- [ ] Codex session ID 已重置为新 UUID
 - [ ] `git status` 显示工作区干净

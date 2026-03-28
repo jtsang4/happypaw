@@ -206,8 +206,8 @@ export function ensureUserHomeGroup(
   // Create user-global memory directory and initialize CLAUDE.md from template
   const userGlobalDir = path.join(GROUPS_DIR, 'user-global', userId);
   fs.mkdirSync(userGlobalDir, { recursive: true });
-  const userClaudeMd = path.join(userGlobalDir, 'CLAUDE.md');
-  if (!fs.existsSync(userClaudeMd)) {
+  const userMemoryFile = path.join(userGlobalDir, 'CLAUDE.md');
+  if (!fs.existsSync(userMemoryFile)) {
     const templatePath = path.resolve(
       process.cwd(),
       'config',
@@ -215,9 +215,13 @@ export function ensureUserHomeGroup(
     );
     if (fs.existsSync(templatePath)) {
       try {
-        fs.writeFileSync(userClaudeMd, fs.readFileSync(templatePath, 'utf-8'), {
-          flag: 'wx',
-        });
+        fs.writeFileSync(
+          userMemoryFile,
+          fs.readFileSync(templatePath, 'utf-8'),
+          {
+            flag: 'wx',
+          },
+        );
       } catch {
         // EEXIST race or read error — ignore
       }

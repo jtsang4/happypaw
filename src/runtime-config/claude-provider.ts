@@ -24,25 +24,25 @@ import {
 import { decryptSecrets, encryptSecrets } from './crypto.js';
 import type {
   BalancingConfig,
-  ClaudeOAuthCredentials,
-  ClaudeProviderConfig,
-  ClaudeProviderMode,
-  ClaudeProviderPublicConfig,
-  ClaudeThirdPartyProfile,
-  ClaudeThirdPartyProfilePublic,
+  LegacyOAuthCredentials,
+  LegacyProviderConfig,
+  LegacyProviderMode,
+  LegacyProviderPublicConfig,
+  LegacyThirdPartyProfile,
+  LegacyThirdPartyProfilePublic,
   SecretPayload,
   UnifiedProvider,
   UnifiedProviderPublic,
 } from './types.js';
 
-interface StoredClaudeProviderConfigV2 {
+interface StoredLegacyProviderConfigV2 {
   version: 2;
   anthropicBaseUrl: string;
   updatedAt: string;
   secrets: ReturnType<typeof encryptSecrets>;
 }
 
-interface StoredClaudeThirdPartyProfileV1 {
+interface StoredLegacyThirdPartyProfileV1 {
   id: string;
   name: string;
   anthropicBaseUrl: string;
@@ -52,10 +52,10 @@ interface StoredClaudeThirdPartyProfileV1 {
   customEnv?: Record<string, string>;
 }
 
-interface StoredClaudeProviderConfigV3 {
+interface StoredLegacyProviderConfigV3 {
   version: 3;
   activeProfileId: string;
-  profiles: StoredClaudeThirdPartyProfileV1[];
+  profiles: StoredLegacyThirdPartyProfileV1[];
   official: {
     updatedAt: string;
     secrets: ReturnType<typeof encryptSecrets>;
@@ -63,7 +63,7 @@ interface StoredClaudeProviderConfigV3 {
   };
 }
 
-interface StoredClaudeProviderConfigLegacy {
+interface StoredLegacyProviderConfigLegacy {
   anthropicBaseUrl?: string;
   anthropicAuthToken?: string;
   anthropicApiKey?: string;
@@ -71,17 +71,17 @@ interface StoredClaudeProviderConfigLegacy {
   updatedAt?: string;
 }
 
-interface ClaudeStoredStateV3Resolved {
+interface LegacyStoredStateV3Resolved {
   activeProfileId: string;
-  profiles: StoredClaudeThirdPartyProfileV1[];
+  profiles: StoredLegacyThirdPartyProfileV1[];
   officialSecrets: SecretPayload;
   officialUpdatedAt: string | null;
   officialCustomEnv: Record<string, string>;
 }
 
-interface ClaudeStoredProfileResolved {
-  mode: ClaudeProviderMode;
-  profile: ClaudeThirdPartyProfile | null;
+interface LegacyStoredProfileResolved {
+  mode: LegacyProviderMode;
+  profile: LegacyThirdPartyProfile | null;
   officialSecrets: SecretPayload;
   officialUpdatedAt: string | null;
 }
@@ -105,7 +105,7 @@ interface StoredProviderV4 {
   updatedAt: string;
 }
 
-interface StoredClaudeProviderConfigV4 {
+interface StoredLegacyProviderConfigV4 {
   version: 4;
   providers: StoredProviderV4[];
   balancing: BalancingConfig;
@@ -115,7 +115,7 @@ interface StoredClaudeProviderConfigV4 {
 const MAX_PROVIDERS = 20;
 const POOL_CONFIG_FILE = path.join(CLAUDE_CONFIG_DIR, 'provider-pool.json');
 
-interface ClaudeConfigAuditEntry {
+interface LegacyConfigAuditEntry {
   timestamp: string;
   actor: string;
   action: string;
@@ -127,14 +127,14 @@ function sanitizeProviderCustomEnv(
   customEnv: Record<string, string>,
 ): Record<string, string> {
   return sanitizeCustomEnvMap(customEnv, {
-    skipReservedClaudeKeys: true,
+    skipReservedLegacyKeys: true,
     skipReservedInfrastructureKeys: true,
   });
 }
 
 function normalizeConfig(
-  input: Omit<ClaudeProviderConfig, 'updatedAt'>,
-): Omit<ClaudeProviderConfig, 'updatedAt'> {
+  input: Omit<LegacyProviderConfig, 'updatedAt'>,
+): Omit<LegacyProviderConfig, 'updatedAt'> {
   return {
     anthropicBaseUrl: normalizeBaseUrl(input.anthropicBaseUrl),
     anthropicAuthToken: normalizeSecret(
@@ -152,9 +152,9 @@ function normalizeConfig(
 }
 
 function buildConfig(
-  input: Omit<ClaudeProviderConfig, 'updatedAt'>,
+  input: Omit<LegacyProviderConfig, 'updatedAt'>,
   updatedAt: string | null,
-): ClaudeProviderConfig {
+): LegacyProviderConfig {
   return {
     ...normalizeConfig(input),
     updatedAt,
@@ -162,8 +162,8 @@ function buildConfig(
 }
 
 function readLegacyConfig(
-  raw: StoredClaudeProviderConfigLegacy,
-): ClaudeProviderConfig {
+  raw: StoredLegacyProviderConfigLegacy,
+): LegacyProviderConfig {
   return buildConfig(
     {
       anthropicBaseUrl: raw.anthropicBaseUrl ?? '',
@@ -178,8 +178,8 @@ function readLegacyConfig(
 }
 
 function toStoredProfile(
-  profile: ClaudeThirdPartyProfile,
-): StoredClaudeThirdPartyProfileV1 {
+  profile: LegacyThirdPartyProfile,
+): StoredLegacyThirdPartyProfileV1 {
   const sanitizedEnv = sanitizeProviderCustomEnv(profile.customEnv || {});
   return {
     id: normalizeProfileId(profile.id),
@@ -203,8 +203,8 @@ function toStoredProfile(
 }
 
 function fromStoredProfile(
-  stored: StoredClaudeThirdPartyProfileV1,
-): ClaudeThirdPartyProfile {
+  stored: StoredLegacyThirdPartyProfileV1,
+): LegacyThirdPartyProfile {
   const secrets = decryptSecrets(stored.secrets);
   return {
     id: normalizeProfileId(stored.id),
@@ -224,8 +224,8 @@ function fromStoredProfile(
 }
 
 function makeDefaultThirdPartyProfile(
-  config: ClaudeProviderConfig,
-): ClaudeThirdPartyProfile {
+  config: LegacyProviderConfig,
+): LegacyThirdPartyProfile {
   return {
     id: DEFAULT_THIRD_PARTY_PROFILE_ID,
     name: DEFAULT_THIRD_PARTY_PROFILE_NAME,
@@ -254,14 +254,14 @@ function normalizeOfficialSecrets(input: SecretPayload): SecretPayload {
   };
 }
 
-function isOfficialClaudeMode(activeProfileId: string): boolean {
+function isOfficialLegacyMode(activeProfileId: string): boolean {
   return activeProfileId === OFFICIAL_CLAUDE_PROFILE_ID;
 }
 
-function buildOfficialClaudeProviderConfig(
+function buildOfficialLegacyProviderConfig(
   officialSecrets: SecretPayload,
   officialUpdatedAt: string | null,
-): ClaudeProviderConfig {
+): LegacyProviderConfig {
   return buildConfig(
     {
       anthropicBaseUrl: '',
@@ -276,15 +276,15 @@ function buildOfficialClaudeProviderConfig(
 }
 
 function normalizeStoredState(
-  state: ClaudeStoredStateV3Resolved,
-): ClaudeStoredStateV3Resolved {
+  state: LegacyStoredStateV3Resolved,
+): LegacyStoredStateV3Resolved {
   const normalizedProfiles = state.profiles
     .map((item) => fromStoredProfile(item))
     .slice(0, 20)
     .map((profile) => toStoredProfile(profile));
 
   const officialSecrets = normalizeOfficialSecrets(state.officialSecrets);
-  const officialMode = isOfficialClaudeMode(state.activeProfileId);
+  const officialMode = isOfficialLegacyMode(state.activeProfileId);
   let officialCustomEnv = sanitizeProviderCustomEnv(
     state.officialCustomEnv || {},
   );
@@ -372,14 +372,14 @@ function normalizeStoredState(
   };
 }
 
-function readStoredState(): ClaudeStoredStateV3Resolved | null {
+function readStoredState(): LegacyStoredStateV3Resolved | null {
   if (!fs.existsSync(CLAUDE_CONFIG_FILE)) return null;
   try {
     const content = fs.readFileSync(CLAUDE_CONFIG_FILE, 'utf-8');
     const parsed = JSON.parse(content) as Record<string, unknown>;
 
     if (parsed.version === 3) {
-      const v3 = parsed as unknown as StoredClaudeProviderConfigV3;
+      const v3 = parsed as unknown as StoredLegacyProviderConfigV3;
       const profiles = Array.isArray(v3.profiles) ? v3.profiles : [];
       const officialSecrets = v3.official
         ? decryptSecrets(v3.official.secrets)
@@ -392,11 +392,11 @@ function readStoredState(): ClaudeStoredStateV3Resolved | null {
       return normalizeStoredState({
         activeProfileId:
           typeof v3.activeProfileId === 'string'
-            ? isOfficialClaudeMode(v3.activeProfileId)
+            ? isOfficialLegacyMode(v3.activeProfileId)
               ? OFFICIAL_CLAUDE_PROFILE_ID
               : normalizeProfileId(v3.activeProfileId)
             : DEFAULT_THIRD_PARTY_PROFILE_ID,
-        profiles: profiles as StoredClaudeThirdPartyProfileV1[],
+        profiles: profiles as StoredLegacyThirdPartyProfileV1[],
         officialSecrets,
         officialUpdatedAt: v3.official?.updatedAt || null,
         officialCustomEnv: v3.official?.customEnv || {},
@@ -404,7 +404,7 @@ function readStoredState(): ClaudeStoredStateV3Resolved | null {
     }
 
     if (parsed.version === 2) {
-      const v2 = parsed as unknown as StoredClaudeProviderConfigV2;
+      const v2 = parsed as unknown as StoredLegacyProviderConfigV2;
       const secrets = decryptSecrets(v2.secrets);
       const legacyConfig = buildConfig(
         {
@@ -434,7 +434,7 @@ function readStoredState(): ClaudeStoredStateV3Resolved | null {
       });
     }
 
-    const legacy = readLegacyConfig(parsed as StoredClaudeProviderConfigLegacy);
+    const legacy = readLegacyConfig(parsed as StoredLegacyProviderConfigLegacy);
     const profile = toStoredProfile(makeDefaultThirdPartyProfile(legacy));
     return normalizeStoredState({
       activeProfileId: profile.id,
@@ -451,15 +451,15 @@ function readStoredState(): ClaudeStoredStateV3Resolved | null {
   } catch (err) {
     logger.error(
       { err, file: CLAUDE_CONFIG_FILE },
-      'Failed to read Claude provider config, falling back to defaults',
+      'Failed to read legacy provider config, falling back to defaults',
     );
     return null;
   }
 }
 
-function writeStoredState(state: ClaudeStoredStateV3Resolved): void {
+function writeStoredState(state: LegacyStoredStateV3Resolved): void {
   const normalized = normalizeStoredState(state);
-  const payload: StoredClaudeProviderConfigV3 = {
+  const payload: StoredLegacyProviderConfigV3 = {
     version: CURRENT_CONFIG_VERSION,
     activeProfileId: normalized.activeProfileId,
     profiles: normalized.profiles,
@@ -527,7 +527,7 @@ function fromStoredProviderV4(stored: StoredProviderV4): UnifiedProvider {
   };
 }
 
-function migrateV3toV4(v3: ClaudeStoredStateV3Resolved): {
+function migrateV3toV4(v3: LegacyStoredStateV3Resolved): {
   providers: UnifiedProvider[];
   balancing: BalancingConfig;
 } {
@@ -541,9 +541,9 @@ function migrateV3toV4(v3: ClaudeStoredStateV3Resolved): {
   if (hasOfficial) {
     providers.push({
       id: OFFICIAL_CLAUDE_PROFILE_ID,
-      name: '官方 Claude',
+      name: '官方旧版',
       type: 'official',
-      enabled: isOfficialClaudeMode(v3.activeProfileId),
+      enabled: isOfficialLegacyMode(v3.activeProfileId),
       weight: 1,
       anthropicBaseUrl: '',
       anthropicAuthToken: '',
@@ -632,7 +632,7 @@ function readStoredStateV4(): {
     const parsed = JSON.parse(content) as Record<string, unknown>;
 
     if (parsed.version === 4) {
-      const v4 = parsed as unknown as StoredClaudeProviderConfigV4;
+      const v4 = parsed as unknown as StoredLegacyProviderConfigV4;
       return {
         providers: v4.providers.map(fromStoredProviderV4),
         balancing: {
@@ -654,14 +654,14 @@ function readStoredStateV4(): {
     writeStoredStateV4(migrated.providers, migrated.balancing);
     logger.info(
       { providerCount: migrated.providers.length },
-      'Migrated Claude provider config from V3 to V4',
+      'Migrated legacy provider config from V3 to V4',
     );
 
     return migrated;
   } catch (err) {
     logger.error(
       { err, file: CLAUDE_CONFIG_FILE },
-      'Failed to read Claude provider config V4',
+      'Failed to read legacy provider config V4',
     );
     return null;
   }
@@ -671,7 +671,7 @@ function writeStoredStateV4(
   providers: UnifiedProvider[],
   balancing: BalancingConfig,
 ): void {
-  const payload: StoredClaudeProviderConfigV4 = {
+  const payload: StoredLegacyProviderConfigV4 = {
     version: 4,
     providers: providers.map(toStoredProviderV4),
     balancing,
@@ -721,7 +721,7 @@ export function createProvider(input: {
   anthropicModel?: string;
   anthropicApiKey?: string;
   claudeCodeOauthToken?: string;
-  claudeOAuthCredentials?: ClaudeOAuthCredentials | null;
+  claudeOAuthCredentials?: LegacyOAuthCredentials | null;
   customEnv?: Record<string, string>;
   weight?: number;
   enabled?: boolean;
@@ -778,7 +778,7 @@ export function updateProvider(
   },
 ): UnifiedProvider {
   const state = readStoredStateV4();
-  if (!state) throw new Error('Claude 配置不存在');
+  if (!state) throw new Error('旧版配置不存在');
 
   const idx = state.providers.findIndex((p) => p.id === id);
   if (idx < 0) throw new Error('未找到指定供应商');
@@ -819,13 +819,13 @@ export function updateProviderSecrets(
     anthropicApiKey?: string;
     clearAnthropicApiKey?: boolean;
     claudeCodeOauthToken?: string;
-    clearClaudeCodeOauthToken?: boolean;
-    claudeOAuthCredentials?: ClaudeOAuthCredentials;
-    clearClaudeOAuthCredentials?: boolean;
+    clearLegacyCodeOauthToken?: boolean;
+    claudeOAuthCredentials?: LegacyOAuthCredentials;
+    clearLegacyOAuthCredentials?: boolean;
   },
 ): UnifiedProvider {
   const state = readStoredStateV4();
-  if (!state) throw new Error('Claude 配置不存在');
+  if (!state) throw new Error('旧版配置不存在');
 
   const idx = state.providers.findIndex((p) => p.id === id);
   if (idx < 0) throw new Error('未找到指定供应商');
@@ -856,14 +856,14 @@ export function updateProviderSecrets(
       secrets.claudeCodeOauthToken,
       'claudeCodeOauthToken',
     );
-  } else if (secrets.clearClaudeCodeOauthToken) {
+  } else if (secrets.clearLegacyCodeOauthToken) {
     updated.claudeCodeOauthToken = '';
   }
 
   if (secrets.claudeOAuthCredentials) {
     updated.claudeOAuthCredentials = secrets.claudeOAuthCredentials;
     updated.claudeCodeOauthToken = '';
-  } else if (secrets.clearClaudeOAuthCredentials) {
+  } else if (secrets.clearLegacyOAuthCredentials) {
     updated.claudeOAuthCredentials = null;
   }
 
@@ -874,7 +874,7 @@ export function updateProviderSecrets(
 
 export function toggleProvider(id: string): UnifiedProvider {
   const state = readStoredStateV4();
-  if (!state) throw new Error('Claude 配置不存在');
+  if (!state) throw new Error('旧版配置不存在');
 
   const idx = state.providers.findIndex((p) => p.id === id);
   if (idx < 0) throw new Error('未找到指定供应商');
@@ -897,7 +897,7 @@ export function toggleProvider(id: string): UnifiedProvider {
 
 export function deleteProvider(id: string): void {
   const state = readStoredStateV4();
-  if (!state) throw new Error('Claude 配置不存在');
+  if (!state) throw new Error('旧版配置不存在');
 
   const idx = state.providers.findIndex((p) => p.id === id);
   if (idx < 0) throw new Error('未找到指定供应商');
@@ -918,7 +918,7 @@ export function deleteProvider(id: string): void {
 
 export function providerToConfig(
   provider: UnifiedProvider,
-): ClaudeProviderConfig {
+): LegacyProviderConfig {
   return {
     anthropicBaseUrl: provider.anthropicBaseUrl,
     anthropicAuthToken: provider.anthropicAuthToken,
@@ -945,9 +945,9 @@ export function toPublicProvider(
     anthropicAuthTokenMasked: maskSecret(provider.anthropicAuthToken),
     hasAnthropicApiKey: !!provider.anthropicApiKey,
     anthropicApiKeyMasked: maskSecret(provider.anthropicApiKey),
-    hasClaudeCodeOauthToken: !!provider.claudeCodeOauthToken,
+    hasLegacyCodeOauthToken: !!provider.claudeCodeOauthToken,
     claudeCodeOauthTokenMasked: maskSecret(provider.claudeCodeOauthToken),
-    hasClaudeOAuthCredentials: !!provider.claudeOAuthCredentials,
+    hasLegacyOAuthCredentials: !!provider.claudeOAuthCredentials,
     claudeOAuthCredentialsExpiresAt:
       provider.claudeOAuthCredentials?.expiresAt ?? null,
     claudeOAuthCredentialsAccessTokenMasked: provider.claudeOAuthCredentials
@@ -959,7 +959,7 @@ export function toPublicProvider(
 }
 
 export function resolveProviderById(providerId: string): {
-  config: ClaudeProviderConfig;
+  config: LegacyProviderConfig;
   customEnv: Record<string, string>;
 } {
   const state = readStoredStateV4();
@@ -988,9 +988,9 @@ export function resolveProviderById(providerId: string): {
 }
 
 function resolveActiveProfile(
-  state: ClaudeStoredStateV3Resolved,
-): ClaudeStoredProfileResolved {
-  if (isOfficialClaudeMode(state.activeProfileId)) {
+  state: LegacyStoredStateV3Resolved,
+): LegacyStoredProfileResolved {
+  if (isOfficialLegacyMode(state.activeProfileId)) {
     return {
       mode: 'official',
       profile: null,
@@ -1020,7 +1020,7 @@ function resolveActiveProfile(
   };
 }
 
-function defaultsFromEnv(): ClaudeProviderConfig {
+function defaultsFromEnv(): LegacyProviderConfig {
   const raw = {
     anthropicBaseUrl: process.env.ANTHROPIC_BASE_URL || '',
     anthropicAuthToken: process.env.ANTHROPIC_AUTH_TOKEN || '',
@@ -1045,7 +1045,7 @@ function defaultsFromEnv(): ClaudeProviderConfig {
   }
 }
 
-export function getClaudeProviderConfig(): ClaudeProviderConfig {
+export function getLegacyProviderConfig(): LegacyProviderConfig {
   try {
     const state = readStoredStateV4();
     if (state) {
@@ -1059,20 +1059,20 @@ export function getClaudeProviderConfig(): ClaudeProviderConfig {
   return defaultsFromEnv();
 }
 
-export function toPublicClaudeProviderConfig(
-  config: ClaudeProviderConfig,
-): ClaudeProviderPublicConfig {
+export function toPublicLegacyProviderConfig(
+  config: LegacyProviderConfig,
+): LegacyProviderPublicConfig {
   return {
     anthropicBaseUrl: config.anthropicBaseUrl,
     anthropicModel: config.anthropicModel,
     updatedAt: config.updatedAt,
     hasAnthropicAuthToken: !!config.anthropicAuthToken,
     hasAnthropicApiKey: !!config.anthropicApiKey,
-    hasClaudeCodeOauthToken: !!config.claudeCodeOauthToken,
+    hasLegacyCodeOauthToken: !!config.claudeCodeOauthToken,
     anthropicAuthTokenMasked: maskSecret(config.anthropicAuthToken),
     anthropicApiKeyMasked: maskSecret(config.anthropicApiKey),
     claudeCodeOauthTokenMasked: maskSecret(config.claudeCodeOauthToken),
-    hasClaudeOAuthCredentials: !!config.claudeOAuthCredentials,
+    hasLegacyOAuthCredentials: !!config.claudeOAuthCredentials,
     claudeOAuthCredentialsExpiresAt:
       config.claudeOAuthCredentials?.expiresAt ?? null,
     claudeOAuthCredentialsAccessTokenMasked: config.claudeOAuthCredentials
@@ -1081,8 +1081,8 @@ export function toPublicClaudeProviderConfig(
   };
 }
 
-export function validateClaudeProviderConfig(
-  config: ClaudeProviderConfig,
+export function validateLegacyProviderConfig(
+  config: LegacyProviderConfig,
 ): string[] {
   const errors: string[] = [];
 
@@ -1104,12 +1104,12 @@ export function validateClaudeProviderConfig(
   return errors;
 }
 
-export function saveClaudeProviderConfig(
-  next: Omit<ClaudeProviderConfig, 'updatedAt'>,
-  options?: { mode?: ClaudeProviderMode },
-): ClaudeProviderConfig {
+export function saveLegacyProviderConfig(
+  next: Omit<LegacyProviderConfig, 'updatedAt'>,
+  options?: { mode?: LegacyProviderMode },
+): LegacyProviderConfig {
   const normalized = buildConfig(next, new Date().toISOString());
-  const errors = validateClaudeProviderConfig(normalized);
+  const errors = validateLegacyProviderConfig(normalized);
   if (errors.length > 0) {
     throw new Error(errors.join('；'));
   }
@@ -1117,7 +1117,7 @@ export function saveClaudeProviderConfig(
   const mode =
     options?.mode ?? (normalized.anthropicBaseUrl ? 'third_party' : 'official');
   const existing = readStoredState();
-  const baseState: ClaudeStoredStateV3Resolved = existing || {
+  const baseState: LegacyStoredStateV3Resolved = existing || {
     activeProfileId:
       mode === 'official'
         ? OFFICIAL_CLAUDE_PROFILE_ID
@@ -1163,13 +1163,13 @@ export function saveClaudeProviderConfig(
       officialUpdatedAt: normalized.updatedAt,
     });
 
-    return buildOfficialClaudeProviderConfig(
+    return buildOfficialLegacyProviderConfig(
       officialSecrets,
       normalized.updatedAt,
     );
   }
 
-  const activeId = isOfficialClaudeMode(baseState.activeProfileId)
+  const activeId = isOfficialLegacyMode(baseState.activeProfileId)
     ? null
     : baseState.activeProfileId;
   const activeStored =
@@ -1181,7 +1181,7 @@ export function saveClaudeProviderConfig(
     ? fromStoredProfile(activeStored)
     : makeDefaultThirdPartyProfile(normalized);
 
-  const updatedProfile: ClaudeThirdPartyProfile = {
+  const updatedProfile: LegacyThirdPartyProfile = {
     ...activeProfile,
     anthropicBaseUrl: normalized.anthropicBaseUrl,
     anthropicAuthToken: normalized.anthropicAuthToken,
@@ -1211,13 +1211,13 @@ export function saveClaudeProviderConfig(
   return normalized;
 }
 
-export function saveClaudeOfficialProviderSecrets(
+export function saveLegacyOfficialProviderSecrets(
   next: Pick<
-    ClaudeProviderConfig,
+    LegacyProviderConfig,
     'anthropicApiKey' | 'claudeCodeOauthToken' | 'claudeOAuthCredentials'
   >,
   options?: { activateOfficial?: boolean },
-): ClaudeProviderConfig {
+): LegacyProviderConfig {
   const updatedAt = new Date().toISOString();
   const officialSecrets = normalizeOfficialSecrets({
     anthropicAuthToken: '',
@@ -1227,7 +1227,7 @@ export function saveClaudeOfficialProviderSecrets(
   });
 
   const existing = readStoredState();
-  const baseState: ClaudeStoredStateV3Resolved = existing || {
+  const baseState: LegacyStoredStateV3Resolved = existing || {
     activeProfileId: OFFICIAL_CLAUDE_PROFILE_ID,
     profiles: [],
     officialSecrets: {
@@ -1249,12 +1249,12 @@ export function saveClaudeOfficialProviderSecrets(
     officialUpdatedAt: updatedAt,
   });
 
-  return getClaudeProviderConfig();
+  return getLegacyProviderConfig();
 }
 
-export function listClaudeThirdPartyProfiles(): {
+export function listLegacyThirdPartyProfiles(): {
   activeProfileId: string;
-  profiles: ClaudeThirdPartyProfile[];
+  profiles: LegacyThirdPartyProfile[];
 } {
   const state = readStoredState();
   if (!state) {
@@ -1272,9 +1272,9 @@ export function listClaudeThirdPartyProfiles(): {
   };
 }
 
-export function toPublicClaudeThirdPartyProfile(
-  profile: ClaudeThirdPartyProfile,
-): ClaudeThirdPartyProfilePublic {
+export function toPublicLegacyThirdPartyProfile(
+  profile: LegacyThirdPartyProfile,
+): LegacyThirdPartyProfilePublic {
   return {
     id: profile.id,
     name: profile.name,
@@ -1287,13 +1287,13 @@ export function toPublicClaudeThirdPartyProfile(
   };
 }
 
-export function createClaudeThirdPartyProfile(input: {
+export function createLegacyThirdPartyProfile(input: {
   name: string;
   anthropicBaseUrl: string;
   anthropicAuthToken: string;
   anthropicModel?: string;
   customEnv?: Record<string, string>;
-}): ClaudeThirdPartyProfile {
+}): LegacyThirdPartyProfile {
   const state = readStoredState() || {
     activeProfileId: DEFAULT_THIRD_PARTY_PROFILE_ID,
     profiles: [],
@@ -1312,7 +1312,7 @@ export function createClaudeThirdPartyProfile(input: {
   }
 
   const now = new Date().toISOString();
-  const profile: ClaudeThirdPartyProfile = {
+  const profile: LegacyThirdPartyProfile = {
     id: crypto.randomBytes(8).toString('hex'),
     name: normalizeProfileName(input.name),
     anthropicBaseUrl: normalizeBaseUrl(input.anthropicBaseUrl),
@@ -1337,7 +1337,7 @@ export function createClaudeThirdPartyProfile(input: {
     },
     now,
   );
-  const errors = validateClaudeProviderConfig(merged);
+  const errors = validateLegacyProviderConfig(merged);
   if (errors.length > 0) {
     throw new Error(errors.join('；'));
   }
@@ -1352,7 +1352,7 @@ export function createClaudeThirdPartyProfile(input: {
   return profile;
 }
 
-export function updateClaudeThirdPartyProfile(
+export function updateLegacyThirdPartyProfile(
   profileId: string,
   patch: {
     name?: string;
@@ -1360,16 +1360,16 @@ export function updateClaudeThirdPartyProfile(
     anthropicModel?: string;
     customEnv?: Record<string, string>;
   },
-): ClaudeThirdPartyProfile {
+): LegacyThirdPartyProfile {
   const state = readStoredState();
-  if (!state) throw new Error('Claude 配置不存在');
+  if (!state) throw new Error('旧版配置不存在');
 
   const id = normalizeProfileId(profileId);
   const current = state.profiles.find((item) => item.id === id);
   if (!current) throw new Error('未找到指定第三方配置');
 
   const decoded = fromStoredProfile(current);
-  const next: ClaudeThirdPartyProfile = {
+  const next: LegacyThirdPartyProfile = {
     ...decoded,
     name:
       patch.name !== undefined
@@ -1402,7 +1402,7 @@ export function updateClaudeThirdPartyProfile(
     },
     next.updatedAt,
   );
-  const errors = validateClaudeProviderConfig(merged);
+  const errors = validateLegacyProviderConfig(merged);
   if (errors.length > 0) {
     throw new Error(errors.join('；'));
   }
@@ -1417,15 +1417,15 @@ export function updateClaudeThirdPartyProfile(
   return next;
 }
 
-export function updateClaudeThirdPartyProfileSecret(
+export function updateLegacyThirdPartyProfileSecret(
   profileId: string,
   patch: {
     anthropicAuthToken?: string;
     clearAnthropicAuthToken?: boolean;
   },
-): ClaudeThirdPartyProfile {
+): LegacyThirdPartyProfile {
   const state = readStoredState();
-  if (!state) throw new Error('Claude 配置不存在');
+  if (!state) throw new Error('旧版配置不存在');
 
   const id = normalizeProfileId(profileId);
   const current = state.profiles.find((item) => item.id === id);
@@ -1439,7 +1439,7 @@ export function updateClaudeThirdPartyProfileSecret(
         ? ''
         : decoded.anthropicAuthToken;
 
-  const next: ClaudeThirdPartyProfile = {
+  const next: LegacyThirdPartyProfile = {
     ...decoded,
     anthropicAuthToken: nextToken,
     updatedAt: new Date().toISOString(),
@@ -1457,7 +1457,7 @@ export function updateClaudeThirdPartyProfileSecret(
     },
     next.updatedAt,
   );
-  const errors = validateClaudeProviderConfig(merged);
+  const errors = validateLegacyProviderConfig(merged);
   if (errors.length > 0) {
     throw new Error(errors.join('；'));
   }
@@ -1472,11 +1472,11 @@ export function updateClaudeThirdPartyProfileSecret(
   return next;
 }
 
-export function activateClaudeThirdPartyProfile(
+export function activateLegacyThirdPartyProfile(
   profileId: string,
-): ClaudeProviderConfig {
+): LegacyProviderConfig {
   const state = readStoredState();
-  if (!state) throw new Error('Claude 配置不存在');
+  if (!state) throw new Error('旧版配置不存在');
 
   const id = normalizeProfileId(profileId);
   const target = state.profiles.find((item) => item.id === id);
@@ -1487,15 +1487,15 @@ export function activateClaudeThirdPartyProfile(
     activeProfileId: id,
   });
 
-  return getClaudeProviderConfig();
+  return getLegacyProviderConfig();
 }
 
-export function deleteClaudeThirdPartyProfile(profileId: string): {
+export function deleteLegacyThirdPartyProfile(profileId: string): {
   activeProfileId: string;
   deletedProfileId: string;
 } {
   const state = readStoredState();
-  if (!state) throw new Error('Claude 配置不存在');
+  if (!state) throw new Error('旧版配置不存在');
 
   const id = normalizeProfileId(profileId);
   if (!state.profiles.some((item) => item.id === id)) {
@@ -1532,8 +1532,8 @@ export function shellQuoteEnvLines(lines: string[]): string[] {
   });
 }
 
-export function buildClaudeEnvLines(
-  config: ClaudeProviderConfig,
+export function buildLegacyEnvLines(
+  config: LegacyProviderConfig,
   profileCustomEnv?: Record<string, string>,
 ): string[] {
   const lines: string[] = [];
@@ -1586,12 +1586,12 @@ export function getActiveProfileCustomEnv(): Record<string, string> {
 
 export function resolveProfileToConfig(
   profileId: string,
-): ClaudeProviderConfig {
+): LegacyProviderConfig {
   const state = readStoredState();
   if (!state) return defaultsFromEnv();
 
-  if (isOfficialClaudeMode(profileId)) {
-    return buildOfficialClaudeProviderConfig(
+  if (isOfficialLegacyMode(profileId)) {
+    return buildOfficialLegacyProviderConfig(
       state.officialSecrets,
       state.officialUpdatedAt,
     );
@@ -1603,7 +1603,7 @@ export function resolveProfileToConfig(
       { profileId },
       'resolveProfileToConfig: profile not found, falling back to active',
     );
-    return getClaudeProviderConfig();
+    return getLegacyProviderConfig();
   }
 
   const profile = fromStoredProfile(stored);
@@ -1627,7 +1627,7 @@ export function getCustomEnvForProfile(
   const state = readStoredState();
   if (!state) return {};
 
-  if (isOfficialClaudeMode(profileId)) {
+  if (isOfficialLegacyMode(profileId)) {
     return sanitizeProviderCustomEnv(state.officialCustomEnv || {});
   }
 
@@ -1646,7 +1646,7 @@ export function getCustomEnvForProfile(
 }
 
 export function resolveProfileFull(profileId: string): {
-  config: ClaudeProviderConfig;
+  config: LegacyProviderConfig;
   customEnv: Record<string, string>;
 } {
   return resolveProviderById(profileId);
@@ -1657,7 +1657,7 @@ export function saveOfficialCustomEnv(
 ): Record<string, string> {
   const sanitized = sanitizeProviderCustomEnv(customEnv);
   const state = readStoredState();
-  if (!state) throw new Error('Claude 配置不存在');
+  if (!state) throw new Error('旧版配置不存在');
   writeStoredState({
     ...state,
     officialCustomEnv: sanitized,
@@ -1665,13 +1665,13 @@ export function saveOfficialCustomEnv(
   return sanitized;
 }
 
-export function appendClaudeConfigAudit(
+export function appendLegacyConfigAudit(
   actor: string,
   action: string,
   changedFields: string[],
   metadata?: Record<string, unknown>,
 ): void {
-  const entry: ClaudeConfigAuditEntry = {
+  const entry: LegacyConfigAuditEntry = {
     timestamp: new Date().toISOString(),
     actor,
     action,

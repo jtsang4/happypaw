@@ -59,13 +59,16 @@ assert.ok(
   'built config route composition should be importable standalone',
 );
 await import(path.join(repoRoot, 'dist', 'web.js'));
-const groupRoutes = (await import(path.join(repoRoot, 'dist', 'routes', 'groups.js'))).default;
+const groupRoutes = (
+  await import(path.join(repoRoot, 'dist', 'routes', 'groups.js'))
+).default;
 const { registerCodexRoutes } = codexRoutesModule;
 const { registerLegacyAndSystemRoutes } = legacySystemRoutesModule;
 const { registerUserImRoutes } = userImRoutesModule;
 const { registerUserImWeChatAndBindingRoutes } =
   userImWeChatBindingsRoutesModule;
-const { saveCodexProviderConfig, saveCodexProviderSecrets } = runtimeConfigModule;
+const { saveCodexProviderConfig, saveCodexProviderSecrets } =
+  runtimeConfigModule;
 const { authMiddleware } = await import(
   path.join(repoRoot, 'dist', 'middleware', 'auth.js')
 );
@@ -112,7 +115,9 @@ registerUserImRoutes(app);
 registerUserImWeChatAndBindingRoutes(app);
 
 const cookieHeaders = setSessionCookieHeaders(
-  { req: { header: () => undefined, url: 'http://localhost/api/config/codex' } },
+  {
+    req: { header: () => undefined, url: 'http://localhost/api/config/codex' },
+  },
   'session-token',
 );
 const cookie = cookieHeaders.getSetCookie()[0].split(';')[0];
@@ -230,7 +235,7 @@ const legacyResponse = await app.request('/claude', {
 assert.equal(
   legacyResponse.status,
   404,
-  'legacy Claude config endpoint should be absent from the composed config routes',
+  'legacy provider config endpoint should be absent from the composed config routes',
 );
 
 const tempWorkspaceFolder = 'env-contraction-workspace';
@@ -286,7 +291,7 @@ for (const forbiddenKey of [
   'claudeCodeOauthTokenMasked',
   'hasAnthropicAuthToken',
   'hasAnthropicApiKey',
-  'hasClaudeCodeOauthToken',
+  'hasLegacyCodeOauthToken',
   'anthropicModel',
 ]) {
   assert.ok(
@@ -312,7 +317,7 @@ const rejectedLegacyEnvResponse = await app.request(
 assert.equal(
   rejectedLegacyEnvResponse.status,
   400,
-  'workspace env route should reject legacy Claude-shaped fields',
+  'workspace env route should reject legacy provider-shaped fields',
 );
 
 const updatedWorkspaceEnvResponse = await app.request(
@@ -324,7 +329,10 @@ const updatedWorkspaceEnvResponse = await app.request(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      customEnv: { SAFE_FLAG: '1', OPENAI_BASE_URL: 'https://custom.example/v1' },
+      customEnv: {
+        SAFE_FLAG: '1',
+        OPENAI_BASE_URL: 'https://custom.example/v1',
+      },
     }),
   },
 );

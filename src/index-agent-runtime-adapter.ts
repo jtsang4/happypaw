@@ -23,7 +23,7 @@ export interface SendMessageOptions {
   localImagePaths?: string[];
   /** Message source identifier (e.g. 'scheduled_task') for frontend routing. */
   source?: string;
-  /** Metadata used to preserve Claude SDK turn semantics for persisted messages. */
+  /** Metadata used to preserve legacy SDK turn semantics for persisted messages. */
   messageMeta?: {
     turnId?: string;
     sessionId?: string;

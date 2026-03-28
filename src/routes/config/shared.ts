@@ -6,7 +6,7 @@ import { ProxyAgent } from 'proxy-agent';
 import { setRegisteredGroup } from '../../db.js';
 import { logger } from '../../logger.js';
 import {
-  appendClaudeConfigAudit,
+  appendLegacyConfigAudit,
   getUserFeishuConfig,
   getUserQQConfig,
   getUserTelegramConfig,
@@ -34,7 +34,7 @@ function requireConfigDeps(): WebDeps {
   return deps;
 }
 
-export interface ClaudeApplyResultPayload {
+export interface LegacyApplyResultPayload {
   success: boolean;
   stoppedCount: number;
   failedCount: number;
@@ -81,10 +81,10 @@ export function destroyTelegramApiAgent(agent: HttpsAgent | ProxyAgent): void {
   agent.destroy();
 }
 
-export async function applyClaudeConfigToAllGroups(
+export async function applyLegacyConfigToAllGroups(
   actor: string,
   metadata?: Record<string, unknown>,
-): Promise<ClaudeApplyResultPayload> {
+): Promise<LegacyApplyResultPayload> {
   const activeDeps = requireConfigDeps();
   const groupJids = Object.keys(activeDeps.getRegisteredGroups());
   const results = await Promise.allSettled(
@@ -93,7 +93,7 @@ export async function applyClaudeConfigToAllGroups(
   const failedCount = results.filter((r) => r.status === 'rejected').length;
   const stoppedCount = groupJids.length - failedCount;
 
-  appendClaudeConfigAudit(actor, 'apply_to_all_flows', ['queue.stopGroup'], {
+  appendLegacyConfigAudit(actor, 'apply_to_all_flows', ['queue.stopGroup'], {
     stoppedCount,
     failedCount,
     ...(metadata || {}),

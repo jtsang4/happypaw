@@ -268,7 +268,7 @@ export function sanitizeEnvValue(value: string): string {
 export function sanitizeCustomEnvMap(
   input: Record<string, string>,
   options?: {
-    skipReservedClaudeKeys?: boolean;
+    skipReservedLegacyKeys?: boolean;
     skipReservedInfrastructureKeys?: boolean;
   },
 ): Record<string, string> {
@@ -284,7 +284,7 @@ export function sanitizeCustomEnvMap(
     if (!ENV_KEY_RE.test(key)) {
       throw new Error(`Invalid env key: ${key}`);
     }
-    if (options?.skipReservedClaudeKeys && RESERVED_CLAUDE_ENV_KEYS.has(key)) {
+    if (options?.skipReservedLegacyKeys && RESERVED_CLAUDE_ENV_KEYS.has(key)) {
       continue;
     }
     if (

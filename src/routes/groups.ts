@@ -1018,7 +1018,7 @@ groupRoutes.post('/:jid/reset-session', authMiddleware, async (c) => {
     );
   }
 
-  // 2. Delete session JSONL files so Claude starts fresh.
+  // 2. Delete session JSONL files so the next Codex turn starts fresh.
   try {
     clearSessionRuntimeFiles(group.folder, agentId);
   } catch (err) {

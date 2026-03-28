@@ -33,9 +33,9 @@ export interface LegacyRunnerResult {
   };
 }
 
-export function runLegacyClaudeQuery(): Promise<LegacyRunnerResult> {
+export function runRemovedRuntimeQuery(): Promise<LegacyRunnerResult> {
   return Promise.reject(
-    new Error('Claude runtime has been removed; use Codex runtime instead.'),
+    new Error('Legacy runtime has been removed; use Codex runtime instead.'),
   );
 }
 

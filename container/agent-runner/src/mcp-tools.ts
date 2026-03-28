@@ -499,7 +499,7 @@ Supports: PDF, DOC, XLS, PPT, MP4, etc. Max file size: 30MB.`,
       `Schedule a recurring or one-time task.
 
 EXECUTION TYPE:
-\u2022 "agent" (default): Task runs as a full Claude Agent with access to all tools. Consumes API tokens.
+\u2022 "agent" (default): Task runs as a full Codex agent session with access to all tools. Consumes API tokens.
 \u2022 "script" (admin only): Task runs a shell command directly on the host. Zero API token cost. Use for deterministic tasks like health checks, data collection, cURL calls, or cron-like scripts.
 
 CONTEXT MODE (agent mode only) - Choose based on task type:
@@ -536,7 +536,7 @@ SCHEDULE VALUE FORMAT (all times are LOCAL timezone):
           .enum(['agent', 'script'])
           .default('agent')
           .describe(
-            'agent=full Claude Agent (default), script=shell command (admin only, zero token cost)',
+            'agent=full Codex agent session (default), script=shell command (admin only, zero token cost)',
           ),
         script_command: z
           .string()

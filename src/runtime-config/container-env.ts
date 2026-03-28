@@ -5,12 +5,12 @@ import { DATA_DIR } from '../config.js';
 import { logger } from '../logger.js';
 import { getCodexProviderConfig } from './im-config.js';
 import type {
-  ClaudeOAuthCredentials,
-  ClaudeProviderConfig,
+  LegacyOAuthCredentials,
+  LegacyProviderConfig,
   CodexProviderConfig,
   ContainerEnvConfig,
   ContainerEnvPublicConfig,
-  LocalClaudeCodeStatus,
+  LocalLegacyAuthStatus,
 } from './types.js';
 import {
   CONTAINER_ENV_DIR,
@@ -18,7 +18,7 @@ import {
   ENV_KEY_RE,
   sanitizeEnvValue,
 } from './shared.js';
-import { buildClaudeEnvLines } from './claude-provider.js';
+import { buildLegacyEnvLines } from './claude-provider.js';
 
 function containerEnvPath(folder: string): string {
   if (folder.includes('..') || folder.includes('/')) {
@@ -108,10 +108,10 @@ export function toPublicContainerEnvConfig(
   };
 }
 
-export function mergeClaudeEnvConfig(
-  global: ClaudeProviderConfig,
+export function mergeLegacyEnvConfig(
+  global: LegacyProviderConfig,
   _override: ContainerEnvConfig,
-): ClaudeProviderConfig {
+): LegacyProviderConfig {
   return {
     anthropicBaseUrl: global.anthropicBaseUrl,
     anthropicAuthToken: global.anthropicAuthToken,
@@ -124,13 +124,13 @@ export function mergeClaudeEnvConfig(
 }
 
 export function buildContainerEnvLines(
-  global: ClaudeProviderConfig,
+  global: LegacyProviderConfig,
   override: ContainerEnvConfig,
   profileCustomEnv?: Record<string, string>,
   codexConfig?: CodexProviderConfig,
 ): string[] {
-  const merged = mergeClaudeEnvConfig(global, override);
-  const lines = buildClaudeEnvLines(merged, profileCustomEnv);
+  const merged = mergeLegacyEnvConfig(global, override);
+  const lines = buildLegacyEnvLines(merged, profileCustomEnv);
 
   const effectiveCodexConfig = codexConfig ?? getCodexProviderConfig();
   if (effectiveCodexConfig.openaiApiKey) {
@@ -156,7 +156,7 @@ export function buildContainerEnvLines(
 
 export function writeCredentialsFile(
   sessionDir: string,
-  config: ClaudeProviderConfig,
+  config: LegacyProviderConfig,
 ): void {
   const creds = config.claudeOAuthCredentials;
   if (!creds) return;
@@ -180,7 +180,7 @@ export function writeCredentialsFile(
 }
 
 export function updateAllSessionCredentials(
-  config: ClaudeProviderConfig,
+  config: LegacyProviderConfig,
 ): void {
   if (!config.claudeOAuthCredentials) return;
 
@@ -202,13 +202,13 @@ export function updateAllSessionCredentials(
       const agentsDir = path.join(sessionsDir, folder, 'agents');
       if (fs.existsSync(agentsDir) && fs.statSync(agentsDir).isDirectory()) {
         for (const agentId of fs.readdirSync(agentsDir)) {
-          const agentClaudeDir = path.join(agentsDir, agentId, '.claude');
+          const agentLegacyDir = path.join(agentsDir, agentId, '.claude');
           if (
-            fs.existsSync(agentClaudeDir) &&
-            fs.statSync(agentClaudeDir).isDirectory()
+            fs.existsSync(agentLegacyDir) &&
+            fs.statSync(agentLegacyDir).isDirectory()
           ) {
             try {
-              writeCredentialsFile(agentClaudeDir, config);
+              writeCredentialsFile(agentLegacyDir, config);
             } catch (err) {
               logger.warn(
                 { err, folder, agentId },
@@ -254,7 +254,7 @@ function readLocalOAuthCredentials(): {
   }
 }
 
-export function detectLocalClaudeCode(): LocalClaudeCodeStatus {
+export function detectLocalLegacyAuth(): LocalLegacyAuthStatus {
   const oauth = readLocalOAuthCredentials();
 
   if (oauth) {
@@ -278,7 +278,7 @@ export function detectLocalClaudeCode(): LocalClaudeCodeStatus {
   };
 }
 
-export function importLocalClaudeCredentials(): ClaudeOAuthCredentials | null {
+export function importLocalLegacyCredentials(): LegacyOAuthCredentials | null {
   const oauth = readLocalOAuthCredentials();
   if (!oauth) return null;
 

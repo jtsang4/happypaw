@@ -23,9 +23,9 @@ const codexConfigModule = await import(
 const dbModule = await import(path.join(repoRoot, 'dist', 'db.js'));
 
 const {
-  getClaudeProviderConfig,
+  getLegacyProviderConfig,
   getCodexProviderConfig,
-  buildClaudeEnvLines,
+  buildLegacyEnvLines,
   createProvider,
   getEnabledProviders,
   buildContainerEnvLines,
@@ -52,8 +52,13 @@ const {
   getPinnedCodexRepoCacheRoot,
   HAPPYPAW_CODEX_EXECUTABLE_ENV,
 } = await import(path.join(repoRoot, 'dist', 'codex-binary.js'));
-const { initDatabase, closeDatabase, setSession, getRuntimeSession, getAllSessions } =
-  dbModule;
+const {
+  initDatabase,
+  closeDatabase,
+  setSession,
+  getRuntimeSession,
+  getAllSessions,
+} = dbModule;
 
 const workspaceDir = path.join(tempRoot, 'workspace');
 const workspaceConfigDir = path.join(workspaceDir, '.happypaw');
@@ -171,9 +176,7 @@ assert.match(
 );
 assert.match(prepared.configToml, /command = "node"/);
 
-const workspaceServers = readCodexMcpServersFromSettings(
-  workspaceMcpPath,
-);
+const workspaceServers = readCodexMcpServersFromSettings(workspaceMcpPath);
 assert.deepEqual(Object.keys(workspaceServers).sort(), ['workspaceEnabled']);
 
 const merged = mergeCodexMcpServers(
@@ -221,7 +224,7 @@ assert.deepEqual(routeUpdatedProvider.customEnv, {
   SAFE_PROVIDER_FLAG: '2',
   EXTRA_SAFE_FLAG: 'yes',
 });
-const activeProviderEnvLines = buildClaudeEnvLines(getClaudeProviderConfig());
+const activeProviderEnvLines = buildLegacyEnvLines(getLegacyProviderConfig());
 assert.ok(activeProviderEnvLines.includes('SAFE_PROVIDER_FLAG=2'));
 assert.ok(activeProviderEnvLines.includes('EXTRA_SAFE_FLAG=yes'));
 assert.ok(
@@ -234,8 +237,8 @@ assert.ok(
     line.startsWith(`${legacyCodexExecutableEnv}=`),
   ),
 );
-const explicitProviderEnvLines = buildClaudeEnvLines(
-  getClaudeProviderConfig(),
+const explicitProviderEnvLines = buildLegacyEnvLines(
+  getLegacyProviderConfig(),
   {
     SAFE_PROVIDER_FLAG: '3',
     [HAPPYPAW_CODEX_EXECUTABLE_ENV]: '/tmp/direct-rogue-codex',
@@ -300,7 +303,7 @@ assert.deepEqual(inheritedReservedEnv.customEnv, {
   SAFE_FLAG: '1',
 });
 const containerEnvLines = buildContainerEnvLines(
-  getClaudeProviderConfig(),
+  getLegacyProviderConfig(),
   inheritedReservedEnv,
   undefined,
   providerConfig,

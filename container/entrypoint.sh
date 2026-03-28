@@ -51,7 +51,7 @@ chmod -R a-w /tmp/dist
 cat > /tmp/input.json
 chmod 644 /tmp/input.json
 
-# Fix permissions on exit: Claude Code creates some files with mode 0600
+# Fix permissions on exit: the legacy auth flow may create some files with mode 0600
 # (e.g. settings.json), which the host backend (agent user) cannot read.
 # The trap runs as root after the node process exits.
 cleanup() {

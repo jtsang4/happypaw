@@ -477,13 +477,13 @@ function buildRuntimePromptContext(
   memoryRecall: string,
 ): { extraDirs: string[]; systemPromptAppend: string } {
   const { isHome } = deps.normalizeHomeFlags(containerInput);
-  const globalClaudeMdPath = path.join(deps.WORKSPACE_GLOBAL, 'CLAUDE.md');
+  const globalMemoryFilePath = path.join(deps.WORKSPACE_GLOBAL, 'CLAUDE.md');
 
-  let globalClaudeMd = '';
-  if (isHome && fs.existsSync(globalClaudeMdPath)) {
-    globalClaudeMd = fs.readFileSync(globalClaudeMdPath, 'utf-8');
-    globalClaudeMd = deps.truncateWithHeadTail(
-      globalClaudeMd,
+  let globalMemoryContent = '';
+  if (isHome && fs.existsSync(globalMemoryFilePath)) {
+    globalMemoryContent = fs.readFileSync(globalMemoryFilePath, 'utf-8');
+    globalMemoryContent = deps.truncateWithHeadTail(
+      globalMemoryContent,
       GLOBAL_CLAUDE_MD_MAX_CHARS,
     );
   }
@@ -582,7 +582,7 @@ function buildRuntimePromptContext(
   );
 
   const systemPromptAppend = [
-    globalClaudeMd && `<user-profile>\n${globalClaudeMd}\n</user-profile>`,
+    globalMemoryContent && `<user-profile>\n${globalMemoryContent}\n</user-profile>`,
     `<behavior>\n${interactionGuidelines}\n</behavior>`,
     `<security>\n${deps.SECURITY_RULES}\n</security>`,
     `<memory-system>\n${memoryRecall}\n</memory-system>`,

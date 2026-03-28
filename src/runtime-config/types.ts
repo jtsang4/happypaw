@@ -1,40 +1,40 @@
 import type { RuntimeType } from '../types.js';
 
-export type ClaudeProviderMode = 'official' | 'third_party';
+export type LegacyProviderMode = 'official' | 'third_party';
 
-export interface ClaudeOAuthCredentials {
+export interface LegacyOAuthCredentials {
   accessToken: string;
   refreshToken: string;
   expiresAt: number;
   scopes: string[];
 }
 
-export interface ClaudeProviderConfig {
+export interface LegacyProviderConfig {
   anthropicBaseUrl: string;
   anthropicAuthToken: string;
   anthropicApiKey: string;
   claudeCodeOauthToken: string;
-  claudeOAuthCredentials: ClaudeOAuthCredentials | null;
+  claudeOAuthCredentials: LegacyOAuthCredentials | null;
   anthropicModel: string;
   updatedAt: string | null;
 }
 
-export interface ClaudeProviderPublicConfig {
+export interface LegacyProviderPublicConfig {
   anthropicBaseUrl: string;
   anthropicModel: string;
   updatedAt: string | null;
   hasAnthropicAuthToken: boolean;
   hasAnthropicApiKey: boolean;
-  hasClaudeCodeOauthToken: boolean;
+  hasLegacyCodeOauthToken: boolean;
   anthropicAuthTokenMasked: string | null;
   anthropicApiKeyMasked: string | null;
   claudeCodeOauthTokenMasked: string | null;
-  hasClaudeOAuthCredentials: boolean;
+  hasLegacyOAuthCredentials: boolean;
   claudeOAuthCredentialsExpiresAt: number | null;
   claudeOAuthCredentialsAccessTokenMasked: string | null;
 }
 
-export interface ClaudeThirdPartyProfile {
+export interface LegacyThirdPartyProfile {
   id: string;
   name: string;
   anthropicBaseUrl: string;
@@ -44,7 +44,7 @@ export interface ClaudeThirdPartyProfile {
   customEnv: Record<string, string>;
 }
 
-export interface ClaudeThirdPartyProfilePublic {
+export interface LegacyThirdPartyProfilePublic {
   id: string;
   name: string;
   anthropicBaseUrl: string;
@@ -127,7 +127,7 @@ export interface UnifiedProvider {
   anthropicModel: string;
   anthropicApiKey: string;
   claudeCodeOauthToken: string;
-  claudeOAuthCredentials: ClaudeOAuthCredentials | null;
+  claudeOAuthCredentials: LegacyOAuthCredentials | null;
   customEnv: Record<string, string>;
   updatedAt: string;
 }
@@ -144,9 +144,9 @@ export interface UnifiedProviderPublic {
   anthropicAuthTokenMasked: string | null;
   hasAnthropicApiKey: boolean;
   anthropicApiKeyMasked: string | null;
-  hasClaudeCodeOauthToken: boolean;
+  hasLegacyCodeOauthToken: boolean;
   claudeCodeOauthTokenMasked: string | null;
-  hasClaudeOAuthCredentials: boolean;
+  hasLegacyOAuthCredentials: boolean;
   claudeOAuthCredentialsExpiresAt: number | null;
   claudeOAuthCredentialsAccessTokenMasked: string | null;
   customEnv: Record<string, string>;
@@ -167,7 +167,7 @@ export interface RegistrationConfig {
   updatedAt: string | null;
 }
 
-export interface LocalClaudeCodeStatus {
+export interface LocalLegacyAuthStatus {
   detected: boolean;
   hasCredentials: boolean;
   expiresAt: number | null;
@@ -237,7 +237,7 @@ export interface SecretPayload {
   anthropicAuthToken: string;
   anthropicApiKey: string;
   claudeCodeOauthToken: string;
-  claudeOAuthCredentials?: ClaudeOAuthCredentials | null;
+  claudeOAuthCredentials?: LegacyOAuthCredentials | null;
 }
 
 export interface EncryptedSecrets {

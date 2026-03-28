@@ -20,11 +20,7 @@ async function main() {
     'db',
     'tasks-sessions.ts',
   );
-  const containerRunnerPath = path.join(
-    repoRoot,
-    'src',
-    'container-runner.ts',
-  );
+  const containerRunnerPath = path.join(repoRoot, 'src', 'container-runner.ts');
   const runtimeAdapterPath = path.join(
     repoRoot,
     'src',
@@ -204,7 +200,7 @@ async function main() {
       'legacy-folder',
       '2026-03-28T00:00:00.000Z',
       'container',
-      'claude_sdk',
+      'legacy_runtime',
       'u1',
       0,
     );
@@ -212,15 +208,11 @@ async function main() {
     .prepare(
       'INSERT INTO sessions (group_folder, session_id, agent_id, runtime) VALUES (?, ?, ?, ?)',
     )
-    .run('legacy-folder', 'legacy-thread', '', 'claude_sdk');
+    .run('legacy-folder', 'legacy-thread', '', 'legacy_runtime');
   seedDb.close();
 
-  const {
-    initDatabase,
-    closeDatabase,
-    getRegisteredGroup,
-    getRuntimeSession,
-  } = await import(dbModulePath);
+  const { initDatabase, closeDatabase, getRegisteredGroup, getRuntimeSession } =
+    await import(dbModulePath);
 
   initDatabase();
 

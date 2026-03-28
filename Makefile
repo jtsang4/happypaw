@@ -174,7 +174,7 @@ sync-types: ## 同步 shared/ 下的类型定义到各子项目
 
 # ─── SDK ─────────────────────────────────────────────────────
 
-update-sdk: ## 更新 agent-runner 的 Claude Agent SDK 到最新版本
+update-sdk: ## 更新 agent-runner 的底层 Agent SDK 到最新版本
 	cd container/agent-runner && $(PKG) update @anthropic-ai/claude-agent-sdk && $(PKG) run build
 	@echo "SDK updated. Run 'make typecheck' to verify."
 
@@ -182,11 +182,11 @@ ensure-latest-sdk: ## 启动前自动检测并更新 SDK（有新版才更新）
 	@LOCAL=$$(node -p "require('./container/agent-runner/node_modules/@anthropic-ai/claude-agent-sdk/package.json').version" 2>/dev/null || echo "0.0.0"); \
 	LATEST=$$(npm view @anthropic-ai/claude-agent-sdk version --fetch-timeout=5000 2>/dev/null || echo "$$LOCAL"); \
 	if [ "$$LOCAL" != "$$LATEST" ]; then \
-		echo "🔄 Claude Agent SDK 有新版本: $$LOCAL → $$LATEST，正在更新..."; \
+		echo "🔄 Agent SDK 有新版本: $$LOCAL → $$LATEST，正在更新..."; \
 		cd container/agent-runner && $(PKG) update @anthropic-ai/claude-agent-sdk && $(PKG) run build; \
-		echo "✅ SDK 更新完成（内置 Claude Code 版本随之更新）"; \
+		echo "✅ SDK 更新完成（内置运行时依赖已同步）"; \
 	else \
-		echo "✅ Claude Agent SDK 已是最新 ($$LOCAL)"; \
+		echo "✅ Agent SDK 已是最新 ($$LOCAL)"; \
 	fi
 
 # ─── Setup ───────────────────────────────────────────────────

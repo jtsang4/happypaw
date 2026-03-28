@@ -143,12 +143,12 @@ export const MemoryGlobalSchema = z.object({
   content: z.string(),
 });
 
-export const ClaudeConfigSchema = z.object({
+export const LegacyConfigSchema = z.object({
   anthropicBaseUrl: z.string(),
   anthropicModel: z.string().max(128).optional(),
 });
 
-export const ClaudeThirdPartyProfileCreateSchema = z.object({
+export const LegacyThirdPartyProfileCreateSchema = z.object({
   name: z.string().min(1).max(64),
   anthropicBaseUrl: z.string().max(2000),
   anthropicAuthToken: z.string().max(2000),
@@ -156,7 +156,7 @@ export const ClaudeThirdPartyProfileCreateSchema = z.object({
   customEnv: z.record(z.string().max(256), z.string().max(4096)).optional(),
 });
 
-export const ClaudeThirdPartyProfilePatchSchema = z
+export const LegacyThirdPartyProfilePatchSchema = z
   .object({
     name: z.string().min(1).max(64).optional(),
     anthropicBaseUrl: z.string().max(2000).optional(),
@@ -172,7 +172,7 @@ export const ClaudeThirdPartyProfilePatchSchema = z
     { message: 'At least one profile field must be provided' },
   );
 
-export const ClaudeThirdPartyProfileSecretsSchema = z
+export const LegacyThirdPartyProfileSecretsSchema = z
   .object({
     anthropicAuthToken: z.string().max(2000).optional(),
     clearAnthropicAuthToken: z.boolean().optional(),
@@ -341,23 +341,23 @@ export const InviteCreateSchema = z.object({
   expires_in_hours: z.number().int().min(1).max(8760).optional(),
 });
 
-export const ClaudeOAuthCredentialsSchema = z.object({
+export const LegacyOAuthCredentialsSchema = z.object({
   accessToken: z.string().min(1),
   refreshToken: z.string().min(1),
   expiresAt: z.number(),
   scopes: z.array(z.string()).default([]),
 });
 
-export const ClaudeSecretsSchema = z
+export const LegacySecretsSchema = z
   .object({
     anthropicAuthToken: z.string().optional(),
     clearAnthropicAuthToken: z.boolean().optional(),
     anthropicApiKey: z.string().optional(),
     clearAnthropicApiKey: z.boolean().optional(),
     claudeCodeOauthToken: z.string().optional(),
-    clearClaudeCodeOauthToken: z.boolean().optional(),
-    claudeOAuthCredentials: ClaudeOAuthCredentialsSchema.optional(),
-    clearClaudeOAuthCredentials: z.boolean().optional(),
+    clearLegacyCodeOauthToken: z.boolean().optional(),
+    claudeOAuthCredentials: LegacyOAuthCredentialsSchema.optional(),
+    clearLegacyOAuthCredentials: z.boolean().optional(),
   })
   .refine(
     (data) => {
@@ -367,17 +367,17 @@ export const ClaudeSecretsSchema = z
       const hasAnthropicApiKey =
         typeof data.anthropicApiKey === 'string' ||
         data.clearAnthropicApiKey === true;
-      const hasClaudeCodeOauthToken =
+      const hasLegacyCodeOauthToken =
         typeof data.claudeCodeOauthToken === 'string' ||
-        data.clearClaudeCodeOauthToken === true;
-      const hasClaudeOAuthCredentials =
+        data.clearLegacyCodeOauthToken === true;
+      const hasLegacyOAuthCredentials =
         data.claudeOAuthCredentials !== undefined ||
-        data.clearClaudeOAuthCredentials === true;
+        data.clearLegacyOAuthCredentials === true;
       return (
         hasAnthropicAuthToken ||
         hasAnthropicApiKey ||
-        hasClaudeCodeOauthToken ||
-        hasClaudeOAuthCredentials
+        hasLegacyCodeOauthToken ||
+        hasLegacyOAuthCredentials
       );
     },
     { message: 'At least one secret field must be provided' },
@@ -433,7 +433,7 @@ export const QQConfigSchema = z
     { message: 'At least one config field must be provided' },
   );
 
-export const ClaudeCustomEnvSchema = z.object({
+export const LegacyCustomEnvSchema = z.object({
   customEnv: z.record(z.string().max(256), z.string().max(4096)),
 });
 
@@ -627,7 +627,7 @@ export const UnifiedProviderCreateSchema = z
     anthropicModel: z.string().max(128).optional(),
     anthropicApiKey: z.string().max(2000).optional(),
     claudeCodeOauthToken: z.string().max(2000).optional(),
-    claudeOAuthCredentials: ClaudeOAuthCredentialsSchema.optional(),
+    claudeOAuthCredentials: LegacyOAuthCredentialsSchema.optional(),
     customEnv: z.record(z.string().max(256), z.string().max(4096)).optional(),
     weight: z.number().int().min(1).max(100).optional(),
     enabled: z.boolean().optional(),
@@ -671,9 +671,9 @@ export const UnifiedProviderSecretsSchema = z
     anthropicApiKey: z.string().max(2000).optional(),
     clearAnthropicApiKey: z.boolean().optional(),
     claudeCodeOauthToken: z.string().max(2000).optional(),
-    clearClaudeCodeOauthToken: z.boolean().optional(),
-    claudeOAuthCredentials: ClaudeOAuthCredentialsSchema.optional(),
-    clearClaudeOAuthCredentials: z.boolean().optional(),
+    clearLegacyCodeOauthToken: z.boolean().optional(),
+    claudeOAuthCredentials: LegacyOAuthCredentialsSchema.optional(),
+    clearLegacyOAuthCredentials: z.boolean().optional(),
   })
   .refine(
     (data) => {
@@ -683,9 +683,9 @@ export const UnifiedProviderSecretsSchema = z
         typeof data.anthropicApiKey === 'string' ||
         data.clearAnthropicApiKey === true ||
         typeof data.claudeCodeOauthToken === 'string' ||
-        data.clearClaudeCodeOauthToken === true ||
+        data.clearLegacyCodeOauthToken === true ||
         data.claudeOAuthCredentials !== undefined ||
-        data.clearClaudeOAuthCredentials === true
+        data.clearLegacyOAuthCredentials === true
       );
     },
     { message: 'At least one secret field must be provided' },

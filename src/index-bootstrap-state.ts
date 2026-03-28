@@ -379,10 +379,10 @@ export function createIndexStateBootstrap(
         for (const user of allUsers) {
           const userDir = path.join(userGlobalBase, user.id);
           fs.mkdirSync(userDir, { recursive: true });
-          const userClaudeMd = path.join(userDir, 'CLAUDE.md');
-          if (!fs.existsSync(userClaudeMd)) {
+          const userMemoryFile = path.join(userDir, 'CLAUDE.md');
+          if (!fs.existsSync(userMemoryFile)) {
             try {
-              fs.writeFileSync(userClaudeMd, template, { flag: 'wx' });
+              fs.writeFileSync(userMemoryFile, template, { flag: 'wx' });
               logger.info(
                 { userId: user.id },
                 'Initialized user-global CLAUDE.md from template',

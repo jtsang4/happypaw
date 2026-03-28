@@ -11,7 +11,7 @@ import {
   TelegramConfigSchema,
 } from '../../schemas.js';
 import {
-  appendClaudeConfigAudit,
+  appendLegacyConfigAudit,
   getAppearanceConfig,
   getFeishuProviderConfig,
   getFeishuProviderConfigWithSource,
@@ -287,7 +287,7 @@ export function registerLegacyAndSystemRoutes(
       try {
         const actor = (c.get('user') as AuthUser).username;
         const saved = saveRegistrationConfig(validation.data);
-        appendClaudeConfigAudit(actor, 'update_registration_config', [
+        appendLegacyConfigAudit(actor, 'update_registration_config', [
           'allowRegistration',
           'requireInviteCode',
         ]);
