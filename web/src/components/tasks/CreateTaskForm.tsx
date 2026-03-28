@@ -140,6 +140,8 @@ export function CreateTaskForm({ groups, onSubmit, onClose, isAdmin, homeFolder 
     setAiGroupJid(g?.jid || '');
   };
 
+  const helperModeLabel = 'Codex 智能创建';
+
   const handleParse = async () => {
     if (!aiDescription.trim()) {
       setParseError('请输入任务描述');
@@ -158,7 +160,7 @@ export function CreateTaskForm({ groups, onSubmit, onClose, isAdmin, homeFolder 
       });
       setParsedTask(result.parsed);
     } catch (err) {
-      setParseError(err instanceof Error ? err.message : 'AI 解析失败，请重试');
+      setParseError(err instanceof Error ? err.message : '任务解析失败，请重试');
     } finally {
       setParsing(false);
     }
@@ -318,7 +320,7 @@ export function CreateTaskForm({ groups, onSubmit, onClose, isAdmin, homeFolder 
             )}
           >
             <Sparkles className="w-4 h-4" />
-            AI 智能创建
+            {helperModeLabel}
           </button>
           <button
             onClick={() => setMode('manual')}
@@ -334,7 +336,7 @@ export function CreateTaskForm({ groups, onSubmit, onClose, isAdmin, homeFolder 
           </button>
         </div>
 
-        {/* AI Mode */}
+        {/* Codex-assisted Mode */}
         {mode === 'ai' && (
           <div className="p-6 space-y-4">
             {/* Group */}
@@ -375,6 +377,9 @@ export function CreateTaskForm({ groups, onSubmit, onClose, isAdmin, homeFolder 
                 className="resize-none"
                 placeholder="例如：每天早上 9 点帮我总结最新的科技新闻&#10;每周一下午 2 点检查项目依赖是否有安全更新&#10;每隔 2 小时检查一次服务器状态"
               />
+              <p className="mt-1 text-xs text-muted-foreground">
+                由当前系统 Codex 配置解析为定时任务参数；如果解析失败，可切换到手动配置。
+              </p>
             </div>
 
             {/* Parse Button */}
@@ -387,12 +392,12 @@ export function CreateTaskForm({ groups, onSubmit, onClose, isAdmin, homeFolder 
                 {parsing ? (
                   <>
                     <Loader2 className="size-4 animate-spin" />
-                    AI 解析中...
+                    Codex 解析中...
                   </>
                 ) : (
                   <>
                     <Sparkles className="size-4" />
-                    AI 解析
+                    Codex 解析
                   </>
                 )}
               </Button>
@@ -408,7 +413,7 @@ export function CreateTaskForm({ groups, onSubmit, onClose, isAdmin, homeFolder 
                 <div className="bg-brand-50/50 border border-brand-200 rounded-lg p-4 space-y-3">
                   <div className="flex items-center gap-2 text-sm font-medium text-primary">
                     <Sparkles className="w-4 h-4" />
-                    AI 解析结果
+                    Codex 解析结果
                   </div>
                   <p className="text-sm text-muted-foreground">{parsedTask.summary}</p>
 
@@ -534,7 +539,7 @@ export function CreateTaskForm({ groups, onSubmit, onClose, isAdmin, homeFolder 
                 <p className="mt-1 text-xs text-muted-foreground">
                   {isScript
                     ? '直接执行 Shell 命令，零 API 消耗，适合确定性任务'
-                    : '启动完整 Claude Agent，消耗 API tokens'}
+                    : '启动完整 Codex Agent，消耗 API tokens'}
                 </p>
               </div>
             )}

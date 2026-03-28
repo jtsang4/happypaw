@@ -87,8 +87,19 @@ export function formatWorkspaceList(
   }
 
   lines.push('');
-  lines.push('💡 /sw <消息> 并行任务 · /recall 总结 · /clear 重置');
+  lines.push('💡 /sw <消息> 并行任务 · /status 状态 · /clear 重置');
   return lines.join('\n');
+}
+
+export function getRecallCommandUnavailableMessage(): string {
+  return [
+    'ℹ️ Codex-only 版本已移除 /recall 总结助手。',
+    '',
+    '可用替代方式：',
+    '• 直接查看当前对话最近消息',
+    '• /status 查看当前绑定状态',
+    '• /list 查看工作区和对话列表',
+  ].join('\n');
 }
 
 // ─── Location Info ────────────────────────────────────────────

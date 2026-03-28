@@ -1,4 +1,3 @@
-import { execFile } from 'child_process';
 import crypto from 'crypto';
 
 import {
@@ -24,6 +23,7 @@ import {
 } from './db.js';
 import {
   formatContextMessages,
+  getRecallCommandUnavailableMessage,
   formatSystemStatus,
   formatWorkspaceList,
   resolveLocationInfo,
@@ -75,8 +75,6 @@ export function createSlashCommandHandlers(deps: CommandDeps): {
     sourceImJid?: string,
   ) => Promise<string>;
 } {
-  const recallCooldowns = new Map<string, number>();
-
   function collectWorkspaces(userId: string): WorkspaceInfo[] {
     const ownedGroups = getGroupsByOwner(userId);
     const user = getUserById(userId);
@@ -424,163 +422,9 @@ export function createSlashCommandHandlers(deps: CommandDeps): {
     return '用法: /require_mention true|false';
   }
 
-  async function summarizeWithClaude(
-    transcript: string,
-  ): Promise<string | null> {
-    const prompt = `请用简洁的中文总结以下对话的要点和进展，重点说明讨论了什么、达成了什么结论、还有什么待办事项。不要逐条翻译，而是提炼核心信息。\n\n${transcript}`;
-
-    return new Promise((resolve) => {
-      logger.info(
-        { promptLen: prompt.length },
-        'summarizeWithClaude: invoking claude CLI via stdin',
-      );
-
-      const model = process.env.RECALL_MODEL || '';
-      const args = ['--print'];
-      if (model) {
-        args.push('--model', model);
-      }
-
-      const child = execFile(
-        'claude',
-        args,
-        {
-          timeout: 30000,
-          maxBuffer: 1024 * 1024,
-          env: { ...process.env, CLAUDECODE: '' },
-        },
-        (err, stdout, stderr) => {
-          if (err) {
-            const e = err as Error & { code?: number | string };
-            logger.warn(
-              {
-                message: e.message?.slice(0, 200),
-                code: e.code,
-                stderr: stderr?.slice(0, 300),
-                stdout: stdout?.slice(0, 300),
-              },
-              'summarizeWithClaude: CLI call failed',
-            );
-            resolve(null);
-            return;
-          }
-          const text = stdout.trim();
-          logger.info(
-            {
-              stdoutLen: text.length,
-              stderr: stderr?.trim().slice(0, 200) || '',
-            },
-            'summarizeWithClaude: CLI returned',
-          );
-          resolve(text || null);
-        },
-      );
-
-      child.stdin?.write(prompt);
-      child.stdin?.end();
-    });
-  }
-
   async function handleRecallCommand(chatJid: string): Promise<string> {
     logger.info({ chatJid }, '/recall command received');
-
-    const now = Date.now();
-    const lastRecall = recallCooldowns.get(chatJid) || 0;
-    if (now - lastRecall < 10000) {
-      return '⏳ 请稍后再试（冷却中）';
-    }
-    recallCooldowns.set(chatJid, now);
-
-    const group = deps.registeredGroups[chatJid] ?? getRegisteredGroup(chatJid);
-    if (!group) {
-      logger.warn({ chatJid }, '/recall: no registered group found');
-      return '当前 IM 未绑定工作区';
-    }
-
-    let targetJid: string | undefined;
-    let targetFolder: string;
-    let targetAgentId: string | null = null;
-    let headerName: string;
-
-    if (group.target_agent_id) {
-      const agent = getAgent(group.target_agent_id);
-      const parent = agent
-        ? (deps.registeredGroups[agent.chat_jid] ??
-          getRegisteredGroup(agent.chat_jid))
-        : null;
-      const workspaceName = parent?.name || parent?.folder || group.folder;
-      headerName = `${workspaceName} / ${agent?.name || group.target_agent_id}`;
-      targetFolder = parent?.folder || group.folder;
-      targetAgentId = group.target_agent_id;
-      targetJid = agent
-        ? `${agent.chat_jid}#agent:${group.target_agent_id}`
-        : undefined;
-    } else if (group.target_main_jid) {
-      const target =
-        deps.registeredGroups[group.target_main_jid] ??
-        getRegisteredGroup(group.target_main_jid);
-      headerName = `${target?.name || group.target_main_jid} / 主对话`;
-      targetFolder = target?.folder || group.folder;
-      targetJid = group.target_main_jid;
-    } else {
-      headerName = `${findGroupNameByFolder(group.folder)} / 主对话`;
-      targetFolder = group.folder;
-      targetJid = findWebJidForFolder(group.folder) ?? undefined;
-    }
-
-    const header = `🧠 ${headerName}`;
-    if (!targetJid) {
-      logger.warn(
-        { chatJid, targetFolder },
-        '/recall: no JID found for target',
-      );
-      return `${header}\n\n📭 该对话暂无消息记录`;
-    }
-
-    const messages = getMessagesPage(targetJid, undefined, 10);
-    logger.info(
-      { chatJid, targetJid, messageCount: messages.length },
-      '/recall: fetched messages',
-    );
-
-    if (messages.length === 0) return `${header}\n\n📭 该对话暂无消息记录`;
-
-    const transcript = messages
-      .reverse()
-      .map((msg) => {
-        const who = msg.is_from_me ? 'AI' : msg.sender_name || '用户';
-        const text = (msg.content || '').slice(0, 300);
-        return `${who}: ${text}`;
-      })
-      .join('\n');
-
-    logger.info(
-      { chatJid, transcriptLen: transcript.length },
-      '/recall: built transcript, calling Claude CLI',
-    );
-
-    const summary = await summarizeWithClaude(transcript);
-    if (summary) {
-      logger.info(
-        { chatJid, summaryLen: summary.length },
-        '/recall: summary generated successfully',
-      );
-      return `${header}\n\n${summary}`;
-    }
-
-    logger.warn(
-      { chatJid },
-      '/recall: summary failed, falling back to raw messages',
-    );
-
-    const context = getConversationContext(
-      targetFolder,
-      targetAgentId,
-      10,
-      200,
-    );
-    if (!context) return `${header}\n\n📭 该对话暂无消息记录`;
-    return header + context;
+    return getRecallCommandUnavailableMessage();
   }
 
   function resolveSpawnWorkspace(

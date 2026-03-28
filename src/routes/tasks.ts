@@ -2,12 +2,15 @@
 
 import { Hono } from 'hono';
 import * as crypto from 'node:crypto';
-import { execFile } from 'node:child_process';
 import { CronExpressionParser } from 'cron-parser';
 import type { Variables } from '../web-context.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { TaskCreateSchema, TaskPatchSchema } from '../schemas.js';
 import { logger } from '../logger.js';
+import {
+  CodexHelperError,
+  requestCodexHelperJson,
+} from '../codex-helper-client.js';
 import {
   getAllTasks,
   getTaskById,
@@ -299,8 +302,16 @@ tasksRoutes.get('/:id/logs', authMiddleware, (c) => {
   return c.json({ logs });
 });
 
+interface ParsedTaskResponse {
+  prompt?: string;
+  schedule_type?: 'cron' | 'interval' | 'once';
+  schedule_value?: string;
+  context_mode?: 'group' | 'isolated';
+  summary?: string;
+}
+
 /**
- * Parse natural language task description into structured task parameters using Claude CLI.
+ * Parse natural language task description into structured task parameters using Codex.
  */
 tasksRoutes.post('/parse', authMiddleware, async (c) => {
   const body = await c.req.json().catch(() => ({}));
@@ -340,48 +351,10 @@ tasksRoutes.post('/parse', authMiddleware, async (c) => {
 只返回 JSON，不要返回其他任何内容。`;
 
   try {
-    const result = await new Promise<string | null>((resolve) => {
-      const model = process.env.RECALL_MODEL || '';
-      const args = ['--print'];
-      if (model) args.push('--model', model);
-
-      const child = execFile(
-        'claude',
-        args,
-        {
-          timeout: 30000,
-          maxBuffer: 1024 * 1024,
-          env: { ...process.env, CLAUDECODE: '' },
-        },
-        (err, stdout, stderr) => {
-          if (err) {
-            logger.warn(
-              {
-                err: (err as Error).message?.slice(0, 200),
-                stderr: stderr?.slice(0, 300),
-              },
-              'task-parse: Claude CLI failed',
-            );
-            resolve(null);
-            return;
-          }
-          resolve(stdout.trim() || null);
-        },
-      );
-      child.stdin?.write(prompt);
-      child.stdin?.end();
-    });
-
-    if (!result) {
-      return c.json({ error: 'AI 解析失败，请重试或切换到手动模式' }, 502);
-    }
-
-    // Extract JSON from response (may be wrapped in ```json ... ```)
-    let jsonStr = result;
-    const fenced = result.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (fenced) jsonStr = fenced[1].trim();
-
-    const parsed = JSON.parse(jsonStr);
+    const parsed = await requestCodexHelperJson<ParsedTaskResponse>(
+      prompt,
+      '任务解析',
+    );
     return c.json({
       success: true,
       parsed: {
@@ -393,8 +366,20 @@ tasksRoutes.post('/parse', authMiddleware, async (c) => {
       },
     });
   } catch (err) {
-    logger.warn({ err }, 'task-parse: failed to parse AI response');
-    return c.json({ error: 'AI 返回格式异常，请重试或切换到手动模式' }, 502);
+    if (err instanceof CodexHelperError) {
+      logger.warn(
+        { message: err.message, statusCode: err.statusCode },
+        'task-parse: Codex helper request failed',
+      );
+      const status = err.statusCode === 503 ? 503 : 502;
+      return c.json({ error: err.message }, status);
+    }
+
+    logger.warn({ err }, 'task-parse: failed to parse Codex response');
+    return c.json(
+      { error: '任务解析返回格式异常，请重试或切换到手动模式' },
+      502,
+    );
   }
 });
 
