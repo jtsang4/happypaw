@@ -219,6 +219,14 @@ const agentDefinitionsPage = fs.readFileSync(
   path.join(repoRoot, 'web', 'src', 'pages', 'AgentDefinitionsPage.tsx'),
   'utf8',
 );
+const appSource = fs.readFileSync(
+  path.join(repoRoot, 'web', 'src', 'App.tsx'),
+  'utf8',
+);
+const settingsPageSource = fs.readFileSync(
+  path.join(repoRoot, 'web', 'src', 'pages', 'SettingsPage.tsx'),
+  'utf8',
+);
 assert.match(
   agentDefinitionsPage,
   /Agent 管理/u,
@@ -248,6 +256,26 @@ assert.doesNotMatch(
   agentDefinitionsPage,
   /Switch|globalModeEnabled|storageMode === 'global'|工作区目录|用户全局 Agent 目录/u,
   'settings surface should not ship a storage-mode toggle or project-local default copy',
+);
+assert.match(
+  appSource,
+  /path="\/agent-definitions"[\s\S]*?<AuthGuard requiredPermission="manage_system_config">[\s\S]*?<AgentDefinitionsPage \/>[\s\S]*?<\/AuthGuard>/u,
+  'standalone /agent-definitions route should be guarded by manage_system_config on the frontend',
+);
+assert.match(
+  settingsPageSource,
+  /const SYSTEM_CONFIG_ONLY_TABS: SettingsTab\[\] = \['agent-definitions'\]/u,
+  'settings page should mark agent-definitions as a privileged-only tab',
+);
+assert.match(
+  settingsPageSource,
+  /SYSTEM_CONFIG_ONLY_TABS\.includes\(raw\) && !canManageSystemConfig/u,
+  'settings page should redirect unauthorized tab query access back to a safe default tab',
+);
+assert.match(
+  settingsPageSource,
+  /setSearchParams\(\{ tab: activeTab \}, \{ replace: true \}\)/u,
+  'settings page should normalize unauthorized agent-definitions tab queries back to the resolved safe tab in the URL',
 );
 
 console.log('✅ agent-definition-surface-cleanup assertions passed');

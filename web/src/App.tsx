@@ -67,7 +67,14 @@ export function App() {
           <Route path="/memory" element={<MemoryPage />} />
           <Route path="/skills" element={<SkillsPage />} />
           <Route path="/mcp-servers" element={<McpServersPage />} />
-          <Route path="/agent-definitions" element={<AgentDefinitionsPage />} />
+          <Route
+            path="/agent-definitions"
+            element={
+              <AuthGuard requiredPermission="manage_system_config">
+                <AgentDefinitionsPage />
+              </AuthGuard>
+            }
+          />
           <Route path="/settings" element={<Suspense fallback={null}><SettingsPage /></Suspense>} />
           <Route
             path="/users"

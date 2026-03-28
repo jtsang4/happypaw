@@ -25,6 +25,7 @@ import type { SettingsTab } from '../components/settings/types';
 const VALID_TABS: SettingsTab[] = ['codex', 'registration', 'appearance', 'system', 'profile', 'my-channels', 'security', 'groups', 'memory', 'skills', 'mcp-servers', 'agent-definitions', 'users', 'about', 'bindings'];
 const SYSTEM_TABS: SettingsTab[] = ['codex', 'registration', 'appearance', 'system'];
 const FULLPAGE_TABS: SettingsTab[] = ['groups', 'memory', 'skills', 'mcp-servers', 'agent-definitions', 'users', 'bindings'];
+const SYSTEM_CONFIG_ONLY_TABS: SettingsTab[] = ['agent-definitions'];
 
 export function SettingsPage() {
   const { user: currentUser } = useAuthStore();
@@ -48,10 +49,37 @@ export function SettingsPage() {
     const raw = searchParams.get('tab') as SettingsTab | null;
     if (raw && VALID_TABS.includes(raw)) {
       if (SYSTEM_TABS.includes(raw) && !canManageSystemConfig) return defaultTab;
+      if (SYSTEM_CONFIG_ONLY_TABS.includes(raw) && !canManageSystemConfig) return defaultTab;
       return raw;
     }
     return defaultTab;
   }, [searchParams, canManageSystemConfig, mustChangePassword, defaultTab]);
+
+  useEffect(() => {
+    const raw = searchParams.get('tab') as SettingsTab | null;
+    if (!raw || raw === activeTab) return;
+
+    const invalidTab = !VALID_TABS.includes(raw);
+    const forbiddenSystemTab = SYSTEM_TABS.includes(raw) && !canManageSystemConfig;
+    const forbiddenSystemConfigTab =
+      SYSTEM_CONFIG_ONLY_TABS.includes(raw) && !canManageSystemConfig;
+    const blockedByPasswordChange = mustChangePassword && raw !== 'profile';
+
+    if (
+      invalidTab ||
+      forbiddenSystemTab ||
+      forbiddenSystemConfigTab ||
+      blockedByPasswordChange
+    ) {
+      setSearchParams({ tab: activeTab }, { replace: true });
+    }
+  }, [
+    activeTab,
+    canManageSystemConfig,
+    mustChangePassword,
+    searchParams,
+    setSearchParams,
+  ]);
 
   const handleTabChange = useCallback((tab: SettingsTab) => {
     setNavOpen(false);
