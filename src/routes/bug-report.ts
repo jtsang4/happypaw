@@ -343,10 +343,10 @@ bugReportRoutes.post('/generate', authMiddleware, async (c) => {
       { promptLen: prompt.length, userId: user.id },
       'bug-report: invoking codex helper',
     );
-    const parsed = await requestCodexHelperJson<{ title?: string; body: string }>(
-      prompt,
-      'Bug 报告生成',
-    );
+    const parsed = await requestCodexHelperJson<{
+      title?: string;
+      body: string;
+    }>(prompt, 'Bug 报告生成');
     return c.json({
       title: parsed.title || `bug: ${description.slice(0, 70)}`,
       body: parsed.body,

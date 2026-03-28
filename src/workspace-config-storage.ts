@@ -13,6 +13,8 @@ export function getWorkspaceSkillsDirFromRoot(workspaceRoot: string): string {
   return path.join(getWorkspaceConfigDir(workspaceRoot), 'skills');
 }
 
-export function getWorkspaceMcpConfigPathFromRoot(workspaceRoot: string): string {
+export function getWorkspaceMcpConfigPathFromRoot(
+  workspaceRoot: string,
+): string {
   return path.join(getWorkspaceConfigDir(workspaceRoot), WORKSPACE_MCP_FILE);
 }

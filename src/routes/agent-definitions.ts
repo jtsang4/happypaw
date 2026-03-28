@@ -1,5 +1,6 @@
-// Agent definitions management routes
-// Manages ~/.factory/droids/*.md files (global droid definition files)
+// Agent definitions management routes.
+// Agent definitions currently persist under ~/.factory/droids/*.md as an
+// implementation detail for the underlying loader.
 
 import { Hono } from 'hono';
 import fs from 'fs';
@@ -10,7 +11,7 @@ import { authMiddleware, systemConfigMiddleware } from '../middleware/auth.js';
 import { logger } from '../logger.js';
 
 const agentDefinitionsRoutes = new Hono<{ Variables: Variables }>();
-const DROID_FRONTMATTER_PREFIX = /^---[\s\S]*?\n---\n/u;
+const AGENT_DEFINITION_FRONTMATTER_PREFIX = /^---[\s\S]*?\n---\n/u;
 
 // --- Types ---
 
@@ -28,7 +29,7 @@ interface AgentDefinitionDetail extends AgentDefinition {
 
 // --- Utility Functions ---
 
-function getAgentsDir(): string {
+function getAgentDefinitionsDir(): string {
   return path.join(os.homedir(), '.factory', 'droids');
 }
 
@@ -120,7 +121,7 @@ function parseFrontmatter(content: string): Record<string, string | string[]> {
 }
 
 function discoverAgents(): AgentDefinition[] {
-  const agentsDir = getAgentsDir();
+  const agentsDir = getAgentDefinitionsDir();
   if (!fs.existsSync(agentsDir)) return [];
 
   const agents: AgentDefinition[] = [];
@@ -161,7 +162,7 @@ function discoverAgents(): AgentDefinition[] {
 function getAgentDetail(id: string): AgentDefinitionDetail | null {
   if (!validateAgentId(id)) return null;
 
-  const filePath = path.join(getAgentsDir(), `${id}.md`);
+  const filePath = path.join(getAgentDefinitionsDir(), `${id}.md`);
   if (!fs.existsSync(filePath)) return null;
 
   try {
@@ -182,8 +183,8 @@ function getAgentDetail(id: string): AgentDefinitionDetail | null {
   }
 }
 
-function ensureDroidFrontmatter(content: string, id: string): string {
-  if (DROID_FRONTMATTER_PREFIX.test(content)) {
+function ensureAgentDefinitionFrontmatter(content: string, id: string): string {
+  if (AGENT_DEFINITION_FRONTMATTER_PREFIX.test(content)) {
     return content;
   }
 
@@ -227,10 +228,14 @@ agentDefinitionsRoutes.put(
       return c.json({ error: 'content must be a string' }, 400);
     }
 
-    const filePath = path.join(getAgentsDir(), `${id}.md`);
+    const filePath = path.join(getAgentDefinitionsDir(), `${id}.md`);
     try {
       fs.accessSync(filePath);
-      fs.writeFileSync(filePath, ensureDroidFrontmatter(content, id), 'utf-8');
+      fs.writeFileSync(
+        filePath,
+        ensureAgentDefinitionFrontmatter(content, id),
+        'utf-8',
+      );
     } catch (err: unknown) {
       if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
         return c.json({ error: 'Agent definition not found' }, 404);
@@ -267,15 +272,19 @@ agentDefinitionsRoutes.post(
       return c.json({ error: 'Invalid agent name' }, 400);
     }
 
-    const agentsDir = getAgentsDir();
+    const agentsDir = getAgentDefinitionsDir();
     fs.mkdirSync(agentsDir, { recursive: true });
 
     const filePath = path.join(agentsDir, `${id}.md`);
     try {
-      fs.writeFileSync(filePath, ensureDroidFrontmatter(content, id), {
-        encoding: 'utf-8',
-        flag: 'wx',
-      });
+      fs.writeFileSync(
+        filePath,
+        ensureAgentDefinitionFrontmatter(content, id),
+        {
+          encoding: 'utf-8',
+          flag: 'wx',
+        },
+      );
     } catch (err: unknown) {
       if ((err as NodeJS.ErrnoException).code === 'EEXIST') {
         return c.json({ error: 'Agent with this name already exists' }, 409);
@@ -297,7 +306,7 @@ agentDefinitionsRoutes.delete(
       return c.json({ error: 'Invalid agent ID' }, 400);
     }
 
-    const filePath = path.join(getAgentsDir(), `${id}.md`);
+    const filePath = path.join(getAgentDefinitionsDir(), `${id}.md`);
     try {
       fs.unlinkSync(filePath);
     } catch (err: unknown) {

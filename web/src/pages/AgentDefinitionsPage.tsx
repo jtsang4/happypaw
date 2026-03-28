@@ -140,7 +140,7 @@ tools:
 
 # ${createName.trim()}
 
-（在此编写 Agent 指令）
+（在此编写 Agent 定义）
 `;
       const id = await createAgent(createName.trim(), defaultContent);
       setCreateName('');
@@ -172,7 +172,7 @@ tools:
               <div>
                 <h1 className="text-2xl font-bold text-foreground">Agent 管理</h1>
                 <p className="text-sm text-muted-foreground mt-0.5">
-                  管理个人 Droid 定义文件，对应 `~/.factory/droids/*.md` 并可通过 Task 工具的 subagent_type 调用。
+                  管理个人 Agent 定义；当前实现会将定义保存到 `~/.factory/droids/*.md`，同时保持现有加载与保存行为兼容。
                 </p>
               </div>
             </div>

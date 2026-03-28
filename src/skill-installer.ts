@@ -68,7 +68,9 @@ function normalizeSkillDirName(value: string): string {
 function getSkillDirName(skillDir: string, fallbackName: string): string {
   const skillFilePath = path.join(skillDir, 'SKILL.md');
   try {
-    const frontmatter = parseFrontmatter(fs.readFileSync(skillFilePath, 'utf-8'));
+    const frontmatter = parseFrontmatter(
+      fs.readFileSync(skillFilePath, 'utf-8'),
+    );
     const fromFrontmatter = normalizeSkillDirName(frontmatter.name || '');
     if (fromFrontmatter) return fromFrontmatter;
   } catch {
@@ -145,17 +147,19 @@ export async function installSkillPackageToDirectory(
     throw new Error('Invalid package name format');
   }
 
-  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'happypaw-skill-install-'));
+  const tempRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'happypaw-skill-install-'),
+  );
   const repoDir = path.join(tempRoot, 'repo');
   const repoUrl = `https://github.com/${parsed.source}.git`;
-  const repoFallbackName = parsed.skillId || parsed.source.split('/').at(-1) || 'skill';
+  const repoFallbackName =
+    parsed.skillId || parsed.source.split('/').at(-1) || 'skill';
 
   try {
-    await execFileAsync(
-      'git',
-      ['clone', '--depth', '1', repoUrl, repoDir],
-      { timeout: 60_000, maxBuffer: 2 * 1024 * 1024 },
-    );
+    await execFileAsync('git', ['clone', '--depth', '1', repoUrl, repoDir], {
+      timeout: 60_000,
+      maxBuffer: 2 * 1024 * 1024,
+    });
 
     const skillDirs = discoverSkillDirs(repoDir, parsed);
     if (skillDirs.length === 0) {

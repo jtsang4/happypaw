@@ -77,12 +77,12 @@ const agentDefinitionsSource = read('src/routes/agent-definitions.ts');
 assert.match(
   agentDefinitionsSource,
   /\.factory', 'droids'/u,
-  'agent definition management should use the droid storage directory',
+  'agent definition management should use the current non-Claude storage directory',
 );
 assert.match(
   agentDefinitionsSource,
-  /ensureDroidFrontmatter/u,
-  'agent definition writes should preserve required droid frontmatter',
+  /ensureAgentDefinitionFrontmatter/u,
+  'agent definition writes should preserve required frontmatter for existing stored definitions',
 );
 assert.doesNotMatch(
   agentDefinitionsSource,
@@ -125,12 +125,17 @@ const agentDefinitionsPage = read('web/src/pages/AgentDefinitionsPage.tsx');
 assert.match(
   agentDefinitionsPage,
   /\.factory\/droids\/\*\.md/u,
-  'agent definition UI should explain the droid storage path',
+  'agent definition UI should mention the current implementation storage path',
+);
+assert.doesNotMatch(
+  agentDefinitionsPage,
+  /Droid|subagent_type/u,
+  'agent definition UI should stay Agent-branded and avoid Task/droid product copy',
 );
 assert.match(
   agentDefinitionsPage,
   /model: inherit/u,
-  'new agent definition templates should include droid-compatible frontmatter',
+  'new agent definition templates should include compatible frontmatter',
 );
 
 console.log('✅ helper-ops-cutover assertions passed');

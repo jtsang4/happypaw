@@ -120,7 +120,8 @@ function parseTomlString(value: string): string | undefined {
 function parseTomlStringArray(value: string): string[] | undefined {
   try {
     const parsed = JSON.parse(value);
-    return Array.isArray(parsed) && parsed.every((item) => typeof item === 'string')
+    return Array.isArray(parsed) &&
+      parsed.every((item) => typeof item === 'string')
       ? parsed
       : undefined;
   } catch {
@@ -142,9 +143,7 @@ function parseTomlInlineStringTable(
   let match: RegExpExecArray | null;
   while ((match = entryPattern.exec(inner)) !== null) {
     const rawKey = match[1];
-    const key = rawKey.startsWith('"')
-      ? parseTomlString(rawKey)
-      : rawKey;
+    const key = rawKey.startsWith('"') ? parseTomlString(rawKey) : rawKey;
     const parsedValue = parseTomlString(match[2]);
     if (!key || parsedValue === undefined) continue;
     result[key] = parsedValue;
