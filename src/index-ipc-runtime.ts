@@ -6,6 +6,8 @@ import { CronExpressionParser } from 'cron-parser';
 
 import type { AvailableGroup } from './container-runner.js';
 import type { RegisteredGroup, ScheduledTask } from './types.js';
+import { getAgent } from './db.js';
+import { readActiveImReplyRouteForIpcDir } from './im-reply-route-snapshot.js';
 import { logger } from './logger.js';
 
 const SAFE_REQUEST_ID_RE = /^[A-Za-z0-9_-]+$/;
@@ -64,6 +66,11 @@ interface IpcRuntimeDeps {
   getRegisteredGroups: () => Record<string, RegisteredGroup>;
   getShuttingDown: () => boolean;
   getActiveImReplyRoute: (folder: string) => string | null | undefined;
+  getAgentReplyRouteJid: (
+    folder: string,
+    chatJid: string,
+    agentId?: string,
+  ) => string | undefined;
   sendMessage: (
     jid: string,
     text: string,
@@ -300,6 +307,22 @@ function canSendCrossGroupMessage(
   return false;
 }
 
+function resolveIpcReplyRouteJid(
+  deps: Pick<IpcRuntimeDeps, 'getActiveImReplyRoute' | 'getAgentReplyRouteJid'>,
+  sourceGroup: string,
+  ipcRoot: string,
+  chatJid: string,
+  ipcAgentId: string | null,
+): string | undefined {
+  const scopedReplyRoute = readActiveImReplyRouteForIpcDir(ipcRoot);
+  if (scopedReplyRoute) return scopedReplyRoute;
+  return deps.getAgentReplyRouteJid(
+    sourceGroup,
+    chatJid,
+    ipcAgentId || undefined,
+  );
+}
+
 export function createIpcRuntime(deps: IpcRuntimeDeps): {
   closeAll: () => void;
   startIpcWatcher: () => void;
@@ -357,6 +380,7 @@ export function createIpcRuntime(deps: IpcRuntimeDeps): {
     isHome: boolean,
     sourceGroupEntry: RegisteredGroup | undefined,
     ipcAgentId: string | null = null,
+    ipcRoot?: string,
   ): Promise<void> {
     switch (data.type) {
       case 'schedule_task':
@@ -789,6 +813,13 @@ export function createIpcRuntime(deps: IpcRuntimeDeps): {
           }
 
           try {
+            if (!ipcRoot) {
+              logger.warn(
+                { sourceGroup, chatJid: data.chatJid, ipcAgentId },
+                'Missing ipcRoot for send_file IPC processing',
+              );
+              break;
+            }
             const fullPath = path.join(
               deps.groupsDir,
               sourceGroup,
@@ -805,11 +836,18 @@ export function createIpcRuntime(deps: IpcRuntimeDeps): {
               break;
             }
 
+            const replyRouteJid = resolveIpcReplyRouteJid(
+              deps,
+              sourceGroup,
+              ipcRoot,
+              data.chatJid,
+              ipcAgentId,
+            );
             const fileImRoute = ipcAgentId
               ? null
               : deps.getChannelType(data.chatJid) !== null
                 ? data.chatJid
-                : (deps.getActiveImReplyRoute(sourceGroup) ?? null);
+                : (replyRouteJid ?? null);
             if (fileImRoute) {
               const imFileName = data.fileName || path.basename(resolvedPath);
               await deps.retryImOperation('send_file', fileImRoute, () =>
@@ -821,12 +859,27 @@ export function createIpcRuntime(deps: IpcRuntimeDeps): {
                 'No IM route for send_file, skipped IM delivery',
               );
             }
+            if (ipcAgentId) {
+              const agent = getAgent(ipcAgentId);
+              const parentChatJid = agent?.chat_jid ?? data.chatJid;
+              if (
+                replyRouteJid &&
+                deps.getChannelType(parentChatJid) === null &&
+                replyRouteJid !== parentChatJid
+              ) {
+                const imFileName = data.fileName || path.basename(resolvedPath);
+                await deps.retryImOperation('send_file', replyRouteJid, () =>
+                  deps.sendFile(replyRouteJid, resolvedPath, imFileName),
+                );
+              }
+            }
             logger.info(
               {
                 sourceGroup,
                 chatJid: data.chatJid,
                 fileName: data.fileName,
                 imRoute: fileImRoute,
+                replyRouteJid,
               },
               'File sent via IPC',
             );
@@ -959,14 +1012,22 @@ export function createIpcRuntime(deps: IpcRuntimeDeps): {
                   const effectiveChatJid = ipcAgentId
                     ? `${data.chatJid}#agent:${ipcAgentId}`
                     : data.chatJid;
+                  const replyRouteJid = resolveIpcReplyRouteJid(
+                    deps,
+                    sourceGroup,
+                    ipcRoot,
+                    data.chatJid,
+                    ipcAgentId,
+                  );
                   await deps.sendMessage(effectiveChatJid, data.text, {
+                    source: ipcAgentId ? 'agent_ipc' : undefined,
                     messageMeta: {
                       sourceKind: 'sdk_send_message',
                     },
                   });
 
                   if (!ipcAgentId) {
-                    const ipcImRoute = deps.getActiveImReplyRoute(sourceGroup);
+                    const ipcImRoute = replyRouteJid;
                     if (
                       ipcImRoute &&
                       deps.getChannelType(data.chatJid) === null &&
@@ -1011,11 +1072,32 @@ export function createIpcRuntime(deps: IpcRuntimeDeps): {
                     }
                   }
 
+                  if (ipcAgentId) {
+                    const agent = getAgent(ipcAgentId);
+                    const parentChatJid = agent?.chat_jid ?? data.chatJid;
+                    if (
+                      replyRouteJid &&
+                      deps.getChannelType(parentChatJid) === null &&
+                      replyRouteJid !== parentChatJid
+                    ) {
+                      const localImages = deps.extractLocalImImagePaths(
+                        data.text,
+                        sourceGroup,
+                      );
+                      deps.sendImWithFailTracking(
+                        replyRouteJid,
+                        data.text,
+                        localImages,
+                      );
+                    }
+                  }
+
                   logger.info(
                     {
                       chatJid: effectiveChatJid,
                       sourceGroup,
                       agentId: ipcAgentId,
+                      replyRouteJid,
                     },
                     'IPC message sent',
                   );
@@ -1041,16 +1123,30 @@ export function createIpcRuntime(deps: IpcRuntimeDeps): {
                   )
                 ) {
                   try {
+                    if (!ipcRoot) {
+                      logger.warn(
+                        { sourceGroup, chatJid: data.chatJid, ipcAgentId },
+                        'Missing ipcRoot for image IPC processing',
+                      );
+                      break;
+                    }
                     const imageBuffer = Buffer.from(data.imageBase64, 'base64');
                     const mimeType = data.mimeType || 'image/png';
                     const caption = data.caption || undefined;
                     const fileName = data.fileName || undefined;
+                    const replyRouteJid = resolveIpcReplyRouteJid(
+                      deps,
+                      sourceGroup,
+                      ipcRoot,
+                      data.chatJid,
+                      ipcAgentId,
+                    );
 
                     const imgImRoute = ipcAgentId
                       ? null
                       : deps.getChannelType(data.chatJid) !== null
                         ? data.chatJid
-                        : (deps.getActiveImReplyRoute(sourceGroup) ?? null);
+                        : (replyRouteJid ?? null);
                     if (imgImRoute) {
                       await deps.retryImOperation(
                         'send_image',
@@ -1100,6 +1196,29 @@ export function createIpcRuntime(deps: IpcRuntimeDeps): {
                       finalization_reason: null,
                     });
                     deps.broadcastToWebClients(imgChatJid, displayText);
+
+                    if (ipcAgentId) {
+                      const agent = getAgent(ipcAgentId);
+                      const parentChatJid = agent?.chat_jid ?? data.chatJid;
+                      if (
+                        replyRouteJid &&
+                        deps.getChannelType(parentChatJid) === null &&
+                        replyRouteJid !== parentChatJid
+                      ) {
+                        await deps.retryImOperation(
+                          'send_image',
+                          replyRouteJid,
+                          () =>
+                            deps.sendImage(
+                              replyRouteJid,
+                              imageBuffer,
+                              mimeType,
+                              caption,
+                              fileName,
+                            ),
+                        );
+                      }
+                    }
 
                     if (
                       !ipcAgentId &&
@@ -1248,6 +1367,7 @@ export function createIpcRuntime(deps: IpcRuntimeDeps): {
                 isHome,
                 sourceGroupEntry,
                 ipcAgentId,
+                ipcRoot,
               );
               await fsp.unlink(filePath);
             } catch (err) {

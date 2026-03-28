@@ -15,6 +15,7 @@ export interface ContainerInput {
   runtime?: 'codex_app_server';
   groupFolder: string;
   chatJid: string;
+  replyRouteJid?: string;
   /** @deprecated Use isHome + isAdminHome instead. Kept for backward compatibility with older host processes. */
   isMain?: boolean;
   /** Whether this is the user's home container (admin or member). */

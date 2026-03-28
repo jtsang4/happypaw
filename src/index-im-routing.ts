@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-import { DATA_DIR, GROUPS_DIR } from './config.js';
+import { GROUPS_DIR } from './config.js';
 import {
   getAgent,
   getJidsByFolder,
@@ -24,6 +24,10 @@ import type { MessageCursor, RegisteredGroup } from './types.js';
 import { getStreamingSession } from './feishu-streaming-card.js';
 import type { ConnectFeishuOptions } from './im-manager.js';
 import { verifyPairingCode } from './telegram-pairing.js';
+import {
+  getActiveImReplyRouteSnapshotPath as getFolderImReplyRouteSnapshotPath,
+  persistActiveImReplyRouteSnapshot,
+} from './im-reply-route-snapshot.js';
 
 const RELATIVE_IMAGE_EXTENSIONS = new Set([
   '.png',
@@ -39,42 +43,20 @@ const IM_SEND_MAX_RETRIES = 3;
 const IM_SEND_RETRY_DELAY_MS = 2_000;
 const IM_SEND_FAIL_THRESHOLD = 3;
 const IM_HEALTH_CHECK_FAIL_THRESHOLD = 3;
-const ACTIVE_IM_REPLY_ROUTE_FILE = 'active_im_reply_route.json';
-
 export type ReplyRouteUpdater = (newSourceJid: string | null) => void;
 
 export function getActiveImReplyRouteSnapshotPath(folder: string): string {
-  return path.join(DATA_DIR, 'ipc', folder, ACTIVE_IM_REPLY_ROUTE_FILE);
+  return getFolderImReplyRouteSnapshotPath(folder);
 }
 
 export function persistActiveImReplyRoute(
   folder: string,
   replyJid: string | null,
 ): void {
-  const snapshotPath = getActiveImReplyRouteSnapshotPath(folder);
-  if (!replyJid) {
-    try {
-      fs.unlinkSync(snapshotPath);
-    } catch {
-      /* ignore */
-    }
-    return;
-  }
-
-  fs.mkdirSync(path.dirname(snapshotPath), { recursive: true });
-  const tempPath = `${snapshotPath}.tmp`;
-  fs.writeFileSync(
-    tempPath,
-    JSON.stringify(
-      {
-        replyJid,
-        updatedAt: new Date().toISOString(),
-      },
-      null,
-      2,
-    ),
+  persistActiveImReplyRouteSnapshot(
+    getActiveImReplyRouteSnapshotPath(folder),
+    replyJid,
   );
-  fs.renameSync(tempPath, snapshotPath);
 }
 
 export function createImRoutingHelpers(deps: {

@@ -21,6 +21,7 @@ import {
   CURRENT_PRODUCT_ID,
   INTERNAL_MCP_BRIDGE_ID,
 } from './legacy-product.js';
+import { persistActiveImReplyRouteForIpcDir } from './im-reply-route-snapshot.js';
 import { logger } from './logger.js';
 import {
   loadMountAllowlist,
@@ -62,6 +63,7 @@ export interface ContainerInput {
   runtime?: RuntimeType;
   groupFolder: string;
   chatJid: string;
+  replyRouteJid?: string;
   /** @deprecated Use isHome + isAdminHome instead */
   isMain: boolean;
   turnId?: string;
@@ -219,6 +221,7 @@ function ensureCodexSessionHome(
   executionMode: 'container' | 'host',
   bridgeContext: {
     chatJid: string;
+    replyRouteJid?: string;
     workspaceGlobal: string;
     workspaceMemory: string;
     workspaceIpc: string;
@@ -227,10 +230,22 @@ function ensureCodexSessionHome(
     isScheduledTask?: boolean;
   },
 ): void {
+  if (bridgeContext.isHome) {
+    const defaultReplyJid =
+      bridgeContext.chatJid.startsWith('web:') ||
+      bridgeContext.chatJid.includes('#agent:')
+        ? null
+        : bridgeContext.chatJid;
+    persistActiveImReplyRouteForIpcDir(
+      bridgeContext.workspaceIpc,
+      defaultReplyJid,
+    );
+  }
+
   const providerConfig = getCodexProviderConfig();
   const bridgeCommand = buildCodexBridgeCommand(executionMode);
   const bridgeEnv: Record<string, string> = {
-    HAPPYPAW_CHAT_JID: bridgeContext.chatJid,
+    HAPPYPAW_CHAT_JID: bridgeContext.replyRouteJid || bridgeContext.chatJid,
     HAPPYPAW_GROUP_FOLDER: group.folder,
     HAPPYPAW_RUNTIME: 'codex_app_server',
     HAPPYPAW_WORKSPACE_GROUP: runtimeWorkspaceDir,
@@ -387,6 +402,7 @@ function buildVolumeMounts(
     'container',
     {
       chatJid: currentChatJid || `web:${group.folder}`,
+      replyRouteJid: currentChatJid,
       workspaceGlobal: '/workspace/global',
       workspaceMemory: '/workspace/memory',
       workspaceIpc: '/workspace/ipc',
@@ -991,6 +1007,7 @@ export async function runHostAgent(
     'host',
     {
       chatJid: input.chatJid,
+      replyRouteJid: input.replyRouteJid,
       workspaceGlobal: group.created_by
         ? path.join(GROUPS_DIR, 'user-global', group.created_by)
         : path.join(GROUPS_DIR, 'global'),

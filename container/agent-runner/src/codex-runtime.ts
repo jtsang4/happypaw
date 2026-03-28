@@ -578,7 +578,7 @@ function buildRuntimePromptContext(
     : '';
 
   const channelGuidelines = deps.buildChannelGuidelines(
-    getChannelFromJid(containerInput.chatJid),
+    getChannelFromJid(containerInput.replyRouteJid || containerInput.chatJid),
   );
 
   const systemPromptAppend = [

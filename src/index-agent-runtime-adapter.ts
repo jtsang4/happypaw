@@ -61,6 +61,7 @@ export type RunAgentFn = (
   turnId?: string,
   onOutput?: (output: ContainerOutput) => Promise<void>,
   images?: Array<{ data: string; mimeType?: string }>,
+  replyRouteJid?: string,
 ) => Promise<{ status: 'success' | 'error' | 'closed'; error?: string }>;
 
 interface AgentRuntimeAdapterDeps {
@@ -311,6 +312,7 @@ export function createIndexAgentRuntimeAdapter(deps: AgentRuntimeAdapterDeps): {
     options: SendMessageOptions = {},
   ): Promise<string | undefined> {
     const isIMChannel = deps.getChannelType(jid) !== null;
+    const normalizedSource = options.source ?? undefined;
     const sendToIM = options.sendToIM ?? isIMChannel;
     try {
       if (sendToIM && isIMChannel) {
@@ -358,10 +360,10 @@ export function createIndexAgentRuntimeAdapter(deps: AgentRuntimeAdapterDeps): {
           finalization_reason: options.messageMeta?.finalizationReason ?? null,
         },
         undefined,
-        options.source,
+        normalizedSource,
       );
       log.info({ jid, length: text.length, sendToIM }, 'Message sent');
-      if (!options.source) {
+      if (!normalizedSource) {
         deps.broadcastToWebClients(jid, text);
       }
       return persistedMsgId;
@@ -477,6 +479,7 @@ export function createIndexAgentRuntimeAdapter(deps: AgentRuntimeAdapterDeps): {
     turnId,
     onOutput,
     images,
+    replyRouteJid,
   ) => {
     const isHome = !!group.is_home;
     const isAdminHome = isHome && group.folder === MAIN_GROUP_FOLDER;
@@ -555,6 +558,7 @@ export function createIndexAgentRuntimeAdapter(deps: AgentRuntimeAdapterDeps): {
                 turnId,
                 groupFolder: group.folder,
                 chatJid,
+                replyRouteJid,
                 isMain: isAdminHome,
                 isHome,
                 isAdminHome,
@@ -573,6 +577,7 @@ export function createIndexAgentRuntimeAdapter(deps: AgentRuntimeAdapterDeps): {
                 turnId,
                 groupFolder: group.folder,
                 chatJid,
+                replyRouteJid,
                 isMain: isAdminHome,
                 isHome,
                 isAdminHome,

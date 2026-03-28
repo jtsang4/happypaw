@@ -19,6 +19,7 @@ import {
   deleteTask,
   ensureChatExists,
   getAllTasks,
+  getAgent,
   getRegisteredGroup,
   getMessagesSince,
   getNewMessages,
@@ -142,6 +143,26 @@ const activeRouteUpdaters = new Map<string, ReplyRouteUpdater>();
 // running processGroupMessages.  IPC watcher reads this to forward send_message
 // outputs to the correct IM channel (the running session holds the truth).
 const activeImReplyRoutes = new Map<string, string | null>();
+
+function getAgentReplyRouteJid(
+  folder: string,
+  chatJid: string,
+  agentId?: string,
+): string | undefined {
+  const activeRoute = activeImReplyRoutes.get(folder) || undefined;
+  if (activeRoute) return activeRoute;
+  if (!agentId && getChannelType(chatJid) !== null) return chatJid;
+  if (agentId) {
+    const agent = getAgent(agentId);
+    if (
+      agent?.last_im_jid &&
+      imManager.isChannelAvailableForJid(agent.last_im_jid)
+    ) {
+      return agent.last_im_jid;
+    }
+  }
+  return undefined;
+}
 
 // Track consecutive IM send failures per JID for auto-unbind
 const imSendFailCounts = new Map<string, number>();
@@ -399,6 +420,7 @@ const { processGroupMessages } = createMainConversationRuntime({
   extractLocalImImagePaths,
   sendImWithFailTracking,
   writeUsageRecords,
+  getAgentReplyRouteJid,
 });
 
 agentConversationRuntime = createIndexAgentConversationRuntime({
@@ -417,6 +439,7 @@ agentConversationRuntime = createIndexAgentConversationRuntime({
   sendImWithRetry,
   sendImWithFailTracking,
   writeUsageRecords,
+  getAgentReplyRouteJid,
   getEffectiveRuntime,
   sendSystemMessage,
   broadcastStreamEvent,
@@ -435,6 +458,7 @@ ipcRuntime = createIpcRuntime({
   getRegisteredGroups: () => registeredGroups,
   getShuttingDown: () => shuttingDown,
   getActiveImReplyRoute: (folder) => activeImReplyRoutes.get(folder),
+  getAgentReplyRouteJid,
   sendMessage,
   ensureChatExists,
   storeMessageDirect,

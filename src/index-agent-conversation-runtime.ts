@@ -102,6 +102,11 @@ interface AgentConversationRuntimeDeps {
       >;
     };
   }) => void;
+  getAgentReplyRouteJid: (
+    folder: string,
+    chatJid: string,
+    agentId?: string,
+  ) => string | undefined;
   getEffectiveRuntime: (group: RegisteredGroup) => RuntimeType;
   sendSystemMessage: (jid: string, type: string, detail: string) => void;
   broadcastStreamEvent: (jid: string, event: any, agentId?: string) => void;
@@ -299,6 +304,11 @@ export function createIndexAgentConversationRuntime(
     const sessionRecord = getRuntimeSession(effectiveGroup.folder, agentId);
     const sessionId = sessionRecord?.sessionId;
     let currentAgentSessionId = sessionId;
+    const replyRouteJid = deps.getAgentReplyRouteJid(
+      effectiveGroup.folder,
+      chatJid,
+      agentId,
+    );
 
     const wrappedOnOutput = async (output: ContainerOutput) => {
       // Track session
@@ -586,10 +596,50 @@ export function createIndexAgentConversationRuntime(
               );
             }
           } else if (!replySourceImJid) {
-            logger.debug(
-              { chatJid, agentId, sourceKind: output.sourceKind },
-              'Agent conversation: no replySourceImJid, skip IM delivery',
-            );
+            if (
+              isFirstReply &&
+              deps.getChannelType(chatJid) === null &&
+              replyRouteJid &&
+              replyRouteJid !== chatJid
+            ) {
+              const imSent = await deps.sendImWithRetry(
+                replyRouteJid,
+                text,
+                localImagePaths,
+              );
+              if (imSent) {
+                logger.info(
+                  {
+                    chatJid,
+                    agentId,
+                    replyRouteJid,
+                    sourceKind: output.sourceKind,
+                    textLen: text.length,
+                  },
+                  'Agent conversation: static IM message sent via fallback route',
+                );
+              } else {
+                logger.error(
+                  {
+                    chatJid,
+                    agentId,
+                    replyRouteJid,
+                    sourceKind: output.sourceKind,
+                  },
+                  'Agent conversation: fallback IM send failed after all retries',
+                );
+              }
+            } else {
+              logger.debug(
+                {
+                  chatJid,
+                  agentId,
+                  sourceKind: output.sourceKind,
+                  replyRouteJid,
+                },
+                'Agent conversation: no replySourceImJid, skip IM delivery',
+              );
+            }
           }
 
           // Optional mirror mode for linked IM channels
@@ -651,6 +701,7 @@ export function createIndexAgentConversationRuntime(
         turnId: lastProcessed.id,
         groupFolder: effectiveGroup.folder,
         chatJid,
+        replyRouteJid,
         isMain: isAdminHome,
         isHome,
         isAdminHome,

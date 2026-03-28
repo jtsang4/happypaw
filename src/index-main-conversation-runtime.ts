@@ -266,6 +266,7 @@ interface MainConversationRuntimeDeps {
     turnId?: string,
     onOutput?: (output: ContainerOutput) => Promise<void>,
     images?: Array<{ data: string; mimeType?: string }>,
+    replyRouteJid?: string,
   ) => Promise<{ status: 'success' | 'error' | 'closed'; error?: string }>;
   getEffectiveRuntime: (group: RegisteredGroup) => RuntimeType;
   sendBillingDeniedMessage: (jid: string, content: string) => string;
@@ -289,6 +290,11 @@ interface MainConversationRuntimeDeps {
     agentId?: string;
     usage: UsagePayload;
   }) => void;
+  getAgentReplyRouteJid: (
+    folder: string,
+    chatJid: string,
+    agentId?: string,
+  ) => string | undefined;
 }
 
 export function createMainConversationRuntime(
@@ -536,6 +542,10 @@ export function createMainConversationRuntime(
       | undefined;
     const activeMainSession = getRuntimeSession(effectiveGroup.folder);
     let activeSessionId = activeMainSession?.sessionId;
+    const replyRouteJid = deps.getAgentReplyRouteJid(
+      effectiveGroup.folder,
+      chatJid,
+    );
     try {
       output = await deps.runAgent(
         effectiveGroup,
@@ -1017,6 +1027,7 @@ export function createMainConversationRuntime(
           }
         },
         imagesForAgent,
+        replyRouteJid,
       );
     } finally {
       await deps.setTyping(chatJid, false);
