@@ -307,6 +307,10 @@ const containerEnvLines = buildContainerEnvLines(
 );
 assert.ok(containerEnvLines.includes('SAFE_FLAG=1'));
 assert.ok(
+  !containerEnvLines.some((line) => line.startsWith('OPENAI_BASE_URL=')),
+  'container env lines should not export OPENAI_BASE_URL because Codex config.toml owns the base URL and avoids deprecated startup warnings',
+);
+assert.ok(
   !containerEnvLines.some((line) =>
     line.startsWith(`${HAPPYPAW_CODEX_EXECUTABLE_ENV}=`),
   ),

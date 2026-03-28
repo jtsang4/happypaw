@@ -138,11 +138,6 @@ export function buildContainerEnvLines(
       `OPENAI_API_KEY=${sanitizeEnvValue(effectiveCodexConfig.openaiApiKey)}`,
     );
   }
-  if (effectiveCodexConfig.openaiBaseUrl) {
-    lines.push(
-      `OPENAI_BASE_URL=${sanitizeEnvValue(effectiveCodexConfig.openaiBaseUrl)}`,
-    );
-  }
   if (effectiveCodexConfig.openaiModel) {
     lines.push(
       `OPENAI_MODEL=${sanitizeEnvValue(effectiveCodexConfig.openaiModel)}`,

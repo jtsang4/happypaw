@@ -102,10 +102,33 @@ assert.ok(
   ),
   'fresh container startup still prepares the Codex home',
 );
+const successEnvFile = path.join(
+  tempRoot,
+  'data',
+  'env',
+  successFolder,
+  'env',
+);
+assert.ok(fs.existsSync(successEnvFile), 'fresh startup writes the mounted env file');
+const successEnvContent = fs.readFileSync(successEnvFile, 'utf8');
+assert.doesNotMatch(
+  successEnvContent,
+  /^OPENAI_BASE_URL=/mu,
+  'fresh container startup should not export deprecated OPENAI_BASE_URL because Codex config.toml owns the base URL',
+);
 
 const capturedArgs = fs.readFileSync(fakeDockerArgsPath, 'utf8');
 assert.match(capturedArgs, /happypaw-agent:latest/u);
 assert.match(capturedArgs, /\/home\/node\/\.codex/u);
+const dockerfileContent = fs.readFileSync(
+  path.join(repoRoot, 'container', 'Dockerfile'),
+  'utf8',
+);
+assert.match(
+  dockerfileContent,
+  /\bbubblewrap\b/u,
+  'container image should install bubblewrap so supported startup paths do not fall back to avoidable sandbox-warning noise',
+);
 
 const failingFolder = 'fresh-failure';
 process.env.FAKE_DOCKER_EXIT_CODE = '1';
