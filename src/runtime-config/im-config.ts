@@ -347,9 +347,7 @@ export function saveCodexProviderConfig(
     {
       openaiBaseUrl:
         next.openaiBaseUrl !== undefined
-          ? next.openaiBaseUrl.trim()
-            ? next.openaiBaseUrl
-            : (existingRuntime?.openaiBaseUrl ?? '')
+          ? next.openaiBaseUrl
           : (existingRuntime?.openaiBaseUrl ?? ''),
       openaiApiKey: existingRuntime?.openaiApiKey ?? '',
       openaiModel:

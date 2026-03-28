@@ -188,6 +188,42 @@ assert.notEqual(
   'secret update responses must stay masked',
 );
 
+const clearedBaseUrlResponse = await app.request('/codex', {
+  method: 'PUT',
+  headers: {
+    Cookie: cookie,
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({ openaiBaseUrl: '' }),
+});
+assert.equal(clearedBaseUrlResponse.status, 200);
+const clearedBaseUrlPayload = await clearedBaseUrlResponse.json();
+assert.equal(
+  clearedBaseUrlPayload.hasOpenaiBaseUrl,
+  true,
+  'effective payload should still report a base URL when env/default fallback is available',
+);
+assert.equal(
+  clearedBaseUrlPayload.source,
+  'runtime',
+  'runtime source remains selected while other runtime overrides still exist',
+);
+
+const runtimeCodexConfigFile = path.join(
+  tempRoot,
+  'data',
+  'config',
+  'codex-provider.json',
+);
+const runtimeCodexConfig = JSON.parse(
+  fs.readFileSync(runtimeCodexConfigFile, 'utf8'),
+);
+assert.equal(
+  runtimeCodexConfig.openaiBaseUrl,
+  '',
+  'blank openaiBaseUrl submissions should clear the stored runtime override',
+);
+
 const legacyResponse = await app.request('/claude', {
   headers: { Cookie: cookie },
 });

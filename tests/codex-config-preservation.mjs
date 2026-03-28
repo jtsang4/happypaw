@@ -80,8 +80,8 @@ const afterEmptyUpdate = saveCodexProviderConfig({
 });
 assert.equal(
   afterEmptyUpdate.openaiBaseUrl,
-  'https://runtime.example.com/v1',
-  'empty base URL input does not wipe the effective runtime value',
+  'https://env.example.com/v1',
+  'empty base URL input clears the runtime override and falls back to env/default behavior',
 );
 assert.equal(afterEmptyUpdate.openaiModel, 'runtime-model');
 
@@ -89,7 +89,11 @@ const afterSecretUpdate = saveCodexProviderSecrets({
   openaiApiKey: 'runtime-api-key',
 });
 assert.equal(afterSecretUpdate.openaiApiKey, 'runtime-api-key');
-assert.equal(afterSecretUpdate.openaiBaseUrl, 'https://runtime.example.com/v1');
+assert.equal(
+  afterSecretUpdate.openaiBaseUrl,
+  'https://env.example.com/v1',
+  'secret updates should preserve the cleared base URL override and keep env/default fallback behavior',
+);
 assert.equal(afterSecretUpdate.openaiModel, 'runtime-model');
 
 const afterSecretClear = saveCodexProviderSecrets({
@@ -100,17 +104,29 @@ assert.equal(
   'env-api-key',
   'clearing runtime secret falls back to env-backed API key',
 );
-assert.equal(afterSecretClear.openaiBaseUrl, 'https://runtime.example.com/v1');
+assert.equal(
+  afterSecretClear.openaiBaseUrl,
+  'https://env.example.com/v1',
+  'clearing runtime secret should not restore a previously cleared base URL override',
+);
 assert.equal(afterSecretClear.openaiModel, 'runtime-model');
 
 stored = readStoredCodexPayload();
 assert.ok(stored, 'runtime config file remains after partial secret clear');
-assert.equal(stored.openaiBaseUrl, 'https://runtime.example.com/v1');
+assert.equal(
+  stored.openaiBaseUrl,
+  '',
+  'cleared runtime base URL should not remain persisted in the stored config file',
+);
 assert.equal(stored.openaiModel, 'runtime-model');
 
 const reloaded = getCodexProviderConfigWithSource();
 assert.equal(reloaded.source, 'runtime', 'runtime source stays selected when overrides exist');
-assert.equal(reloaded.config.openaiBaseUrl, 'https://runtime.example.com/v1');
+assert.equal(
+  reloaded.config.openaiBaseUrl,
+  'https://env.example.com/v1',
+  'reloaded config resolves base URL from env/default once the runtime override is cleared',
+);
 assert.equal(
   reloaded.config.openaiApiKey,
   'env-api-key',
