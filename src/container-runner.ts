@@ -236,10 +236,11 @@ function ensureCodexSessionHome(
 ): void {
   if (bridgeContext.isHome) {
     const defaultReplyJid =
-      bridgeContext.chatJid.startsWith('web:') ||
+      bridgeContext.replyRouteJid?.trim() ||
+      (bridgeContext.chatJid.startsWith('web:') ||
       bridgeContext.chatJid.includes('#agent:')
         ? null
-        : bridgeContext.chatJid;
+        : bridgeContext.chatJid);
     persistActiveImReplyRouteForIpcDir(
       bridgeContext.workspaceIpc,
       defaultReplyJid,
@@ -249,7 +250,7 @@ function ensureCodexSessionHome(
   const providerConfig = getCodexProviderConfig();
   const bridgeCommand = buildCodexBridgeCommand(executionMode);
   const bridgeEnv: Record<string, string> = {
-    HAPPYPAW_CHAT_JID: bridgeContext.replyRouteJid || bridgeContext.chatJid,
+    HAPPYPAW_CHAT_JID: bridgeContext.chatJid,
     HAPPYPAW_GROUP_FOLDER: group.folder,
     HAPPYPAW_RUNTIME: 'codex_app_server',
     HAPPYPAW_WORKSPACE_GROUP: runtimeWorkspaceDir,
@@ -261,6 +262,9 @@ function ensureCodexSessionHome(
     HAPPYPAW_IS_HOME: bridgeContext.isHome ? '1' : '0',
     HAPPYPAW_IS_ADMIN_HOME: bridgeContext.isAdminHome ? '1' : '0',
   };
+  if (bridgeContext.replyRouteJid) {
+    bridgeEnv.HAPPYPAW_REPLY_ROUTE_JID = bridgeContext.replyRouteJid;
+  }
   if (bridgeContext.isScheduledTask) {
     bridgeEnv.HAPPYPAW_IS_SCHEDULED_TASK = '1';
   }
@@ -325,6 +329,7 @@ function buildVolumeMounts(
   taskRunId?: string,
   resolvedProvider?: ResolvedProvider,
   currentChatJid?: string,
+  currentReplyRouteJid?: string,
 ): VolumeMount[] {
   const mounts: VolumeMount[] = [];
   const projectRoot = process.cwd();
@@ -406,7 +411,7 @@ function buildVolumeMounts(
     'container',
     {
       chatJid: currentChatJid || `web:${group.folder}`,
-      replyRouteJid: currentChatJid,
+      replyRouteJid: currentReplyRouteJid,
       workspaceGlobal: '/workspace/global',
       workspaceMemory: '/workspace/memory',
       workspaceIpc: '/workspace/ipc',
@@ -595,6 +600,7 @@ export async function runContainerAgent(
       input.taskRunId,
       resolvedProvider,
       input.chatJid,
+      input.replyRouteJid,
     );
     const safeName = group.folder.replace(/[^a-zA-Z0-9-]/g, '-');
     const agentSuffix = input.agentId

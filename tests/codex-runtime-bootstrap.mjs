@@ -1471,8 +1471,8 @@ writeJsonLine(homeWebBridgeProc.stdin, {
   id: 2,
   method: 'tools/call',
   params: {
-    name: 'send_image',
-    arguments: { file_path: 'photo.png', caption: '家庭工作区截图' },
+    name: 'send_message',
+    arguments: { text: 'home web scope progress' },
   },
 });
 writeJsonLine(homeWebBridgeProc.stdin, {
@@ -1480,8 +1480,72 @@ writeJsonLine(homeWebBridgeProc.stdin, {
   id: 3,
   method: 'tools/call',
   params: {
+    name: 'send_image',
+    arguments: { file_path: 'photo.png', caption: '家庭工作区截图' },
+  },
+});
+writeJsonLine(homeWebBridgeProc.stdin, {
+  jsonrpc: '2.0',
+  id: 4,
+  method: 'tools/call',
+  params: {
     name: 'send_file',
     arguments: { filePath: 'report.pdf', fileName: 'report.pdf' },
+  },
+});
+
+const agentBridgeIpc = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-agent-web-bridge-'));
+fs.mkdirSync(path.join(agentBridgeIpc, 'messages'), { recursive: true });
+fs.mkdirSync(path.join(agentBridgeIpc, 'tasks'), { recursive: true });
+const agentWebBridgeProc = spawn('node', [bridgeScriptPath], {
+  env: {
+    ...process.env,
+    HAPPYPAW_CHAT_JID: 'web:workspace-a',
+    HAPPYPAW_GROUP_FOLDER: 'workspace-a',
+    HAPPYPAW_OWNER_ID: 'owner-1',
+    HAPPYPAW_RUNTIME: 'codex_app_server',
+    HAPPYPAW_PRODUCT_ID: 'happypaw',
+    HAPPYPAW_WORKSPACE_GROUP: bridgeWorkspace,
+    HAPPYPAW_WORKSPACE_GLOBAL: bridgeGlobal,
+    HAPPYPAW_WORKSPACE_MEMORY: bridgeMemory,
+    HAPPYPAW_WORKSPACE_IPC: agentBridgeIpc,
+    HAPPYPAW_IS_HOME: '0',
+    HAPPYPAW_IS_ADMIN_HOME: '0',
+  },
+  stdio: ['pipe', 'pipe', 'pipe'],
+});
+agentWebBridgeProc.stdout.setEncoding('utf8');
+let agentWebBuffer = '';
+const agentWebResponses = new Map();
+agentWebBridgeProc.stdout.on('data', (chunk) => {
+  agentWebBuffer += chunk;
+  let idx;
+  while ((idx = agentWebBuffer.indexOf('\n')) !== -1) {
+    const raw = agentWebBuffer.slice(0, idx).trim();
+    agentWebBuffer = agentWebBuffer.slice(idx + 1);
+    if (!raw) continue;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed.id !== 'undefined') agentWebResponses.set(parsed.id, parsed);
+  }
+});
+writeJsonLine(agentWebBridgeProc.stdin, {
+  jsonrpc: '2.0',
+  id: 1,
+  method: 'initialize',
+  params: {},
+});
+writeJsonLine(agentWebBridgeProc.stdin, {
+  jsonrpc: '2.0',
+  method: 'initialized',
+  params: {},
+});
+writeJsonLine(agentWebBridgeProc.stdin, {
+  jsonrpc: '2.0',
+  id: 2,
+  method: 'tools/call',
+  params: {
+    name: 'send_message',
+    arguments: { text: 'agent scoped progress' },
   },
 });
 
@@ -1553,6 +1617,8 @@ await closeProc(unsupportedBridgeProc);
 await new Promise((resolve) => setTimeout(resolve, 100));
 await closeProc(homeWebBridgeProc);
 await new Promise((resolve) => setTimeout(resolve, 100));
+await closeProc(agentWebBridgeProc);
+await new Promise((resolve) => setTimeout(resolve, 100));
 await closeProc(homeUnsupportedBridgeProc);
 
 await new Promise((resolve) => setTimeout(resolve, 150));
@@ -1616,18 +1682,24 @@ assert.match(
   unsupportedFileResponse.result.content[0].text,
   /Current channel "qq" is unsupported/,
 );
-const homeWebImageResponse = homeWebResponses.get(2);
+const homeWebMessageResponse = homeWebResponses.get(2);
+assert.equal(homeWebMessageResponse.result.isError, undefined);
+assert.equal(homeWebMessageResponse.result.content[0].text, 'Message sent.');
+const homeWebImageResponse = homeWebResponses.get(3);
 assert.equal(homeWebImageResponse.result.isError, undefined);
 assert.match(
   homeWebImageResponse.result.content[0].text,
   /Image sent: photo\.png/,
 );
-const homeWebFileResponse = homeWebResponses.get(3);
+const homeWebFileResponse = homeWebResponses.get(4);
 assert.equal(homeWebFileResponse.result.isError, undefined);
 assert.equal(
   homeWebFileResponse.result.content[0].text,
   'Sending file "report.pdf"...',
 );
+const agentWebMessageResponse = agentWebResponses.get(2);
+assert.equal(agentWebMessageResponse.result.isError, undefined);
+assert.equal(agentWebMessageResponse.result.content[0].text, 'Message sent.');
 const homeUnsupportedImageResponse = homeUnsupportedResponses.get(2);
 assert.equal(homeUnsupportedImageResponse.result.isError, true);
 assert.match(
@@ -1647,11 +1719,20 @@ const messagePayloads = fs
   .map((file) =>
     JSON.parse(fs.readFileSync(path.join(bridgeIpc, 'messages', file), 'utf8')),
   );
-assert.equal(messagePayloads.length, 3);
+assert.equal(messagePayloads.length, 4);
 assert.equal(
   messagePayloads.find((payload) => payload.type === 'message').text,
   '进度仍在继续',
   'send_message writes IPC without terminating the active turn',
+);
+assert.ok(
+  messagePayloads.some(
+    (payload) =>
+      payload.type === 'message' &&
+      payload.chatJid === 'web:home-demo' &&
+      payload.text === 'home web scope progress',
+  ),
+  'home web standalone bridge keeps send_message persisted under the visible web scope even when an IM reply route snapshot exists',
 );
 assert.equal(
   messagePayloads.find((payload) => payload.type === 'image').mimeType,
@@ -1666,6 +1747,19 @@ assert.deepEqual(
   ['telegram:home-route', 'telegram:test-chat'],
   'home web send_image reuses the active IM reply route when available',
 );
+const agentMessagePayloads = fs
+  .readdirSync(path.join(agentBridgeIpc, 'messages'))
+  .filter((file) => file.endsWith('.json'))
+  .map((file) =>
+    JSON.parse(fs.readFileSync(path.join(agentBridgeIpc, 'messages', file), 'utf8')),
+  );
+assert.equal(agentMessagePayloads.length, 1);
+assert.equal(
+  agentMessagePayloads[0].chatJid,
+  'web:workspace-a',
+  'agent-scoped standalone bridge keeps send_message on the visible web-backed scope so IPC/runtime can retain #agent continuity',
+);
+assert.equal(agentMessagePayloads[0].text, 'agent scoped progress');
 
 const taskPayloads = fs
   .readdirSync(path.join(bridgeIpc, 'tasks'))
