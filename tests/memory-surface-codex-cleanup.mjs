@@ -117,6 +117,51 @@ assert.match(
   /searchHits\[source\.locator\]/u,
   'Memory page should key search hits by public locator',
 );
+assert.match(
+  memoryPageSource,
+  /function sanitizeVisibleMemoryText\(text: string\)/u,
+  'Memory page should sanitize browser-visible locator and legacy wording',
+);
+assert.match(
+  memoryPageSource,
+  /记忆源/u,
+  'Memory page sanitization should mask raw public locators from the browser surface',
+);
+assert.match(
+  memoryPageSource,
+  /CLAUDE\\\.md/u,
+  'Memory page sanitization should mask legacy CLAUDE.md wording from visible snippets',
+);
+assert.match(
+  memoryPageSource,
+  /Claude/iu,
+  'Memory page sanitization should mask legacy Claude wording from visible snippets',
+);
+assert.match(
+  memoryPageSource,
+  /sanitizeVisibleMemoryText\(source\.label\)/u,
+  'Memory page source rows should render sanitized labels',
+);
+assert.match(
+  memoryPageSource,
+  /sanitizeVisibleMemoryText\(hit\.snippet\)/u,
+  'Memory page search-hit snippets should render sanitized text',
+);
+assert.match(
+  memoryPageSource,
+  /sanitizeVisibleMemoryText\(selectedSource\.label\)/u,
+  'Memory page selected-file header should render sanitized text',
+);
+assert.match(
+  memoryPageSource,
+  /\{scopeLabel\(source\.scope\)\} · \{kindLabel\(source\.kind\)\}/u,
+  'Memory page source rows should render neutral scope and kind metadata instead of raw locators',
+);
+assert.match(
+  memoryPageSource,
+  /\{scopeLabel\(selectedSource\.scope\)\} · \{kindLabel\(selectedSource\.kind\)\}/u,
+  'Memory page selected-file header should render neutral scope and kind metadata',
+);
 
 const readmeSource = read('README.md');
 assert.doesNotMatch(

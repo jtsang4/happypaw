@@ -34,6 +34,13 @@ interface MemorySearchHit {
   snippet: string;
 }
 
+const VISIBLE_MEMORY_TEXT_REPLACEMENTS: Array<[pattern: RegExp, replacement: string]> = [
+  [/memory:\/\/[^\s]+/gi, '记忆源'],
+  [/CLAUDE\.md/gi, '主记忆文件'],
+  [/\.claude\b/gi, '自动记忆目录'],
+  [/Claude/gi, '系统'],
+];
+
 function getErrorMessage(err: unknown, fallback: string): string {
   if (typeof err === 'object' && err !== null && 'message' in err) {
     const msg = (err as { message?: unknown }).message;
@@ -56,6 +63,28 @@ function scopeLabel(scope: MemorySource['scope']): string {
     default:
       return '其他';
   }
+}
+
+function kindLabel(kind: MemorySource['kind']): string {
+  switch (kind) {
+    case 'primary':
+      return '主记忆';
+    case 'note':
+      return '记忆文件';
+    case 'session':
+      return '自动记忆';
+    default:
+      return '记忆源';
+  }
+}
+
+function sanitizeVisibleMemoryText(text: string): string {
+  return VISIBLE_MEMORY_TEXT_REPLACEMENTS.reduce(
+    (next, [pattern, replacement]) => next.replace(pattern, replacement),
+    text,
+  )
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 export function MemoryPage() {
@@ -98,6 +127,11 @@ export function MemoryPage() {
     }
     return groups;
   }, [filteredSources]);
+
+  const selectedSource = useMemo(
+    () => sources.find((source) => source.locator === selectedPath) ?? null,
+    [selectedPath, sources],
+  );
 
   const loadFile = useCallback(async (locator: string) => {
     setLoadingFile(true);
@@ -263,14 +297,14 @@ export function MemoryPage() {
                 type="text"
                 value={keyword}
                 onChange={(e) => setKeyword(e.target.value)}
-                placeholder="搜索记忆源（定位符 + 全文）"
+                placeholder="搜索记忆标题或全文"
               />
               <div className="mt-1 text-[11px] text-muted-foreground">
                 {keyword.trim()
                   ? searchingContent
                     ? '正在做全文检索...'
                     : `全文命中：${Object.keys(searchHits).length} 个文件`
-                  : '可按文件名、路径或内容关键词检索'}
+                  : '可按标题或内容关键词检索'}
               </div>
             </div>
 
@@ -298,17 +332,17 @@ export function MemoryPage() {
                             }`}
                           >
                             <div className="text-sm font-medium text-foreground truncate">
-                              {source.label}
+                              {sanitizeVisibleMemoryText(source.label)}
                             </div>
                             <div className="text-[11px] text-muted-foreground truncate mt-0.5">
-                              {source.locator}
+                              {scopeLabel(source.scope)} · {kindLabel(source.kind)}
                             </div>
                             <div className="text-[11px] mt-1 text-muted-foreground">
                               {source.writable ? '可编辑' : '只读'} · {source.exists ? `${source.size} B` : '文件不存在'}
                             </div>
                             {hit && (
                               <div className="text-[11px] mt-1 text-primary truncate">
-                                命中 {hit.hits} 次 · {hit.snippet}
+                                命中 {hit.hits} 次 · {sanitizeVisibleMemoryText(hit.snippet)}
                               </div>
                             )}
                           </button>
@@ -343,8 +377,15 @@ export function MemoryPage() {
                   )}
                   <div className="mb-3">
                     <div className="text-sm font-semibold text-foreground break-all">
-                      {selectedPath}
+                      {selectedSource
+                        ? sanitizeVisibleMemoryText(selectedSource.label)
+                        : '已选记忆源'}
                     </div>
+                    {selectedSource && (
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {scopeLabel(selectedSource.scope)} · {kindLabel(selectedSource.kind)}
+                      </div>
+                    )}
                     <div className="text-xs text-muted-foreground mt-1">
                       最近更新时间: {updatedText} · 字节数: {new TextEncoder().encode(content).length} · {fileMeta?.writable ? '可编辑' : '只读'}
                     </div>
