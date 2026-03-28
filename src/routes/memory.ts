@@ -155,16 +155,19 @@ function classifyMemorySource(
     const name = parts.slice(4).join('/') || 'CLAUDE.md';
     const owner = getUserById(userId);
     const ownerLabel = owner ? owner.display_name || owner.username : userId;
+    const isPrimaryMemory = name === 'CLAUDE.md';
     return {
       scope: 'user-global',
-      kind: 'claude',
-      label: `${ownerLabel} / 全局记忆 / ${name}`,
+      kind: 'primary',
+      label: isPrimaryMemory
+        ? `${ownerLabel} / 全局主记忆`
+        : `${ownerLabel} / 全局记忆 / ${name}`,
       ownerName: ownerLabel,
     };
   }
   // data/groups/main/CLAUDE.md
   if (relativePath === 'data/groups/main/CLAUDE.md') {
-    return { scope: 'main', kind: 'claude', label: '主会话记忆 / CLAUDE.md' };
+    return { scope: 'main', kind: 'primary', label: '主会话主记忆' };
   }
   // data/memory/{folder}/...
   if (parts[0] === 'data' && parts[1] === 'memory') {
@@ -180,11 +183,12 @@ function classifyMemorySource(
   if (parts[0] === 'data' && parts[1] === 'groups') {
     const folder = parts[2] || 'unknown';
     const name = parts.slice(3).join('/');
-    const kind = name === 'CLAUDE.md' ? 'claude' : 'note';
+    const isPrimaryMemory = name === 'CLAUDE.md';
+    const kind = isPrimaryMemory ? 'primary' : 'note';
     return {
       scope: folder === 'main' ? 'main' : 'flow',
       kind,
-      label: `${folder} / ${name}`,
+      label: isPrimaryMemory ? `${folder} / 主记忆` : `${folder} / ${name}`,
     };
   }
   // data/sessions/{folder}/.claude/...
@@ -420,7 +424,7 @@ function listMemorySources(user: AuthUser): MemorySource[] {
     session: 3,
   };
   const kindRank: Record<MemorySource['kind'], number> = {
-    claude: 0,
+    primary: 0,
     note: 1,
     session: 2,
   };

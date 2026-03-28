@@ -577,7 +577,7 @@ export interface MemorySource {
   path: string;
   label: string;
   scope: 'user-global' | 'main' | 'flow' | 'session';
-  kind: 'claude' | 'note' | 'session';
+  kind: 'primary' | 'note' | 'session';
   writable: boolean;
   exists: boolean;
   updatedAt: string | null;

@@ -130,8 +130,8 @@ Agent 在运行时可通过内置 MCP Server 与主进程通信：
 
 Agent 自主维护跨会话的持久记忆：
 
-- **用户全局记忆** — `data/groups/user-global/{userId}/CLAUDE.md`，每个用户独立的全局记忆，所有会话可读
-- **会话记忆** — `data/groups/{folder}/CLAUDE.md`，会话私有
+- **用户全局记忆** — `data/groups/user-global/{userId}/` 下的主记忆文件，每个用户独立，所有会话可读
+- **会话记忆** — `data/groups/{folder}/` 下的私有主记忆文件
 - **日期记忆** — `memory/YYYY-MM-DD.md`，时效性信息
 - **对话归档** — PreCompact Hook 在上下文压缩前自动归档到 `conversations/`
 - **全文检索** — Web 界面在线编辑 + 搜索
@@ -393,7 +393,7 @@ flowchart TD
 
     DB[("SQLite<br/>(WAL 模式)")]
     IPC["IPC 文件通道<br/>(原子读写)"]
-    Memory["记忆系统<br/>(CLAUDE.md + memory/)"]
+    Memory["记忆系统<br/>(主记忆文件 + memory/)"]
 
     Feishu --> Router
     Telegram --> Router
@@ -496,7 +496,7 @@ happypaw/
 │   ├── db/messages.db            #   SQLite 数据库（WAL 模式）
 │   ├── groups/{folder}/          #   会话工作目录（Agent 可读写）
 │   │   ├── downloads/{channel}/  #     IM 文件下载（feishu/telegram/qq，按日期分子目录）
-│   │   └── CLAUDE.md             #     会话私有记忆
+│   │   └── <主记忆文件>          #     会话私有主记忆文件
 │   ├── groups/user-global/{id}/  #   用户全局记忆目录
 │   ├── sessions/{folder}/.codex/ #   Codex 线程 / 运行时持久化
 │   ├── ipc/{folder}/             #   IPC 通道（input / messages / tasks）

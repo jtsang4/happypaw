@@ -12,7 +12,7 @@ interface MemorySource {
   path: string;
   label: string;
   scope: 'user-global' | 'main' | 'flow' | 'session';
-  kind: 'claude' | 'note' | 'session';
+  kind: 'primary' | 'note' | 'session';
   writable: boolean;
   exists: boolean;
   updatedAt: string | null;
@@ -125,10 +125,10 @@ export function MemoryPage() {
       let nextSelected = selectedPath && available.has(selectedPath) ? selectedPath : null;
 
       if (!nextSelected) {
-        // Default: first user-global CLAUDE.md, then main, then first available
+        // Default: first user-global primary memory, then main, then first available
         nextSelected =
-          data.sources.find((s) => s.scope === 'user-global' && s.kind === 'claude')?.path ||
-          data.sources.find((s) => s.scope === 'main' && s.kind === 'claude')?.path ||
+          data.sources.find((s) => s.scope === 'user-global' && s.kind === 'primary')?.path ||
+          data.sources.find((s) => s.scope === 'main' && s.kind === 'primary')?.path ||
           data.sources[0]?.path ||
           null;
       }
