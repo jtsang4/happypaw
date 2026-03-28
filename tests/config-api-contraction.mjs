@@ -341,7 +341,19 @@ const updatedWorkspaceEnvPayload = await updatedWorkspaceEnvResponse.json();
 assert.deepEqual(updatedWorkspaceEnvPayload, {
   customEnv: {
     SAFE_FLAG: '1',
-    OPENAI_BASE_URL: 'https://custom.example/v1',
+  },
+});
+const reloadedWorkspaceEnvResponse = await app.request(
+  `/api/groups/${encodeURIComponent(tempWorkspaceJid)}/env`,
+  {
+    headers: { Cookie: cookie },
+  },
+);
+assert.equal(reloadedWorkspaceEnvResponse.status, 200);
+const reloadedWorkspaceEnvPayload = await reloadedWorkspaceEnvResponse.json();
+assert.deepEqual(reloadedWorkspaceEnvPayload, {
+  customEnv: {
+    SAFE_FLAG: '1',
   },
 });
 

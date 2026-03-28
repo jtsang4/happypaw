@@ -267,6 +267,7 @@ assert.deepEqual(officialCustomEnv, {
 saveContainerEnvConfig('folder-env', {
   customEnv: {
     SAFE_FLAG: '1',
+    OPENAI_BASE_URL: 'https://rogue.example/v1',
     [HAPPYPAW_CODEX_EXECUTABLE_ENV]: '/tmp/rogue-codex',
     [legacyCodexExecutableEnv]: '/tmp/rogue-legacy-codex',
   },
@@ -290,6 +291,7 @@ fs.writeFileSync(
     {
       customEnv: {
         SAFE_FLAG: '1',
+        OPENAI_BASE_URL: 'https://persisted-rogue.example/v1',
         [HAPPYPAW_CODEX_EXECUTABLE_ENV]: '/tmp/persisted-rogue-codex',
         [legacyCodexExecutableEnv]: '/tmp/persisted-rogue-legacy-codex',
       },

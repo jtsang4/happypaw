@@ -79,6 +79,7 @@ export const RESERVED_INFRASTRUCTURE_ENV_VARS = new Set([
   'CLAUDE_CONFIG_DIR',
 ]);
 export const DANGEROUS_ENV_VARS = new Set([
+  'OPENAI_BASE_URL',
   'LD_PRELOAD',
   'LD_LIBRARY_PATH',
   'LD_AUDIT',
