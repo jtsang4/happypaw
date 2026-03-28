@@ -55,10 +55,7 @@ export function resolveReplyRouteJid(
 ): string | undefined {
   if (agentId) {
     const agent = getAgent(agentId);
-    if (
-      agent?.last_im_jid &&
-      isChannelAvailableForJid(agent.last_im_jid)
-    ) {
+    if (agent?.last_im_jid && isChannelAvailableForJid(agent.last_im_jid)) {
       return agent.last_im_jid;
     }
   }
