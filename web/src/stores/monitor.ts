@@ -11,7 +11,37 @@ export interface SystemStatus {
   uptime: number;
   dockerImageExists: boolean;
   dockerBuildInProgress?: boolean;
-  claudeCodeVersions?: { host: string | null; container: string | null; latest: string | null } | null;
+  codexDiagnostics?: {
+    pinnedVersion: string;
+    releaseTag: string;
+    releaseSource: string;
+    repoCache: {
+      executablePath: string | null;
+      prepared: boolean;
+    };
+    hostBootstrap: {
+      executablePath: string | null;
+      cached: boolean;
+    };
+    containerBundle: {
+      executablePath: string;
+      imageReady: boolean;
+    };
+    helperReadiness: {
+      taskParsing: {
+        ready: boolean;
+        detail: string;
+      };
+      bugReportGeneration: {
+        ready: boolean;
+        detail: string;
+      };
+      githubIssueSubmission: {
+        ready: boolean;
+        detail: string;
+      };
+    };
+  } | null;
   dockerBuildLogs?: string[];
   dockerBuildResult?: { success: boolean; error?: string } | null;
   groups: Array<{

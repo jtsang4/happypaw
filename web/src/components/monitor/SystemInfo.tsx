@@ -6,36 +6,10 @@ interface SystemInfoProps {
   status: SystemStatus;
 }
 
-/** Extract semver-like version number from strings like "2.1.81 (Claude Code)" */
 function extractVersion(raw: string | null | undefined): string | null {
   if (!raw) return null;
   const match = raw.match(/(\d+\.\d+\.\d+)/);
   return match ? match[1] : null;
-}
-
-/** Check if a version string is outdated compared to latest */
-function isOutdated(current: string | null | undefined, latest: string | null | undefined): boolean {
-  const cv = extractVersion(current);
-  const lv = extractVersion(latest);
-  if (!cv || !lv) return false;
-  return cv !== lv;
-}
-
-function VersionBadge({ current, latest }: { current: string | null | undefined; latest: string | null | undefined }) {
-  if (!current) return null;
-  const outdated = isOutdated(current, latest);
-  if (!outdated) {
-    return (
-      <span className="ml-1.5 inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-700">
-        最新
-      </span>
-    );
-  }
-  return (
-    <span className="ml-1.5 inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700">
-      可更新
-    </span>
-  );
 }
 
 export function SystemInfo({ status }: SystemInfoProps) {
@@ -49,7 +23,23 @@ export function SystemInfo({ status }: SystemInfoProps) {
     return `${minutes}m`;
   };
 
-  const versions = status.claudeCodeVersions;
+  const diagnostics = status.codexDiagnostics;
+  const helperEntries = diagnostics
+    ? [
+        {
+          label: '任务解析助手',
+          value: diagnostics.helperReadiness.taskParsing,
+        },
+        {
+          label: 'Bug 报告助手',
+          value: diagnostics.helperReadiness.bugReportGeneration,
+        },
+        {
+          label: 'GitHub 提交',
+          value: diagnostics.helperReadiness.githubIssueSubmission,
+        },
+      ]
+    : [];
 
   return (
     <Card>
@@ -72,42 +62,86 @@ export function SystemInfo({ status }: SystemInfoProps) {
           </span>
         </div>
 
-        {versions !== undefined && (
+        {diagnostics !== undefined && (
           <>
-            {versions?.latest && (
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">最新版本</span>
-                <span className="text-foreground font-medium font-mono text-xs">
-                  {versions.latest}
-                </span>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">固定 Codex</span>
+              <span className="text-foreground font-medium font-mono text-xs flex items-center">
+                {extractVersion(diagnostics?.pinnedVersion) ||
+                  diagnostics?.pinnedVersion ||
+                  '未知'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">发布来源</span>
+              <span className="text-foreground font-medium text-xs text-right max-w-[60%]">
+                {diagnostics?.releaseSource || '未知'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">版本标签</span>
+              <span className="text-foreground font-medium font-mono text-xs flex items-center">
+                {diagnostics?.releaseTag || '未知'}
+              </span>
+            </div>
+            <div className="flex items-start justify-between gap-3 text-sm">
+              <span className="text-muted-foreground">仓库缓存</span>
+              <div className="text-right">
+                <div className="text-foreground font-medium text-xs">
+                  {diagnostics?.repoCache.prepared ? '已准备' : '未准备'}
+                </div>
+                <div className="text-[11px] text-muted-foreground break-all max-w-[220px]">
+                  {diagnostics?.repoCache.executablePath || '未发现缓存路径'}
+                </div>
               </div>
-            )}
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">宿主机</span>
-              <span className="text-foreground font-medium font-mono text-xs flex items-center">
-                {extractVersion(versions?.host) || '未知'}
-                <VersionBadge current={versions?.host} latest={versions?.latest} />
-              </span>
             </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">容器</span>
-              <span className="text-foreground font-medium font-mono text-xs flex items-center">
-                {versions?.container ? extractVersion(versions.container) || versions.container : '未构建'}
-                {versions?.container && (
-                  <VersionBadge current={versions.container} latest={versions?.latest} />
-                )}
-              </span>
+            <div className="flex items-start justify-between gap-3 text-sm">
+              <span className="text-muted-foreground">宿主机引导</span>
+              <div className="text-right">
+                <div className="text-foreground font-medium text-xs">
+                  {diagnostics?.hostBootstrap.cached ? '缓存已命中' : '首次启动时下载'}
+                </div>
+                <div className="text-[11px] text-muted-foreground break-all max-w-[220px]">
+                  {diagnostics?.hostBootstrap.executablePath || '未解析宿主机路径'}
+                </div>
+              </div>
             </div>
+            <div className="flex items-start justify-between gap-3 text-sm">
+              <span className="text-muted-foreground">容器内路径</span>
+              <div className="text-right">
+                <div className="text-foreground font-medium text-xs">
+                  {diagnostics?.containerBundle.imageReady ? '镜像可用' : '镜像未构建'}
+                </div>
+                <div className="text-[11px] text-muted-foreground break-all max-w-[220px]">
+                  {diagnostics?.containerBundle.executablePath || '未知'}
+                </div>
+              </div>
+            </div>
+            {helperEntries.map((entry) => (
+              <div
+                key={entry.label}
+                className="flex items-start justify-between gap-3 text-sm"
+              >
+                <span className="text-muted-foreground">{entry.label}</span>
+                <div className="text-right">
+                  <span
+                    className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
+                      entry.value.ready
+                        ? 'bg-success-bg text-success'
+                        : 'bg-warning-bg text-warning'
+                    }`}
+                  >
+                    {entry.value.ready ? '已就绪' : '需配置 / 回退'}
+                  </span>
+                  <div className="mt-1 text-[11px] text-muted-foreground max-w-[220px] break-words">
+                    {entry.value.detail}
+                  </div>
+                </div>
+              </div>
+            ))}
           </>
 
         )}
-
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">飞书连接</span>
-          <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-success-bg text-success">
-            已连接
-          </span>
-        </div>
         </div>
       </CardContent>
     </Card>
