@@ -1,29 +1,20 @@
 /**
  * Workspace-level Skills and MCP Servers management routes.
  *
- * Operates on the workspace's `.claude/` directory (project-level config).
- * SDK reads both 'project' and 'user' settingSources, so these configs
- * take effect alongside global (user-level) configs without any changes
- * to agent-runner or container-runner.
+ * Operates on the workspace's `.happypaw/` directory (project-level config).
  */
 
 import { Hono, type Context } from 'hono';
 import fs from 'fs';
 import path from 'path';
-import os from 'os';
-import { execFile } from 'child_process';
-import { promisify } from 'util';
 import type { Variables } from '../web-context.js';
 import type { AuthUser, RegisteredGroup } from '../types.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { GROUPS_DIR } from '../config.js';
 import { canAccessGroup } from '../web-context.js';
 import { getRegisteredGroup } from '../db.js';
-import {
-  CURRENT_PRODUCT_ID,
-  isReservedMcpServerId,
-  toLegacyProductToken,
-} from '../legacy-product.js';
+import { CURRENT_PRODUCT_ID, isReservedMcpServerId } from '../legacy-product.js';
+import { installSkillPackageToDirectory } from '../skill-installer.js';
 import {
   parseFrontmatter,
   validateSkillId,
@@ -31,8 +22,11 @@ import {
   scanSkillDirectory,
   listFiles,
 } from '../skill-utils.js';
-
-const execFileAsync = promisify(execFile);
+import {
+  getWorkspaceConfigDir,
+  getWorkspaceMcpConfigPathFromRoot,
+  getWorkspaceSkillsDirFromRoot,
+} from '../workspace-config-storage.js';
 
 const workspaceConfigRoutes = new Hono<{ Variables: Variables }>();
 
@@ -50,45 +44,35 @@ function getWorkspaceRoot(group: RegisteredGroup & { jid: string }): string {
   return path.join(GROUPS_DIR, group.folder);
 }
 
-function getWorkspaceClaudeDir(
+function getWorkspaceConfigRoot(
   group: RegisteredGroup & { jid: string },
 ): string {
-  return path.join(getWorkspaceRoot(group), '.claude');
+  return getWorkspaceConfigDir(getWorkspaceRoot(group));
 }
 
 function getWorkspaceSkillsDir(
   group: RegisteredGroup & { jid: string },
 ): string {
-  return path.join(getWorkspaceClaudeDir(group), 'skills');
+  return getWorkspaceSkillsDirFromRoot(getWorkspaceRoot(group));
 }
 
 function getWorkspaceSettingsPath(
   group: RegisteredGroup & { jid: string },
 ): string {
-  return path.join(getWorkspaceClaudeDir(group), 'settings.json');
+  return getWorkspaceMcpConfigPathFromRoot(getWorkspaceRoot(group));
 }
 
 /**
  * Metadata file for workspace MCP servers.
  * Stores full config + enabled state so we can remove disabled servers
- * from settings.json (SDK won't see them) while preserving the config
- * for re-enabling.
+ * from the workspace MCP config while preserving the config for re-enabling.
  */
 function getWorkspaceMcpMetaPath(
   group: RegisteredGroup & { jid: string },
 ): string {
   return path.join(
-    getWorkspaceClaudeDir(group),
+    getWorkspaceConfigRoot(group),
     `${CURRENT_PRODUCT_ID}-workspace.json`,
-  );
-}
-
-function getLegacyWorkspaceMcpMetaPath(
-  group: RegisteredGroup & { jid: string },
-): string {
-  return path.join(
-    getWorkspaceClaudeDir(group),
-    toLegacyProductToken(`${CURRENT_PRODUCT_ID}-workspace.json`),
   );
 }
 
@@ -122,15 +106,7 @@ function readWorkspaceMeta(
     const data = fs.readFileSync(getWorkspaceMcpMetaPath(group), 'utf-8');
     return JSON.parse(data);
   } catch {
-    try {
-      const legacyData = fs.readFileSync(
-        getLegacyWorkspaceMcpMetaPath(group),
-        'utf-8',
-      );
-      return JSON.parse(legacyData);
-    } catch {
-      return { mcpServers: {} };
-    }
+    return { mcpServers: {} };
   }
 }
 
@@ -141,10 +117,6 @@ function writeWorkspaceMeta(
   const metaPath = getWorkspaceMcpMetaPath(group);
   fs.mkdirSync(path.dirname(metaPath), { recursive: true });
   fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
-  const legacyMetaPath = getLegacyWorkspaceMcpMetaPath(group);
-  if (legacyMetaPath !== metaPath && fs.existsSync(legacyMetaPath)) {
-    fs.rmSync(legacyMetaPath, { force: true });
-  }
 }
 
 function readWorkspaceSettings(
@@ -168,8 +140,9 @@ function writeWorkspaceSettings(
 }
 
 /**
- * Sync enabled MCP servers to settings.json so SDK can discover them.
- * Disabled servers are removed from settings.json but kept in metadata.
+ * Sync enabled MCP servers to the workspace MCP config file so Codex home
+ * generation can discover them. Disabled servers are removed from the config
+ * file but kept in metadata.
  */
 function syncMcpToSettings(
   group: RegisteredGroup & { jid: string },
@@ -270,64 +243,12 @@ workspaceConfigRoutes.post(
       return c.json({ error: 'Invalid package name format' }, 400);
     }
 
-    // Install to a temp HOME, then copy to workspace skills dir
-    const tempHome = fs.mkdtempSync(
-      path.join(os.tmpdir(), 'ws-skill-install-'),
-    );
-    const tempSkillsDir = path.join(tempHome, '.claude', 'skills');
-    fs.mkdirSync(tempSkillsDir, { recursive: true });
-
     try {
-      await execFileAsync(
-        'npx',
-        ['-y', 'skills', 'add', pkg, '--global', '--yes', '-a', 'claude-code'],
-        {
-          timeout: 60_000,
-          env: { ...process.env, HOME: tempHome },
-        },
-      );
-
-      // Discover installed skill directories
-      const installedEntries: string[] = [];
-      if (fs.existsSync(tempSkillsDir)) {
-        for (const entry of fs.readdirSync(tempSkillsDir, {
-          withFileTypes: true,
-        })) {
-          if (entry.isDirectory() || entry.isSymbolicLink()) {
-            installedEntries.push(entry.name);
-          }
-        }
-      }
-
-      if (installedEntries.length === 0) {
-        return c.json(
-          { error: 'No skills were installed — package may be invalid' },
-          500,
-        );
-      }
-
-      // Copy to workspace skills directory
       const targetDir = getWorkspaceSkillsDir(group);
-      fs.mkdirSync(targetDir, { recursive: true });
-
-      for (const name of installedEntries) {
-        const src = path.join(tempSkillsDir, name);
-        const dest = path.join(targetDir, name);
-        if (fs.existsSync(dest)) {
-          fs.rmSync(dest, { recursive: true, force: true });
-        }
-        // Resolve symlinks and copy real content
-        let realSrc = src;
-        try {
-          const lstat = fs.lstatSync(src);
-          if (lstat.isSymbolicLink()) {
-            realSrc = fs.realpathSync(src);
-          }
-        } catch {
-          // use src as-is
-        }
-        fs.cpSync(realSrc, dest, { recursive: true });
-      }
+      const installedEntries = await installSkillPackageToDirectory(
+        pkg,
+        targetDir,
+      );
 
       return c.json({ success: true, installed: installedEntries });
     } catch (error) {
@@ -338,12 +259,6 @@ workspaceConfigRoutes.post(
         },
         500,
       );
-    } finally {
-      try {
-        fs.rmSync(tempHome, { recursive: true, force: true });
-      } catch {
-        /* ignore */
-      }
     }
   },
 );
@@ -441,7 +356,7 @@ workspaceConfigRoutes.get(
     const settingsMcp =
       (settings.mcpServers as Record<string, Record<string, unknown>>) || {};
 
-    // Merge: metadata has full info; also discover servers in settings.json
+    // Merge: metadata has full info; also discover servers in workspace config
     // that aren't in metadata (e.g. manually added by user)
     const servers: Array<McpServerMeta & { id: string }> = [];
 
@@ -450,13 +365,13 @@ workspaceConfigRoutes.get(
       servers.push({ id, ...entry });
     }
 
-    // From settings.json (not in metadata = externally added)
+    // From workspace config (not in metadata = externally added)
     for (const [id, entry] of Object.entries(settingsMcp)) {
       if (meta.mcpServers[id]) continue; // already covered
       const isHttpType = entry.type === 'http' || entry.type === 'sse';
       servers.push({
         id,
-        enabled: true, // in settings.json = enabled
+        enabled: true, // present in workspace config = enabled
         addedAt: '',
         ...(isHttpType
           ? {
@@ -577,7 +492,7 @@ workspaceConfigRoutes.patch(
     const meta = readWorkspaceMeta(group);
     let entry = meta.mcpServers[id];
 
-    // If not in metadata, check settings.json for externally added servers
+    // If not in metadata, check workspace config for externally added servers
     if (!entry) {
       const settings = readWorkspaceSettings(group);
       const settingsMcp =
@@ -638,7 +553,7 @@ workspaceConfigRoutes.delete(
     const hadMeta = !!meta.mcpServers[id];
     delete meta.mcpServers[id];
 
-    // Also remove from settings.json directly
+    // Also remove from workspace config directly
     const settings = readWorkspaceSettings(group);
     const settingsMcp = (settings.mcpServers as Record<string, unknown>) || {};
     const hadSettings = id in settingsMcp;

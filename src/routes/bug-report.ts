@@ -7,6 +7,10 @@ import { promisify } from 'util';
 import { Hono } from 'hono';
 
 import { DATA_DIR } from '../config.js';
+import {
+  CodexHelperError,
+  requestCodexHelperJson,
+} from '../codex-helper-client.js';
 import { getUserHomeGroup } from '../db.js';
 import { logger } from '../logger.js';
 import { authMiddleware } from '../middleware/auth.js';
@@ -256,36 +260,6 @@ ${logs.slice(0, 3000)}
   };
 }
 
-/** Try multiple strategies to extract JSON { title, body } from Claude output */
-function tryParseJsonOutput(
-  raw: string,
-): { title?: string; body?: string } | null {
-  const candidates: string[] = [];
-
-  // Strategy 1: strip markdown fencing (greedy to handle nested backticks)
-  const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```\s*$/);
-  if (fenceMatch) candidates.push(fenceMatch[1].trim());
-
-  // Strategy 2: extract first { ... } block
-  const braceMatch = raw.match(/\{[\s\S]*\}/);
-  if (braceMatch) candidates.push(braceMatch[0]);
-
-  // Strategy 3: raw string as-is
-  candidates.push(raw.trim());
-
-  for (const candidate of candidates) {
-    try {
-      const parsed = JSON.parse(candidate) as { title?: string; body?: string };
-      if (typeof parsed === 'object' && parsed !== null && parsed.body) {
-        return parsed;
-      }
-    } catch {
-      // try next candidate
-    }
-  }
-  return null;
-}
-
 // ========== Routes ==========
 
 /**
@@ -365,69 +339,26 @@ bugReportRoutes.post('/generate', authMiddleware, async (c) => {
   );
 
   try {
-    const result = await new Promise<string | null>((resolve) => {
-      const model = process.env.RECALL_MODEL || '';
-      const args = ['--print'];
-      if (model) args.push('--model', model);
-
-      logger.info(
-        { promptLen: prompt.length, userId: user.id },
-        'bug-report: invoking claude --print',
-      );
-
-      const child = execFile(
-        'claude',
-        args,
-        {
-          timeout: 60000,
-          maxBuffer: 2 * 1024 * 1024,
-          env: { ...process.env, CLAUDECODE: '' },
-        },
-        (err, stdout, stderr) => {
-          if (err) {
-            logger.warn(
-              {
-                message: (err as Error).message?.slice(0, 200),
-                stderr: stderr?.slice(0, 300),
-              },
-              'bug-report: claude CLI failed',
-            );
-            resolve(null);
-            return;
-          }
-          resolve(stdout.trim() || null);
-        },
-      );
-
-      child.stdin?.write(prompt);
-      child.stdin?.end();
-    });
-
-    if (!result) {
-      const fallback = buildFallbackReport(description, systemInfo, logs);
-      return c.json({ ...fallback, systemInfo });
-    }
-
-    // Try to parse Claude's JSON output
-    const parsed = tryParseJsonOutput(result);
-    if (parsed?.body) {
-      return c.json({
-        title: parsed.title || `bug: ${description.slice(0, 70)}`,
-        body: parsed.body,
-        systemInfo,
-      });
-    }
-
-    // Claude didn't return valid JSON, use raw output as body
     logger.info(
-      'bug-report: claude output was not valid JSON, using as raw body',
+      { promptLen: prompt.length, userId: user.id },
+      'bug-report: invoking codex helper',
+    );
+    const parsed = await requestCodexHelperJson<{ title?: string; body: string }>(
+      prompt,
+      'Bug 报告生成',
     );
     return c.json({
-      title: `bug: ${description.slice(0, 70)}`,
-      body: result,
+      title: parsed.title || `bug: ${description.slice(0, 70)}`,
+      body: parsed.body,
       systemInfo,
     });
   } catch (err) {
+    if (err instanceof CodexHelperError) {
+      logger.warn(
+        { error: err.message, statusCode: err.statusCode, userId: user.id },
+        'bug-report: codex helper failed, using fallback template',
+      );
+    }
     logger.error(
       { error: (err as Error).message },
       'bug-report: unexpected error during generation',

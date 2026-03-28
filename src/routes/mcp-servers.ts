@@ -14,6 +14,7 @@ import {
   LEGACY_PRODUCT_ID,
   isReservedMcpServerId,
 } from '../legacy-product.js';
+import { readCodexMcpServersFromTomlConfig } from '../codex-config.js';
 
 // --- Types ---
 
@@ -306,42 +307,52 @@ mcpServersRoutes.delete('/:id', authMiddleware, async (c) => {
   return c.json({ success: true });
 });
 
+function sanitizeHostServerEntry(
+  hostEntry: Record<string, unknown>,
+): McpServerEntry | null {
+  const isHttpType = hostEntry.type === 'http' || hostEntry.type === 'sse';
+
+  const entry: McpServerEntry = {
+    enabled: true,
+    addedAt: new Date().toISOString(),
+    syncedFromHost: true,
+  };
+
+  if (isHttpType) {
+    if (typeof hostEntry.url !== 'string' || !hostEntry.url.trim()) return null;
+    entry.type = hostEntry.type as 'http' | 'sse';
+    entry.url = hostEntry.url;
+    if (hostEntry.headers && typeof hostEntry.headers === 'object') {
+      entry.headers = hostEntry.headers as Record<string, string>;
+    }
+  } else {
+    if (typeof hostEntry.command !== 'string' || !hostEntry.command.trim()) {
+      return null;
+    }
+    entry.command = hostEntry.command;
+    if (Array.isArray(hostEntry.args)) {
+      entry.args = hostEntry.args.filter(
+        (value): value is string => typeof value === 'string',
+      );
+    }
+    if (hostEntry.env && typeof hostEntry.env === 'object') {
+      entry.env = hostEntry.env as Record<string, string>;
+    }
+  }
+
+  return entry;
+}
+
 // POST /sync-host — sync from host MCP configs (admin only)
-// Reads from both ~/.claude/settings.json and ~/.claude.json
+// Reads only Codex host config files.
 mcpServersRoutes.post('/sync-host', authMiddleware, async (c) => {
   const authUser = c.get('user') as AuthUser;
   if (authUser.role !== 'admin') {
     return c.json({ error: 'Only admin can sync host MCP servers' }, 403);
   }
 
-  // Read MCP servers from both config file locations
-  let hostServers: Record<string, any> = {};
-
-  // Source 1: ~/.claude/settings.json
-  const settingsPath = path.join(os.homedir(), '.claude', 'settings.json');
-  try {
-    const raw = await fs.readFile(settingsPath, 'utf-8');
-    const settings = JSON.parse(raw);
-    if (settings.mcpServers) {
-      hostServers = { ...hostServers, ...settings.mcpServers };
-    }
-  } catch {
-    // File may not exist, that's OK
-  }
-
-  // Source 2: ~/.claude.json (global Claude Code config, stores per-user MCP settings)
-  // When both files define the same server ID, ~/.claude.json wins because it's
-  // the primary user-facing config file where Claude Code persists MCP settings.
-  const globalConfigPath = path.join(os.homedir(), '.claude.json');
-  try {
-    const raw = await fs.readFile(globalConfigPath, 'utf-8');
-    const config = JSON.parse(raw);
-    if (config.mcpServers) {
-      hostServers = { ...hostServers, ...config.mcpServers };
-    }
-  } catch {
-    // File may not exist, that's OK
-  }
+  const hostConfigPath = path.join(os.homedir(), '.codex', 'config.toml');
+  const hostServers = readCodexMcpServersFromTomlConfig(hostConfigPath);
 
   if (Object.keys(hostServers).length === 0) {
     return c.json({
@@ -362,11 +373,16 @@ mcpServersRoutes.post('/sync-host', authMiddleware, async (c) => {
   const newSyncedList: string[] = [];
 
   // Add/update from host
-  for (const [id, hostEntry] of Object.entries(hostServers) as [
-    string,
-    any,
-  ][]) {
+  for (const [id, hostEntry] of Object.entries(hostServers)) {
     if (!validateServerId(id)) {
+      stats.skipped++;
+      continue;
+    }
+
+    const sanitizedEntry = sanitizeHostServerEntry(
+      hostEntry as Record<string, unknown>,
+    );
+    if (!sanitizedEntry) {
       stats.skipped++;
       continue;
     }
@@ -380,25 +396,12 @@ mcpServersRoutes.post('/sync-host', authMiddleware, async (c) => {
       continue;
     }
 
-    const isHttpType = hostEntry.type === 'http' || hostEntry.type === 'sse';
-
     const entry: McpServerEntry = {
-      enabled: true,
-      syncedFromHost: true,
+      ...sanitizedEntry,
       addedAt: existsInUser
-        ? file.servers[id].addedAt || new Date().toISOString()
-        : new Date().toISOString(),
+        ? file.servers[id].addedAt || sanitizedEntry.addedAt
+        : sanitizedEntry.addedAt,
     };
-
-    if (isHttpType) {
-      entry.type = hostEntry.type;
-      entry.url = hostEntry.url || '';
-      if (hostEntry.headers) entry.headers = hostEntry.headers;
-    } else {
-      entry.command = hostEntry.command || '';
-      if (hostEntry.args) entry.args = hostEntry.args;
-      if (hostEntry.env) entry.env = hostEntry.env;
-    }
 
     if (existsInUser) {
       stats.updated++;

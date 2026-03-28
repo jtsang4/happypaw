@@ -131,6 +131,7 @@ export function AgentDefinitionsPage() {
       const defaultContent = `---
 name: ${slug}
 description:
+model: inherit
 tools:
   - WebSearch
   - Read
@@ -171,7 +172,7 @@ tools:
               <div>
                 <h1 className="text-2xl font-bold text-foreground">Agent 管理</h1>
                 <p className="text-sm text-muted-foreground mt-0.5">
-                  管理 Agent 定义文件，通过 Task 工具的 subagent_type 调用。
+                  管理个人 Droid 定义文件，对应 `~/.factory/droids/*.md` 并可通过 Task 工具的 subagent_type 调用。
                 </p>
               </div>
             </div>

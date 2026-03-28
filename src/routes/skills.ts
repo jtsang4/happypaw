@@ -4,8 +4,6 @@ import { Hono } from 'hono';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { execFile } from 'child_process';
-import { promisify } from 'util';
 import type { Variables } from '../web-context.js';
 import type { AuthUser } from '../types.js';
 import { authMiddleware } from '../middleware/auth.js';
@@ -15,6 +13,7 @@ import {
   saveSystemSettings,
   type SystemSettings,
 } from '../runtime-config.js';
+import { installSkillPackageToDirectory } from '../skill-installer.js';
 import {
   parseFrontmatter,
   validateSkillId,
@@ -22,8 +21,6 @@ import {
   listFiles,
   scanSkillDirectory,
 } from '../skill-utils.js';
-
-const execFileAsync = promisify(execFile);
 let skillInstallLock: Promise<void> = Promise.resolve();
 
 const skillsRoutes = new Hono<{ Variables: Variables }>();
@@ -82,11 +79,25 @@ function getUserSkillsDir(userId: string): string {
 }
 
 function getGlobalSkillsDir(): string {
-  return path.join(os.homedir(), '.claude', 'skills');
+  return path.join(os.homedir(), '.codex', 'skills');
 }
 
 function getProjectSkillsDir(): string {
   return path.resolve(process.cwd(), 'container', 'skills');
+}
+
+function copySkillToUser(src: string, dest: string): void {
+  let realSrc = src;
+  try {
+    const lstat = fs.lstatSync(src);
+    if (lstat.isSymbolicLink()) {
+      realSrc = fs.realpathSync(src);
+    }
+  } catch {
+    // keep original path if inspection fails
+  }
+
+  fs.cpSync(realSrc, dest, { recursive: true });
 }
 
 function getHostSyncManifestPath(userId: string): string {
@@ -272,106 +283,6 @@ function getSkillDetail(skillId: string, userId: string): SkillDetail | null {
   return null;
 }
 
-/**
- * Parse the output of `npx skills find <query>` to extract search results.
- * The output contains ANSI codes and formatted text like:
- *   owner/repo@skill-name
- *   https://skills.sh/owner/repo/skill
- */
-function parseSearchOutput(output: string): SearchResult[] {
-  // Strip ANSI escape codes
-  const clean = output.replace(/\x1b\[[0-9;]*m/g, '');
-  const results: SearchResult[] = [];
-
-  const lines = clean
-    .split('\n')
-    .map((l) => l.trim())
-    .filter(Boolean);
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    // Match package pattern: owner/repo or owner/repo@skill
-    const pkgMatch = line.match(/^([\w\-]+\/[\w\-.]+(?:@[\w\-.]+)?)$/);
-    if (pkgMatch) {
-      const pkg = pkgMatch[1];
-      // Next line might be the URL (possibly prefixed with └ or similar chars)
-      let url = '';
-      if (i + 1 < lines.length) {
-        const nextLine = lines[i + 1].replace(/^[└├│─\s]+/, '');
-        if (nextLine.startsWith('http')) {
-          url = nextLine;
-          i++;
-        }
-      }
-      results.push({ package: pkg, url });
-    }
-  }
-
-  return results;
-}
-
-/**
- * Find skill entries under a path that were modified after the given timestamp.
- * Handles both real directories and symlinks (skills CLI creates symlinks in
- * ~/.claude/skills/ pointing to ~/.agents/skills/).
- * Returns entry names.
- */
-function findModifiedEntries(dir: string, afterMs: number): string[] {
-  const result: string[] = [];
-  if (!fs.existsSync(dir)) return result;
-  try {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
-      try {
-        // Use lstat for symlinks, stat (follows symlink) for mtime of real target
-        const lstat = fs.lstatSync(fullPath);
-
-        if (lstat.isSymbolicLink()) {
-          // Symlink: check both the symlink creation time and target mtime
-          if (lstat.mtimeMs >= afterMs) {
-            result.push(entry.name);
-            continue;
-          }
-          // Also check the resolved target's mtime
-          const realStat = fs.statSync(fullPath);
-          if (realStat.mtimeMs >= afterMs) {
-            result.push(entry.name);
-          }
-        } else if (lstat.isDirectory()) {
-          if (lstat.mtimeMs >= afterMs) {
-            result.push(entry.name);
-          }
-        }
-      } catch {
-        // skip broken symlinks etc.
-      }
-    }
-  } catch {
-    // ignore
-  }
-  return result;
-}
-
-/**
- * Copy a skill entry (directory or symlink target) to dest.
- * Resolves symlinks and copies the real content so the copy is self-contained.
- */
-function copySkillToUser(src: string, dest: string): void {
-  // Resolve symlink to get the real directory
-  let realSrc = src;
-  try {
-    const lstat = fs.lstatSync(src);
-    if (lstat.isSymbolicLink()) {
-      realSrc = fs.realpathSync(src);
-    }
-  } catch {
-    // use src as-is
-  }
-
-  fs.cpSync(realSrc, dest, { recursive: true });
-}
-
 // --- Search cache (LRU, 5min TTL, max 100 entries) ---
 
 interface CacheEntry<T> {
@@ -442,27 +353,6 @@ async function searchSkillsApi(query: string): Promise<SearchResult[]> {
     setCachedSearch(query, results);
     return results;
   } catch {
-    // Fallback to npx skills find
-    return searchSkillsFallback(query);
-  }
-}
-
-/**
- * Fallback search using npx skills find CLI.
- */
-async function searchSkillsFallback(query: string): Promise<SearchResult[]> {
-  try {
-    const { stdout } = await execFileAsync(
-      'npx',
-      ['-y', 'skills', 'find', query],
-      { timeout: 30_000 },
-    );
-    return parseSearchOutput(stdout);
-  } catch (error) {
-    if (error && typeof error === 'object' && 'stdout' in error) {
-      const results = parseSearchOutput((error as any).stdout || '');
-      if (results.length > 0) return results;
-    }
     return [];
   }
 }
@@ -479,7 +369,7 @@ async function fetchSkillMdFromGitHub(
   const pathCandidates = [
     `skills/${skillId}/SKILL.md`,
     `${skillId}/SKILL.md`,
-    `.claude/skills/${skillId}/SKILL.md`,
+    `.codex/skills/${skillId}/SKILL.md`,
     `SKILL.md`,
   ];
 
@@ -757,69 +647,15 @@ skillsRoutes.delete('/:id', authMiddleware, async (c) => {
 
 /**
  * Install a skill package for a specific user.
- * Uses a temporary HOME directory to isolate `npx skills add --global` from
- * the real ~/.claude/skills, eliminating race conditions across concurrent installs.
  * Reusable by both the HTTP route and IPC handler.
  */
 async function installSkillForUser(
   userId: string,
   pkg: string,
 ): Promise<{ success: boolean; installed?: string[]; error?: string }> {
-  if (
-    !/^[\w\-]+\/[\w\-.]+(?:[@#][\w\-.\/]+)?$/.test(pkg) &&
-    !/^https?:\/\//.test(pkg)
-  ) {
-    return { success: false, error: 'Invalid package name format' };
-  }
-
-  // Create an isolated temp directory to act as HOME so `--global` installs
-  // into tempHome/.claude/skills/ instead of the real ~/.claude/skills/.
-  // This avoids any race condition when multiple installs run concurrently.
-  const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-install-'));
-  const tempSkillsDir = path.join(tempHome, '.claude', 'skills');
-  fs.mkdirSync(tempSkillsDir, { recursive: true });
-
   try {
-    await execFileAsync(
-      'npx',
-      ['-y', 'skills', 'add', pkg, '--global', '--yes', '-a', 'claude-code'],
-      {
-        timeout: 60_000,
-        env: { ...process.env, HOME: tempHome },
-      },
-    );
-
-    // Discover all skill directories installed into the temp location
-    const installedEntries: string[] = [];
-    if (fs.existsSync(tempSkillsDir)) {
-      for (const entry of fs.readdirSync(tempSkillsDir, {
-        withFileTypes: true,
-      })) {
-        if (entry.isDirectory() || entry.isSymbolicLink()) {
-          installedEntries.push(entry.name);
-        }
-      }
-    }
-
-    if (installedEntries.length === 0) {
-      return {
-        success: false,
-        error: 'No skills were installed — package may be invalid',
-      };
-    }
-
-    // Copy resolved skill content to per-user directory
     const userDir = getUserSkillsDir(userId);
-    fs.mkdirSync(userDir, { recursive: true });
-
-    for (const name of installedEntries) {
-      const src = path.join(tempSkillsDir, name);
-      const dest = path.join(userDir, name);
-      if (fs.existsSync(dest)) {
-        fs.rmSync(dest, { recursive: true, force: true });
-      }
-      copySkillToUser(src, dest);
-    }
+    const installedEntries = await installSkillPackageToDirectory(pkg, userDir);
 
     // Write manifest metadata
     updateSkillsManifest(userId, pkg, installedEntries);
@@ -830,18 +666,11 @@ async function installSkillForUser(
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
     };
-  } finally {
-    // Always clean up the temp directory
-    try {
-      fs.rmSync(tempHome, { recursive: true, force: true });
-    } catch {
-      /* ignore cleanup errors */
-    }
   }
 }
 
 /**
- * Sync host-level skills (~/.claude/skills/) to a user's directory.
+ * Sync host-level skills (~/.codex/skills/) to a user's directory.
  * Standalone function usable from both the API route and the auto-sync timer.
  */
 async function syncHostSkillsForUser(userId: string): Promise<{

@@ -40,6 +40,10 @@ import {
 } from './runtime-config.js';
 import { providerPool } from './provider-pool.js';
 import { isApiError } from './agent-output-parser.js';
+import {
+  getWorkspaceMcpConfigPathFromRoot,
+  getWorkspaceSkillsDirFromRoot,
+} from './workspace-config-storage.js';
 import type { ClaudeProviderConfig } from './runtime-config.js';
 import { RegisteredGroup, RuntimeType, StreamEvent } from './types.js';
 import {
@@ -209,7 +213,7 @@ function buildCodexBridgeCommand(executionMode: 'container' | 'host'): {
 function getExistingWorkspaceSettingsPath(
   workspaceRoot: string,
 ): string | undefined {
-  const settingsPath = path.join(workspaceRoot, '.claude', 'settings.json');
+  const settingsPath = getWorkspaceMcpConfigPathFromRoot(workspaceRoot);
   return fs.existsSync(settingsPath) ? settingsPath : undefined;
 }
 
@@ -396,7 +400,7 @@ function buildVolumeMounts(
     group,
     '/workspace/group',
     workspaceSettingsPath
-      ? '/workspace/group/.claude/settings.json'
+      ? `/workspace/group/.${CURRENT_PRODUCT_ID}/workspace-mcp.json`
       : undefined,
     groupCodexHomeDir,
     'container',
@@ -1019,10 +1023,10 @@ export async function runHostAgent(
     },
   );
 
-  // 4. Skills 自动链接到 session 目录
-  // 链接顺序：项目级 → 用户级(覆盖同名项目级)，统一落到工作区 .claude/skills
+  // 4. Skills 自动链接到工作区配置目录
+  // 链接顺序：项目级 → 用户级(覆盖同名项目级)，统一落到工作区 .happypaw/skills
   try {
-    const skillsDir = path.join(workspaceHostDir, '.claude', 'skills');
+    const skillsDir = getWorkspaceSkillsDirFromRoot(workspaceHostDir);
     fs.mkdirSync(skillsDir, { recursive: true });
     // 清空已有符号链接
     for (const entry of fs.readdirSync(skillsDir, { withFileTypes: true })) {

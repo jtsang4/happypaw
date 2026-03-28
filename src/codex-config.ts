@@ -80,6 +80,166 @@ function readJsonObject(
   }
 }
 
+function stripTomlComment(line: string): string {
+  let inString = false;
+  let escaped = false;
+  let result = '';
+  for (const char of line) {
+    if (escaped) {
+      result += char;
+      escaped = false;
+      continue;
+    }
+    if (char === '\\') {
+      result += char;
+      escaped = true;
+      continue;
+    }
+    if (char === '"') {
+      inString = !inString;
+      result += char;
+      continue;
+    }
+    if (char === '#' && !inString) {
+      break;
+    }
+    result += char;
+  }
+  return result.trim();
+}
+
+function parseTomlString(value: string): string | undefined {
+  try {
+    const parsed = JSON.parse(value);
+    return typeof parsed === 'string' ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function parseTomlStringArray(value: string): string[] | undefined {
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) && parsed.every((item) => typeof item === 'string')
+      ? parsed
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function parseTomlInlineStringTable(
+  value: string,
+): Record<string, string> | undefined {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) return undefined;
+  const inner = trimmed.slice(1, -1).trim();
+  if (!inner) return {};
+
+  const result: Record<string, string> = {};
+  const entryPattern =
+    /([A-Za-z0-9_-]+|"[^"]+")\s*=\s*("(?:[^"\\]|\\.)*")\s*(?:,|$)/gu;
+  let match: RegExpExecArray | null;
+  while ((match = entryPattern.exec(inner)) !== null) {
+    const rawKey = match[1];
+    const key = rawKey.startsWith('"')
+      ? parseTomlString(rawKey)
+      : rawKey;
+    const parsedValue = parseTomlString(match[2]);
+    if (!key || parsedValue === undefined) continue;
+    result[key] = parsedValue;
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+export function readCodexMcpServersFromTomlConfig(
+  configPath: string | undefined,
+): Record<string, CodexMcpServerConfig> {
+  if (!configPath || !fs.existsSync(configPath)) return {};
+
+  const source = fs.readFileSync(configPath, 'utf8');
+  const lines = source.split(/\r?\n/u);
+  const result: Record<string, CodexMcpServerConfig> = {};
+  let currentId: string | null = null;
+
+  for (const rawLine of lines) {
+    const line = stripTomlComment(rawLine);
+    if (!line) continue;
+
+    const sectionMatch = line.match(
+      /^\[mcp_servers\.(?:"((?:[^"\\]|\\.)+)"|([A-Za-z0-9_-]+))\]$/u,
+    );
+    if (sectionMatch) {
+      const parsedQuotedId = sectionMatch[1]
+        ? parseTomlString(`"${sectionMatch[1]}"`)
+        : undefined;
+      const id = parsedQuotedId || sectionMatch[2] || null;
+      currentId = id && !isReservedMcpServerId(id) ? id : null;
+      if (currentId) result[currentId] = {};
+      continue;
+    }
+
+    if (/^\[.*\]$/u.test(line)) {
+      currentId = null;
+      continue;
+    }
+    if (!currentId) continue;
+
+    const entryMatch = line.match(/^([A-Za-z0-9_]+)\s*=\s*(.+)$/u);
+    if (!entryMatch) continue;
+
+    const [, key, value] = entryMatch;
+    const target = result[currentId];
+    switch (key) {
+      case 'command': {
+        const parsed = parseTomlString(value);
+        if (parsed) target.command = parsed;
+        break;
+      }
+      case 'args': {
+        const parsed = parseTomlStringArray(value);
+        if (parsed) target.args = parsed;
+        break;
+      }
+      case 'env': {
+        const parsed = parseTomlInlineStringTable(value);
+        if (parsed) target.env = parsed;
+        break;
+      }
+      case 'cwd': {
+        const parsed = parseTomlString(value);
+        if (parsed) target.cwd = parsed;
+        break;
+      }
+      case 'url': {
+        const parsed = parseTomlString(value);
+        if (parsed) target.url = parsed;
+        break;
+      }
+      case 'http_headers': {
+        const parsed = parseTomlInlineStringTable(value);
+        if (parsed) target.http_headers = parsed;
+        break;
+      }
+      case 'enabled':
+        if (value === 'true' || value === 'false') {
+          target.enabled = value === 'true';
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  return Object.fromEntries(
+    Object.entries(result).filter(([, server]) => {
+      if (server.enabled === false) return false;
+      return Boolean(server.command || server.url);
+    }),
+  );
+}
+
 function normalizeStringRecord(
   value: unknown,
 ): Record<string, string> | undefined {

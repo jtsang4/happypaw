@@ -56,14 +56,15 @@ const { initDatabase, closeDatabase, setSession, getRuntimeSession, getAllSessio
   dbModule;
 
 const workspaceDir = path.join(tempRoot, 'workspace');
-const workspaceClaudeDir = path.join(workspaceDir, '.claude');
+const workspaceConfigDir = path.join(workspaceDir, '.happypaw');
+const workspaceMcpPath = path.join(workspaceConfigDir, 'workspace-mcp.json');
 const codexHome = path.join(tempRoot, 'session-home', '.codex');
 const userMcpDir = path.join(tempRoot, 'data', 'mcp-servers', 'u1');
-fs.mkdirSync(workspaceClaudeDir, { recursive: true });
+fs.mkdirSync(workspaceConfigDir, { recursive: true });
 fs.mkdirSync(userMcpDir, { recursive: true });
 
 fs.writeFileSync(
-  path.join(workspaceClaudeDir, 'settings.json'),
+  workspaceMcpPath,
   JSON.stringify(
     {
       mcpServers: {
@@ -116,7 +117,7 @@ const prepared = prepareCodexHome({
   codexHome,
   providerConfig,
   writableRoots: ['/workspace/group'],
-  workspaceSettingsPath: path.join(workspaceClaudeDir, 'settings.json'),
+  workspaceSettingsPath: workspaceMcpPath,
   userSettingsPath: path.join(userMcpDir, 'servers.json'),
   bridge: {
     command: 'node',
@@ -171,7 +172,7 @@ assert.match(
 assert.match(prepared.configToml, /command = "node"/);
 
 const workspaceServers = readCodexMcpServersFromSettings(
-  path.join(workspaceClaudeDir, 'settings.json'),
+  workspaceMcpPath,
 );
 assert.deepEqual(Object.keys(workspaceServers).sort(), ['workspaceEnabled']);
 

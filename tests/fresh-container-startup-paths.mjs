@@ -82,12 +82,12 @@ assert.equal(
       'data',
       'groups',
       successFolder,
-      '.claude',
-      'settings.json',
+      '.happypaw',
+      'workspace-mcp.json',
     ),
   ),
   false,
-  'fresh container startup no longer creates or depends on workspace .claude/settings.json',
+  'fresh container startup no longer creates or depends on workspace .happypaw/workspace-mcp.json',
 );
 assert.ok(
   fs.existsSync(
@@ -146,12 +146,12 @@ assert.equal(
       'data',
       'groups',
       failingFolder,
-      '.claude',
-      'settings.json',
+      '.happypaw',
+      'workspace-mcp.json',
     ),
   ),
   false,
-  'fresh failure path still avoids creating legacy workspace settings.json',
+  'fresh failure path still avoids creating workspace MCP config by default',
 );
 
 console.log('✅ fresh container startup path checks passed');

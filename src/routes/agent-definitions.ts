@@ -1,5 +1,5 @@
 // Agent definitions management routes
-// Manages ~/.claude/agents/*.md files (global agent definition files)
+// Manages ~/.factory/droids/*.md files (global droid definition files)
 
 import { Hono } from 'hono';
 import fs from 'fs';
@@ -10,6 +10,7 @@ import { authMiddleware, systemConfigMiddleware } from '../middleware/auth.js';
 import { logger } from '../logger.js';
 
 const agentDefinitionsRoutes = new Hono<{ Variables: Variables }>();
+const DROID_FRONTMATTER_PREFIX = /^---[\s\S]*?\n---\n/u;
 
 // --- Types ---
 
@@ -28,7 +29,7 @@ interface AgentDefinitionDetail extends AgentDefinition {
 // --- Utility Functions ---
 
 function getAgentsDir(): string {
-  return path.join(os.homedir(), '.claude', 'agents');
+  return path.join(os.homedir(), '.factory', 'droids');
 }
 
 function validateAgentId(id: string): boolean {
@@ -181,6 +182,16 @@ function getAgentDetail(id: string): AgentDefinitionDetail | null {
   }
 }
 
+function ensureDroidFrontmatter(content: string, id: string): string {
+  if (DROID_FRONTMATTER_PREFIX.test(content)) {
+    return content;
+  }
+
+  const trimmed = content.trim();
+  const body = trimmed || `# ${id}`;
+  return `---\nname: ${id}\ndescription: \nmodel: inherit\n---\n${body.startsWith('#') ? '\n' : '\n\n'}${body}\n`;
+}
+
 // --- Routes ---
 
 // List all agent definitions
@@ -219,7 +230,7 @@ agentDefinitionsRoutes.put(
     const filePath = path.join(getAgentsDir(), `${id}.md`);
     try {
       fs.accessSync(filePath);
-      fs.writeFileSync(filePath, content, 'utf-8');
+      fs.writeFileSync(filePath, ensureDroidFrontmatter(content, id), 'utf-8');
     } catch (err: unknown) {
       if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
         return c.json({ error: 'Agent definition not found' }, 404);
@@ -261,7 +272,10 @@ agentDefinitionsRoutes.post(
 
     const filePath = path.join(agentsDir, `${id}.md`);
     try {
-      fs.writeFileSync(filePath, content, { encoding: 'utf-8', flag: 'wx' });
+      fs.writeFileSync(filePath, ensureDroidFrontmatter(content, id), {
+        encoding: 'utf-8',
+        flag: 'wx',
+      });
     } catch (err: unknown) {
       if ((err as NodeJS.ErrnoException).code === 'EEXIST') {
         return c.json({ error: 'Agent with this name already exists' }, 409);
