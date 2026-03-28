@@ -22,14 +22,14 @@ fi
 
 # Discover and link skills (builtin → project → user, higher priority overwrites)
 # Only remove entries that conflict with mounted skills (non-symlink with same name),
-# preserving any skills the agent created directly in .claude/skills/.
-mkdir -p /home/node/.claude/skills
+# preserving any skills the agent created directly in .codex/skills/.
+mkdir -p /home/node/.codex/skills
 for dir in /opt/builtin-skills /workspace/project-skills /workspace/user-skills; do
   if [ -d "$dir" ]; then
     for skill in "$dir"/*/; do
       if [ -d "$skill" ]; then
         name=$(basename "$skill")
-        target="/home/node/.claude/skills/$name"
+        target="/home/node/.codex/skills/$name"
         # Remove conflicting non-symlink entry (e.g. real directory from a failed agent edit)
         if [ -e "$target" ] && [ ! -L "$target" ]; then
           rm -rf "$target" 2>/dev/null || true
@@ -39,7 +39,7 @@ for dir in /opt/builtin-skills /workspace/project-skills /workspace/user-skills;
     done
   fi
 done
-chown -R node:node /home/node/.claude/skills 2>/dev/null || true
+chown -R node:node /home/node/.codex/skills 2>/dev/null || true
 
 # Compile TypeScript (agent-runner source may be hot-mounted from host)
 cd /app && npx tsc --outDir /tmp/dist 2>&1 >&2

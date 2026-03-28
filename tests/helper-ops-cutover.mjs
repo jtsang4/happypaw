@@ -107,6 +107,18 @@ assert.doesNotMatch(
   'container runner should not look for legacy workspace settings.json',
 );
 
+const containerEntrypointSource = read('container/entrypoint.sh');
+assert.match(
+  containerEntrypointSource,
+  /\.codex\/skills/u,
+  'container startup should link mounted skills into the Codex skill directory',
+);
+assert.doesNotMatch(
+  containerEntrypointSource,
+  /\.claude\/skills/u,
+  'container startup should not link mounted skills through the legacy Claude home',
+);
+
 const workspaceSkillsPanel = read('web/src/components/chat/WorkspaceSkillsPanel.tsx');
 assert.match(
   workspaceSkillsPanel,
