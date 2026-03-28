@@ -274,14 +274,6 @@ function ensureCodexSessionHome(
 function trySelectPoolProvider(
   groupFolder: string,
 ): { profileId: string; resolved: ResolvedProvider } | null {
-  const override = getContainerEnvConfig(groupFolder);
-  const hasOverride = !!(
-    override.anthropicApiKey ||
-    override.anthropicAuthToken ||
-    override.anthropicBaseUrl
-  );
-  if (hasOverride) return null;
-
   // Refresh pool state from V4 config
   const enabledProviders = getEnabledProviders();
   if (enabledProviders.length <= 1) return null; // No pool needed for 0-1 providers

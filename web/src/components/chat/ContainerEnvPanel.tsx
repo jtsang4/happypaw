@@ -56,10 +56,6 @@ export function ContainerEnvPanel({ groupJid, onClose }: ContainerEnvPanelProps)
     if (!window.confirm('确定要清空该工作区的自定义环境变量并重建工作区吗？')) return;
     setClearing(true);
     const ok = await saveConfig(groupJid, {
-      anthropicBaseUrl: '',
-      anthropicAuthToken: '',
-      anthropicApiKey: '',
-      claudeCodeOauthToken: '',
       customEnv: {},
     });
     setClearing(false);

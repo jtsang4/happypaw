@@ -437,19 +437,16 @@ export const ClaudeCustomEnvSchema = z.object({
   customEnv: z.record(z.string().max(256), z.string().max(4096)),
 });
 
-export const ContainerEnvSchema = z.object({
-  anthropicBaseUrl: z.string().max(2000).optional(),
-  anthropicAuthToken: z.string().max(2000).optional(),
-  anthropicApiKey: z.string().max(2000).optional(),
-  claudeCodeOauthToken: z.string().max(2000).optional(),
-  anthropicModel: z.string().max(128).optional(),
-  customEnv: z
-    .record(z.string().max(256), z.string().max(4096))
-    .optional()
-    .refine((env) => !env || Object.keys(env).length <= 50, {
-      message: 'customEnv must have at most 50 entries',
-    }),
-});
+export const ContainerEnvSchema = z
+  .object({
+    customEnv: z
+      .record(z.string().max(256), z.string().max(4096))
+      .optional()
+      .refine((env) => !env || Object.keys(env).length <= 50, {
+        message: 'customEnv must have at most 50 entries',
+      }),
+  })
+  .strict();
 
 // Terminal WebSocket message schemas
 export const TerminalStartSchema = z.object({

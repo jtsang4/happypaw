@@ -154,24 +154,10 @@ export interface UnifiedProviderPublic {
 }
 
 export interface ContainerEnvConfig {
-  anthropicBaseUrl?: string;
-  anthropicAuthToken?: string;
-  anthropicApiKey?: string;
-  claudeCodeOauthToken?: string;
-  claudeOAuthCredentials?: ClaudeOAuthCredentials | null;
-  anthropicModel?: string;
   customEnv?: Record<string, string>;
 }
 
 export interface ContainerEnvPublicConfig {
-  anthropicBaseUrl: string;
-  anthropicAuthTokenMasked: string | null;
-  anthropicApiKeyMasked: string | null;
-  claudeCodeOauthTokenMasked: string | null;
-  hasAnthropicAuthToken: boolean;
-  hasAnthropicApiKey: boolean;
-  hasClaudeCodeOauthToken: boolean;
-  anthropicModel: string;
   customEnv: Record<string, string>;
 }
 

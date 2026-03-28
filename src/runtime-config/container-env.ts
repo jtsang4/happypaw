@@ -16,7 +16,6 @@ import {
   CONTAINER_ENV_DIR,
   DANGEROUS_ENV_VARS,
   ENV_KEY_RE,
-  LEGACY_PRODUCT_NAME,
   sanitizeEnvValue,
 } from './shared.js';
 import { buildClaudeEnvLines } from './claude-provider.js';
@@ -55,21 +54,12 @@ export function getContainerEnvConfig(folder: string): ContainerEnvConfig {
   const filePath = containerEnvPath(folder);
   try {
     if (fs.existsSync(filePath)) {
-      const stored = JSON.parse(
-        fs.readFileSync(filePath, 'utf-8'),
-      ) as ContainerEnvConfig & {
-        [legacyModelKey: string]: string | undefined;
+      const stored = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as {
+        customEnv?: Record<string, string>;
       };
-      const legacyModelKey = `${LEGACY_PRODUCT_NAME.toLowerCase()}Model`;
-      if (
-        stored.anthropicModel === undefined &&
-        stored[legacyModelKey] !== undefined
-      ) {
-        stored.anthropicModel = stored[legacyModelKey];
-        delete stored[legacyModelKey];
-      }
-      stored.customEnv = sanitizeContainerCustomEnv(stored.customEnv) ?? {};
-      return stored;
+      return {
+        customEnv: sanitizeContainerCustomEnv(stored.customEnv) ?? {},
+      };
     }
   } catch (err) {
     logger.warn(
@@ -84,22 +74,9 @@ export function saveContainerEnvConfig(
   folder: string,
   config: ContainerEnvConfig,
 ): void {
-  const sanitized: ContainerEnvConfig = { ...config };
-  if (sanitized.anthropicBaseUrl)
-    sanitized.anthropicBaseUrl = sanitizeEnvValue(sanitized.anthropicBaseUrl);
-  if (sanitized.anthropicAuthToken)
-    sanitized.anthropicAuthToken = sanitizeEnvValue(
-      sanitized.anthropicAuthToken,
-    );
-  if (sanitized.anthropicApiKey)
-    sanitized.anthropicApiKey = sanitizeEnvValue(sanitized.anthropicApiKey);
-  if (sanitized.claudeCodeOauthToken)
-    sanitized.claudeCodeOauthToken = sanitizeEnvValue(
-      sanitized.claudeCodeOauthToken,
-    );
-  if (sanitized.anthropicModel)
-    sanitized.anthropicModel = sanitizeEnvValue(sanitized.anthropicModel);
-  sanitized.customEnv = sanitizeContainerCustomEnv(sanitized.customEnv) ?? {};
+  const sanitized: ContainerEnvConfig = {
+    customEnv: sanitizeContainerCustomEnv(config.customEnv) ?? {},
+  };
 
   fs.mkdirSync(CONTAINER_ENV_DIR, { recursive: true });
   const tmp = `${containerEnvPath(folder)}.tmp`;
@@ -127,32 +104,21 @@ export function toPublicContainerEnvConfig(
   config: ContainerEnvConfig,
 ): ContainerEnvPublicConfig {
   return {
-    anthropicBaseUrl: config.anthropicBaseUrl || '',
-    hasAnthropicAuthToken: !!config.anthropicAuthToken,
-    hasAnthropicApiKey: !!config.anthropicApiKey,
-    hasClaudeCodeOauthToken: !!config.claudeCodeOauthToken,
-    anthropicAuthTokenMasked: maskSecret(config.anthropicAuthToken || ''),
-    anthropicApiKeyMasked: maskSecret(config.anthropicApiKey || ''),
-    claudeCodeOauthTokenMasked: maskSecret(config.claudeCodeOauthToken || ''),
-    anthropicModel: config.anthropicModel || '',
     customEnv: sanitizeContainerCustomEnv(config.customEnv) || {},
   };
 }
 
 export function mergeClaudeEnvConfig(
   global: ClaudeProviderConfig,
-  override: ContainerEnvConfig,
+  _override: ContainerEnvConfig,
 ): ClaudeProviderConfig {
   return {
-    anthropicBaseUrl: override.anthropicBaseUrl || global.anthropicBaseUrl,
-    anthropicAuthToken:
-      override.anthropicAuthToken || global.anthropicAuthToken,
-    anthropicApiKey: override.anthropicApiKey || global.anthropicApiKey,
-    claudeCodeOauthToken:
-      override.claudeCodeOauthToken || global.claudeCodeOauthToken,
-    claudeOAuthCredentials:
-      override.claudeOAuthCredentials ?? global.claudeOAuthCredentials,
-    anthropicModel: override.anthropicModel || global.anthropicModel,
+    anthropicBaseUrl: global.anthropicBaseUrl,
+    anthropicAuthToken: global.anthropicAuthToken,
+    anthropicApiKey: global.anthropicApiKey,
+    claudeCodeOauthToken: global.claudeCodeOauthToken,
+    claudeOAuthCredentials: global.claudeOAuthCredentials,
+    anthropicModel: global.anthropicModel,
     updatedAt: global.updatedAt,
   };
 }

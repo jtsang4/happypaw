@@ -2,14 +2,6 @@ import { create } from 'zustand';
 import { api } from '../api/client';
 
 export interface ContainerEnvPublicConfig {
-  anthropicBaseUrl: string;
-  anthropicAuthTokenMasked: string | null;
-  anthropicApiKeyMasked: string | null;
-  claudeCodeOauthTokenMasked: string | null;
-  hasAnthropicAuthToken: boolean;
-  hasAnthropicApiKey: boolean;
-  hasClaudeCodeOauthToken: boolean;
-  anthropicModel: string;
   customEnv: Record<string, string>;
 }
 
@@ -20,14 +12,12 @@ interface ContainerEnvState {
   error: string | null;
 
   loadConfig: (jid: string) => Promise<void>;
-  saveConfig: (jid: string, data: {
-    anthropicBaseUrl?: string;
-    anthropicAuthToken?: string;
-    anthropicApiKey?: string;
-    claudeCodeOauthToken?: string;
-    anthropicModel?: string;
-    customEnv?: Record<string, string>;
-  }) => Promise<boolean>;
+  saveConfig: (
+    jid: string,
+    data: {
+      customEnv?: Record<string, string>;
+    },
+  ) => Promise<boolean>;
 }
 
 export const useContainerEnvStore = create<ContainerEnvState>((set) => ({

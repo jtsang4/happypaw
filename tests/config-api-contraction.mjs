@@ -52,6 +52,8 @@ const [
   import(path.join(repoRoot, 'dist', 'config.js')),
 ]);
 
+await import(path.join(repoRoot, 'dist', 'web.js'));
+const groupRoutes = (await import(path.join(repoRoot, 'dist', 'routes', 'groups.js'))).default;
 const { registerCodexRoutes } = codexRoutesModule;
 const { registerLegacyAndSystemRoutes } = legacySystemRoutesModule;
 const { registerUserImRoutes } = userImRoutesModule;
@@ -66,6 +68,7 @@ const { setDatabaseInstance } = dbSharedModule;
 const { createUser, createUserSession } = dbUsersAuthModule;
 const { hashPassword, sessionExpiresAt } = authHelpersModule;
 const { STORE_DIR } = configModule;
+const { ensureChatExists } = await import(path.join(repoRoot, 'dist', 'db.js'));
 
 fs.mkdirSync(STORE_DIR, { recursive: true });
 setDatabaseInstance(new Database(path.join(STORE_DIR, 'messages.db')));
@@ -96,6 +99,7 @@ createUserSession({
 
 const app = new Hono();
 app.use('*', authMiddleware);
+app.route('/api/groups', groupRoutes);
 registerCodexRoutes(app);
 registerLegacyAndSystemRoutes(app);
 registerUserImRoutes(app);
@@ -186,6 +190,110 @@ assert.equal(
   404,
   'legacy Claude config endpoint should be absent from the composed config routes',
 );
+
+const tempWorkspaceFolder = 'env-contraction-workspace';
+const tempWorkspaceJid = 'web:env-contraction';
+dbSharedModule.db
+  .prepare('DELETE FROM registered_groups WHERE jid = ?')
+  .run(tempWorkspaceJid);
+dbSharedModule.db
+  .prepare('DELETE FROM chats WHERE jid = ?')
+  .run(tempWorkspaceJid);
+ensureChatExists(tempWorkspaceJid);
+dbSharedModule.db
+  .prepare(
+    `INSERT INTO registered_groups (jid, name, folder, added_at, container_config, execution_mode, runtime, custom_cwd, init_source_path, init_git_url, created_by, is_home, selected_skills, target_agent_id, target_main_jid, reply_policy, require_mention, activation_mode, mcp_mode, selected_mcps)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  )
+  .run(
+    tempWorkspaceJid,
+    'Env Contraction Workspace',
+    tempWorkspaceFolder,
+    new Date().toISOString(),
+    null,
+    'container',
+    null,
+    null,
+    null,
+    null,
+    'admin-user',
+    0,
+    null,
+    null,
+    null,
+    'source_only',
+    0,
+    'auto',
+    'inherit',
+    null,
+  );
+
+const workspaceEnvResponse = await app.request(
+  `/api/groups/${encodeURIComponent(tempWorkspaceJid)}/env`,
+  {
+    headers: { Cookie: cookie },
+  },
+);
+assert.equal(workspaceEnvResponse.status, 200);
+const workspaceEnvPayload = await workspaceEnvResponse.json();
+assert.deepEqual(workspaceEnvPayload, { customEnv: {} });
+for (const forbiddenKey of [
+  'anthropicBaseUrl',
+  'anthropicAuthTokenMasked',
+  'anthropicApiKeyMasked',
+  'claudeCodeOauthTokenMasked',
+  'hasAnthropicAuthToken',
+  'hasAnthropicApiKey',
+  'hasClaudeCodeOauthToken',
+  'anthropicModel',
+]) {
+  assert.ok(
+    !(forbiddenKey in workspaceEnvPayload),
+    `workspace env payload should not expose ${forbiddenKey}`,
+  );
+}
+
+const rejectedLegacyEnvResponse = await app.request(
+  `/api/groups/${encodeURIComponent(tempWorkspaceJid)}/env`,
+  {
+    method: 'PUT',
+    headers: {
+      Cookie: cookie,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      anthropicBaseUrl: 'https://legacy.example.com',
+      customEnv: { SAFE_FLAG: '1' },
+    }),
+  },
+);
+assert.equal(
+  rejectedLegacyEnvResponse.status,
+  400,
+  'workspace env route should reject legacy Claude-shaped fields',
+);
+
+const updatedWorkspaceEnvResponse = await app.request(
+  `/api/groups/${encodeURIComponent(tempWorkspaceJid)}/env`,
+  {
+    method: 'PUT',
+    headers: {
+      Cookie: cookie,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      customEnv: { SAFE_FLAG: '1', OPENAI_BASE_URL: 'https://custom.example/v1' },
+    }),
+  },
+);
+assert.equal(updatedWorkspaceEnvResponse.status, 200);
+const updatedWorkspaceEnvPayload = await updatedWorkspaceEnvResponse.json();
+assert.deepEqual(updatedWorkspaceEnvPayload, {
+  customEnv: {
+    SAFE_FLAG: '1',
+    OPENAI_BASE_URL: 'https://custom.example/v1',
+  },
+});
 
 dbCoreModule.closeDatabase();
 
