@@ -16,6 +16,7 @@ process.env.OPENAI_MODEL = 'env-model';
 
 const [
   { Hono },
+  configRoutesModule,
   codexRoutesModule,
   legacySystemRoutesModule,
   userImRoutesModule,
@@ -29,6 +30,7 @@ const [
   configModule,
 ] = await Promise.all([
   import('hono'),
+  import(path.join(repoRoot, 'dist', 'routes', 'config.js')),
   import(path.join(repoRoot, 'dist', 'routes', 'config', 'codex-routes.js')),
   import(
     path.join(repoRoot, 'dist', 'routes', 'config', 'legacy-system-routes.js')
@@ -52,6 +54,10 @@ const [
   import(path.join(repoRoot, 'dist', 'config.js')),
 ]);
 
+assert.ok(
+  configRoutesModule?.default,
+  'built config route composition should be importable standalone',
+);
 await import(path.join(repoRoot, 'dist', 'web.js'));
 const groupRoutes = (await import(path.join(repoRoot, 'dist', 'routes', 'groups.js'))).default;
 const { registerCodexRoutes } = codexRoutesModule;

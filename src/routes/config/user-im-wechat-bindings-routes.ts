@@ -1,5 +1,6 @@
 import QRCode from 'qrcode';
 
+import { getChannelFromJid } from '../../channel-prefixes.js';
 import { updateWeChatNoProxy } from '../../config.js';
 import {
   deleteChatHistory,
@@ -7,7 +8,6 @@ import {
   getAgent,
   getRegisteredGroup,
 } from '../../db.js';
-import { getChannelType } from '../../im-channel.js';
 import { authMiddleware } from '../../middleware/auth.js';
 import { logger } from '../../logger.js';
 import { WeChatConfigSchema } from '../../schemas.js';
@@ -313,8 +313,8 @@ export function registerUserImWeChatAndBindingRoutes(
     const imJid = decodeURIComponent(c.req.param('imJid'));
     const user = c.get('user') as AuthUser;
 
-    const channelType = getChannelType(imJid);
-    if (!channelType) {
+    const channelType = getChannelFromJid(imJid);
+    if (channelType === 'web') {
       return c.json({ error: 'Invalid IM JID' }, 400);
     }
 
