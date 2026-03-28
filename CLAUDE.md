@@ -526,11 +526,16 @@ scripts/                      # 构建辅助脚本
 
 ### 8.10 IM 通道热管理
 
-通过 `PUT /api/config/user-im/feishu`、`PUT /api/config/user-im/telegram` 或 `PUT /api/config/user-im/qq` 更新 IM 配置后：
+通过 `PUT /api/config/user-im/feishu`、`PUT /api/config/user-im/telegram`、`PUT /api/config/user-im/qq` 或 `PUT /api/config/user-im/wechat` 更新 IM 配置后：
 - 保存配置到 `data/config/user-im/{userId}/` 目录（AES-256-GCM 加密）
 - 断开该用户的旧连接
 - 如果新配置有效（`enabled=true` 且凭据非空），立即建立新连接
 - `ignoreMessagesBefore` 设为当前时间戳，避免处理堆积消息
+
+微信额外提供二维码绑定相关端点：
+- `POST /api/config/user-im/wechat/qrcode`：获取登录二维码
+- `GET /api/config/user-im/wechat/qrcode-status?qrcode=...`：轮询二维码状态并在确认后保存登录态
+- `POST /api/config/user-im/wechat/disconnect`：断开当前微信登录态
 
 ### 8.11 IM 斜杠命令
 
