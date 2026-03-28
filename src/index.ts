@@ -98,6 +98,7 @@ import { createIndexStateBootstrap } from './index-bootstrap-state.js';
 import { createSlashCommandHandlers } from './index-slash-commands.js';
 import {
   createImRoutingHelpers,
+  resolveReplyRouteJid,
   type ReplyRouteUpdater,
 } from './index-im-routing.js';
 import {
@@ -149,19 +150,13 @@ function getAgentReplyRouteJid(
   chatJid: string,
   agentId?: string,
 ): string | undefined {
-  const activeRoute = activeImReplyRoutes.get(folder) || undefined;
-  if (activeRoute) return activeRoute;
-  if (!agentId && getChannelType(chatJid) !== null) return chatJid;
-  if (agentId) {
-    const agent = getAgent(agentId);
-    if (
-      agent?.last_im_jid &&
-      imManager.isChannelAvailableForJid(agent.last_im_jid)
-    ) {
-      return agent.last_im_jid;
-    }
-  }
-  return undefined;
+  return resolveReplyRouteJid(
+    activeImReplyRoutes,
+    folder,
+    chatJid,
+    agentId,
+    (jid) => imManager.isChannelAvailableForJid(jid),
+  );
 }
 
 // Track consecutive IM send failures per JID for auto-unbind

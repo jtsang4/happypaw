@@ -18,6 +18,7 @@ const { createIpcRuntime } = await import(
 const {
   getActiveImReplyRouteSnapshotPath,
   persistActiveImReplyRoute,
+  resolveReplyRouteJid,
 } = await import(path.join(repoRoot, 'dist', 'index-im-routing.js'));
 const { getScopedImReplyRouteSnapshotPath } = await import(
   path.join(repoRoot, 'dist', 'im-reply-route-snapshot.js')
@@ -69,6 +70,28 @@ const sentImages = [];
 const sentFiles = [];
 
 persistActiveImReplyRoute('home-1', 'telegram:home-1');
+
+assert.equal(
+  resolveReplyRouteJid(
+    new Map([['workspace-a', 'telegram:main-active']]),
+    'workspace-a',
+    'web:workspace-a',
+    'agent-1',
+    () => true,
+  ),
+  'telegram:bound-agent',
+  'agent fallback routing prefers the persisted agent IM binding over folder-wide active IM state',
+);
+
+assert.equal(
+  resolveReplyRouteJid(
+    new Map([['home-1', 'telegram:home-1']]),
+    'home-1',
+    'web:home-main',
+  ),
+  'telegram:home-1',
+  'main conversation fallback routing still uses the folder-wide active IM state',
+);
 
 const runtime = createIpcRuntime({
   dataDir: path.join(realTempRoot, 'data'),

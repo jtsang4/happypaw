@@ -45,6 +45,30 @@ const IM_SEND_FAIL_THRESHOLD = 3;
 const IM_HEALTH_CHECK_FAIL_THRESHOLD = 3;
 export type ReplyRouteUpdater = (newSourceJid: string | null) => void;
 
+export function resolveReplyRouteJid(
+  activeImReplyRoutes: Map<string, string | null>,
+  folder: string,
+  chatJid: string,
+  agentId?: string,
+  isChannelAvailableForJid: (jid: string) => boolean = (jid) =>
+    imManager.isChannelAvailableForJid(jid),
+): string | undefined {
+  if (agentId) {
+    const agent = getAgent(agentId);
+    if (
+      agent?.last_im_jid &&
+      isChannelAvailableForJid(agent.last_im_jid)
+    ) {
+      return agent.last_im_jid;
+    }
+  }
+
+  const activeRoute = activeImReplyRoutes.get(folder) || undefined;
+  if (activeRoute) return activeRoute;
+  if (!agentId && getChannelType(chatJid) !== null) return chatJid;
+  return undefined;
+}
+
 export function getActiveImReplyRouteSnapshotPath(folder: string): string {
   return getFolderImReplyRouteSnapshotPath(folder);
 }
