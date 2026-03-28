@@ -14,6 +14,7 @@ export function CodexProviderSection() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [baseUrl, setBaseUrl] = useState('');
+  const [baseUrlTouched, setBaseUrlTouched] = useState(false);
   const [model, setModel] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [clearApiKey, setClearApiKey] = useState(false);
@@ -24,6 +25,7 @@ export function CodexProviderSection() {
         const data = await api.get<CodexConfigPublic>('/api/config/codex');
         setConfig(data);
         setBaseUrl('');
+        setBaseUrlTouched(false);
         setModel(data.openaiModel || '');
         setApiKey('');
         setClearApiKey(false);
@@ -40,7 +42,7 @@ export function CodexProviderSection() {
     try {
       const [updatedConfig, updatedSecrets] = await Promise.all([
         api.put<CodexConfigPublic>('/api/config/codex', {
-          openaiBaseUrl: baseUrl.trim(),
+          ...(baseUrlTouched ? { openaiBaseUrl: baseUrl.trim() } : {}),
           openaiModel: model.trim(),
         }),
         apiKey.trim() || clearApiKey
@@ -53,6 +55,7 @@ export function CodexProviderSection() {
       const next = updatedSecrets ?? updatedConfig;
       setConfig(next);
       setBaseUrl('');
+      setBaseUrlTouched(false);
       setModel(next.openaiModel || '');
       setApiKey('');
       setClearApiKey(false);
@@ -110,7 +113,7 @@ export function CodexProviderSection() {
         <div>
           <h3 className="text-sm font-semibold text-foreground">更新默认配置</h3>
           <p className="text-xs text-muted-foreground mt-1">
-            留空 Base URL 表示使用默认官方网关；Model 为空时使用运行时默认模型。
+            Base URL 若不改动则保留当前覆盖；清空输入框后保存才会移除覆盖并回退到默认官方网关。Model 为空时使用运行时默认模型。
           </p>
         </div>
 
@@ -120,9 +123,15 @@ export function CodexProviderSection() {
             <Input
               type="text"
               value={baseUrl}
-              onChange={(e) => setBaseUrl(e.target.value)}
+              onChange={(e) => {
+                setBaseUrl(e.target.value);
+                setBaseUrlTouched(true);
+              }}
               placeholder="https://api.openai.com/v1"
             />
+            <p className="text-xs text-muted-foreground mt-1">
+              留空并保存可清空当前覆盖；不编辑则保持现状。
+            </p>
           </div>
           <div>
             <Label className="mb-1">OpenAI Model</Label>

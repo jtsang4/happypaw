@@ -357,6 +357,53 @@ assert.deepEqual(reloadedWorkspaceEnvPayload, {
   },
 });
 
+const codexProviderSectionSource = fs.readFileSync(
+  path.join(
+    repoRoot,
+    'web',
+    'src',
+    'components',
+    'settings',
+    'CodexProviderSection.tsx',
+  ),
+  'utf8',
+);
+assert.match(
+  codexProviderSectionSource,
+  /baseUrlTouched/u,
+  'settings Codex form should track whether the Base URL field was explicitly edited',
+);
+assert.match(
+  codexProviderSectionSource,
+  /\.\.\.\(baseUrlTouched \? \{ openaiBaseUrl: baseUrl\.trim\(\) \} : \{\}\)/u,
+  'settings Codex form should omit openaiBaseUrl when the field is untouched',
+);
+assert.match(
+  codexProviderSectionSource,
+  /留空并保存可清空当前覆盖；不编辑则保持现状。/u,
+  'settings Codex form should explain that untouched Base URL preserves the current override',
+);
+
+const setupProvidersPageSource = fs.readFileSync(
+  path.join(repoRoot, 'web', 'src', 'pages', 'SetupProvidersPage.tsx'),
+  'utf8',
+);
+assert.match(
+  setupProvidersPageSource,
+  /codexBaseUrlTouched/u,
+  'setup flow should track whether the Base URL field was explicitly edited',
+);
+assert.match(
+  setupProvidersPageSource,
+  /\.\.\.\(codexBaseUrlTouched \? \{ openaiBaseUrl: codexBaseUrl\.trim\(\) \} : \{\}\)/u,
+  'setup flow should omit openaiBaseUrl when the field is untouched',
+);
+assert.match(
+  setupProvidersPageSource,
+  /不修改则保持当前覆盖；清空输入框后保存可改回默认官方网关。/u,
+  'setup flow should explain that untouched Base URL preserves the current override',
+);
+
 dbCoreModule.closeDatabase();
 
 console.log('✅ config API contraction checks passed');

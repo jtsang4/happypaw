@@ -27,6 +27,7 @@ export function SetupProvidersPage() {
   const [feishuAppSecret, setFeishuAppSecret] = useState('');
 
   const [codexBaseUrl, setCodexBaseUrl] = useState('');
+  const [codexBaseUrlTouched, setCodexBaseUrlTouched] = useState(false);
   const [codexApiKey, setCodexApiKey] = useState('');
   const [codexModel, setCodexModel] = useState('');
   const [existingCodexConfig, setExistingCodexConfig] =
@@ -51,6 +52,7 @@ export function SetupProvidersPage() {
       .get<CodexConfigPublic>('/api/config/codex')
       .then((config) => {
         setExistingCodexConfig(config);
+        setCodexBaseUrlTouched(false);
         setCodexModel(config.openaiModel || '');
       })
       .catch(() => {
@@ -85,7 +87,7 @@ export function SetupProvidersPage() {
       }
 
       await api.put('/api/config/codex', {
-        openaiBaseUrl: codexBaseUrl.trim(),
+        ...(codexBaseUrlTouched ? { openaiBaseUrl: codexBaseUrl.trim() } : {}),
         openaiModel: codexModel.trim(),
       });
 
@@ -149,7 +151,7 @@ export function SetupProvidersPage() {
             <ol className="list-decimal ml-5 space-y-1 text-xs text-muted-foreground">
               <li>系统初始化仅依赖 Codex 配置，不再需要额外的旧版运行时设置。</li>
               <li>API Key 通过独立密钥接口保存，页面始终只显示脱敏结果。</li>
-              <li>Base URL 和 Model 可选；留空时使用默认网关与运行时默认模型。</li>
+              <li>Base URL 和 Model 可选；Base URL 不编辑时保留当前覆盖，清空后保存才会回退到默认网关，Model 留空时使用运行时默认模型。</li>
             </ol>
           </div>
 
@@ -161,7 +163,10 @@ export function SetupProvidersPage() {
               <Input
                 type="text"
                 value={codexBaseUrl}
-                onChange={(e) => setCodexBaseUrl(e.target.value)}
+                onChange={(e) => {
+                  setCodexBaseUrl(e.target.value);
+                  setCodexBaseUrlTouched(true);
+                }}
                 placeholder="https://api.openai.com/v1"
               />
               {existingCodexConfig?.hasOpenaiBaseUrl && (
@@ -169,6 +174,9 @@ export function SetupProvidersPage() {
                   当前已配置：{existingCodexConfig.openaiBaseUrlMasked}
                 </p>
               )}
+              <p className="text-xs text-muted-foreground mt-1">
+                不修改则保持当前覆盖；清空输入框后保存可改回默认官方网关。
+              </p>
             </div>
 
             <div>
