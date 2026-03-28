@@ -12,7 +12,7 @@ const tempRoot = fs.mkdtempSync(
 
 process.chdir(tempRoot);
 
-const { initDatabase, setSession, getRuntimeSession } = await import(
+const { initDatabase, closeDatabase, setSession, getRuntimeSession } = await import(
   path.join(repoRoot, 'dist', 'db.js')
 );
 const {
@@ -24,10 +24,9 @@ const { resolveRuntimeScopePaths } = await import(
 
 initDatabase();
 
-const sessions = /** @type {Record<string, {sessionId: string, runtime: 'codex_app_server'}>} */ ({
+const sessions = /** @type {Record<string, {sessionId: string}>} */ ({
   'workspace-main': {
     sessionId: 'main-thread',
-    runtime: 'codex_app_server',
   },
 });
 
@@ -42,28 +41,22 @@ fs.writeFileSync(
   'stale-agent-thread'
 );
 
-setSession('workspace-main', 'main-thread', undefined, 'codex_app_server');
-setSession(
-  'workspace-main',
-  'agent-thread-before-restart',
-  'agent-42',
-  'codex_app_server'
-);
+setSession('workspace-main', 'main-thread');
+setSession('workspace-main', 'agent-thread-before-restart', 'agent-42');
 
 clearPersistedRuntimeStateForRecovery(sessions, 'workspace-main', 'agent-42');
 
 assert.deepEqual(sessions, {
   'workspace-main': {
     sessionId: 'main-thread',
-    runtime: 'codex_app_server',
   },
 });
 assert.deepEqual(getRuntimeSession('workspace-main'), {
   sessionId: 'main-thread',
-  runtime: 'codex_app_server',
 });
 assert.equal(getRuntimeSession('workspace-main', 'agent-42'), undefined);
 assert.ok(fs.existsSync(path.join(agentScope.codexHomeDir, 'config.toml')));
 assert.ok(!fs.existsSync(path.join(agentScope.codexHomeDir, 'thread.json')));
 
 console.log('✅ restart agent session recovery cleanup checks passed');
+closeDatabase();

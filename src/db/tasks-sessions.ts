@@ -2,13 +2,11 @@ import type {
   MessageCursor,
   NewMessage,
   RuntimeSessionRecord,
-  RuntimeType,
   ScheduledTask,
   TaskRunLog,
 } from '../types.js';
 
 import { db, getNewMessagesStmt, stmts } from './shared.js';
-import { parseRuntimeType } from './group-helpers.js';
 
 export function getNewMessages(
   jids: string[],
@@ -293,18 +291,12 @@ export function getRuntimeSession(
   const effectiveAgentId = agentId || '';
   const row = db
     .prepare(
-      'SELECT session_id, runtime FROM sessions WHERE group_folder = ? AND agent_id = ?',
+      'SELECT session_id FROM sessions WHERE group_folder = ? AND agent_id = ?',
     )
-    .get(groupFolder, effectiveAgentId) as
-    | { session_id: string; runtime: string | null }
-    | undefined;
+    .get(groupFolder, effectiveAgentId) as { session_id: string } | undefined;
   if (!row) return undefined;
   return {
     sessionId: row.session_id,
-    runtime: parseRuntimeType(
-      row.runtime,
-      `session ${groupFolder}/${effectiveAgentId}`,
-    ),
   };
 }
 
@@ -312,13 +304,13 @@ export function setSession(
   groupFolder: string,
   sessionId: string,
   agentId?: string | null,
-  runtime?: RuntimeType | null,
+  _runtime?: unknown,
 ): void {
   const effectiveAgentId = agentId || '';
   db.prepare(
-    `INSERT INTO sessions (group_folder, session_id, agent_id, runtime) VALUES (?, ?, ?, ?)
-     ON CONFLICT(group_folder, agent_id) DO UPDATE SET session_id = excluded.session_id, runtime = excluded.runtime`,
-  ).run(groupFolder, sessionId, effectiveAgentId, runtime ?? null);
+    `INSERT INTO sessions (group_folder, session_id, agent_id, runtime) VALUES (?, ?, ?, NULL)
+     ON CONFLICT(group_folder, agent_id) DO UPDATE SET session_id = excluded.session_id, runtime = NULL`,
+  ).run(groupFolder, sessionId, effectiveAgentId);
 }
 
 export function deleteSession(
@@ -338,18 +330,13 @@ export function deleteAllSessionsForFolder(groupFolder: string): void {
 export function getAllSessions(): Record<string, RuntimeSessionRecord> {
   const rows = db
     .prepare(
-      "SELECT group_folder, session_id, runtime FROM sessions WHERE agent_id = ''",
+      "SELECT group_folder, session_id FROM sessions WHERE agent_id = ''",
     )
-    .all() as Array<{
-    group_folder: string;
-    session_id: string;
-    runtime: string | null;
-  }>;
+    .all() as Array<{ group_folder: string; session_id: string }>;
   const result: Record<string, RuntimeSessionRecord> = {};
   for (const row of rows) {
     result[row.group_folder] = {
       sessionId: row.session_id,
-      runtime: parseRuntimeType(row.runtime, `session ${row.group_folder}`),
     };
   }
   return result;

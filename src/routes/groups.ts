@@ -747,11 +747,7 @@ groupRoutes.patch('/:jid', authMiddleware, async (c) => {
   }
 
   // Update registered group if name, activation_mode, or execution_mode changed
-  if (
-    name ||
-    activation_mode !== undefined ||
-    execution_mode !== undefined
-  ) {
+  if (name || activation_mode !== undefined || execution_mode !== undefined) {
     const updated: RegisteredGroup = {
       name: name || existing.name,
       folder: existing.folder,
@@ -761,7 +757,6 @@ groupRoutes.patch('/:jid', authMiddleware, async (c) => {
         execution_mode !== undefined
           ? (execution_mode as ExecutionMode)
           : existing.executionMode,
-      runtime: existing.runtime,
       customCwd: existing.customCwd,
       initSourcePath: existing.initSourcePath,
       initGitUrl: existing.initGitUrl,

@@ -297,21 +297,13 @@ export function createIndexAgentConversationRuntime(
 
     const runtime = deps.getEffectiveRuntime(effectiveGroup);
     const sessionRecord = getRuntimeSession(effectiveGroup.folder, agentId);
-    const sessionId =
-      sessionRecord && sessionRecord.runtime === runtime
-        ? sessionRecord.sessionId
-        : undefined;
+    const sessionId = sessionRecord?.sessionId;
     let currentAgentSessionId = sessionId;
 
     const wrappedOnOutput = async (output: ContainerOutput) => {
       // Track session
       if (output.newSessionId && output.status !== 'error') {
-        setSession(
-          effectiveGroup.folder,
-          output.newSessionId,
-          agentId,
-          runtime,
-        );
+        setSession(effectiveGroup.folder, output.newSessionId, agentId);
         currentAgentSessionId = output.newSessionId;
       }
 
@@ -712,12 +704,7 @@ export function createIndexAgentConversationRuntime(
 
       // Finalize session
       if (output.newSessionId && output.status !== 'error') {
-        setSession(
-          effectiveGroup.folder,
-          output.newSessionId,
-          agentId,
-          runtime,
-        );
+        setSession(effectiveGroup.folder, output.newSessionId, agentId);
       }
 
       // 不可恢复的转录错误（如超大图片/MIME 错配被固化在会话历史中）

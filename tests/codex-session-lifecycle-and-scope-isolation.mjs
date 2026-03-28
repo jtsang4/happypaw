@@ -22,7 +22,7 @@ const { resolveRuntimeScopePaths } = await import(
 const { ensureAgentDirectories } = await import(
   path.join(repoRoot, 'dist', 'utils.js')
 );
-const { initDatabase, setSession, getRuntimeSession, deleteSession } =
+const { initDatabase, closeDatabase, setSession, getRuntimeSession, deleteSession } =
   await import(path.join(repoRoot, 'dist', 'db.js'));
 
 initDatabase();
@@ -91,26 +91,24 @@ assert.ok(fs.existsSync(path.join(agentIpcDir, 'tasks')));
 assert.ok(fs.existsSync(path.join(agentIpcDir, 'agents')));
 assert.ok(fs.existsSync(agentScope.codexHomeDir));
 
-setSession('workspace-a', 'main-thread', undefined, 'codex_app_server');
-setSession('workspace-a', 'agent-thread', 'agent-1', 'codex_app_server');
+setSession('workspace-a', 'main-thread');
+setSession('workspace-a', 'agent-thread', 'agent-1');
 
 assert.deepEqual(getRuntimeSession('workspace-a'), {
   sessionId: 'main-thread',
-  runtime: 'codex_app_server',
 });
 assert.deepEqual(getRuntimeSession('workspace-a', 'agent-1'), {
   sessionId: 'agent-thread',
-  runtime: 'codex_app_server',
 });
 
 deleteSession('workspace-a');
 assert.equal(getRuntimeSession('workspace-a'), undefined);
 assert.deepEqual(getRuntimeSession('workspace-a', 'agent-1'), {
   sessionId: 'agent-thread',
-  runtime: 'codex_app_server',
 });
 
 deleteSession('workspace-a', 'agent-1');
 assert.equal(getRuntimeSession('workspace-a', 'agent-1'), undefined);
+closeDatabase();
 
 console.log('✅ codex session lifecycle and scope isolation checks passed');

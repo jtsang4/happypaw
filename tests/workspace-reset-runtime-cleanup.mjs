@@ -18,7 +18,7 @@ const { clearWorkspaceRuntimeState } = await import(
 const { resolveRuntimeScopePaths } = await import(
   path.join(repoRoot, 'dist', 'container-runner.js')
 );
-const { initDatabase, setSession, getRuntimeSession } = await import(
+const { initDatabase, closeDatabase, setSession, getRuntimeSession } = await import(
   path.join(repoRoot, 'dist', 'db.js')
 );
 
@@ -65,8 +65,8 @@ fs.writeFileSync(
   'agent-thread'
 );
 
-setSession('workspace-a', 'main-thread', undefined, 'codex_app_server');
-setSession('workspace-a', 'agent-thread', 'agent-1', 'codex_app_server');
+setSession('workspace-a', 'main-thread');
+setSession('workspace-a', 'agent-thread', 'agent-1');
 
 clearWorkspaceRuntimeState('workspace-a');
 
@@ -84,3 +84,4 @@ assert.equal(getRuntimeSession('workspace-a'), undefined);
 assert.equal(getRuntimeSession('workspace-a', 'agent-1'), undefined);
 
 console.log('✅ workspace reset runtime cleanup checks passed');
+closeDatabase();

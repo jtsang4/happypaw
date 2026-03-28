@@ -238,12 +238,9 @@ async function runTask(
 
   // For group context mode, use the group's current session
   const sessions = deps.getSessions();
-  const runtime = group.runtime ?? getSystemSettings().defaultRuntime;
   const sessionId =
     task.context_mode === 'group'
-      ? sessions[task.group_folder]?.runtime === runtime
-        ? sessions[task.group_folder]?.sessionId
-        : undefined
+      ? sessions[task.group_folder]?.sessionId
       : undefined;
 
   // Idle timer: writes _close sentinel after idleTimeout of no output,

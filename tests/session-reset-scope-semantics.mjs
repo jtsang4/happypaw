@@ -20,6 +20,7 @@ const { resolveRuntimeScopePaths } = await import(
 );
 const {
   initDatabase,
+  closeDatabase,
   setRegisteredGroup,
   setSession,
   getRuntimeSession,
@@ -56,8 +57,8 @@ fs.writeFileSync(path.join(mainScope.codexHomeDir, 'thread.json'), 'main-thread'
 fs.writeFileSync(path.join(agentScope.codexHomeDir, 'config.toml'), 'model = "gpt-5"');
 fs.writeFileSync(path.join(agentScope.codexHomeDir, 'thread.json'), 'agent-thread');
 
-setSession('workspace-a', 'main-thread', undefined, 'codex_app_server');
-setSession('workspace-a', 'agent-thread', 'agent-1', 'codex_app_server');
+setSession('workspace-a', 'main-thread');
+setSession('workspace-a', 'agent-thread', 'agent-1');
 
 const mainStops = [];
 const mainBroadcasts = [];
@@ -72,7 +73,7 @@ await executeSessionReset(
       },
     },
     sessions: {
-      'workspace-a': { sessionId: 'main-thread', runtime: 'codex_app_server' },
+      'workspace-a': { sessionId: 'main-thread' },
     },
     broadcast: (jid, msg) => {
       mainBroadcasts.push({ jid, msg });
@@ -87,7 +88,6 @@ assert.deepEqual(mainStops.sort(), ['telegram:workspace-a', 'web:workspace-a']);
 assert.equal(getRuntimeSession('workspace-a'), undefined);
 assert.deepEqual(getRuntimeSession('workspace-a', 'agent-1'), {
   sessionId: 'agent-thread',
-  runtime: 'codex_app_server',
 });
 assert.ok(fs.existsSync(path.join(mainScope.codexHomeDir, 'config.toml')));
 assert.ok(!fs.existsSync(path.join(mainScope.codexHomeDir, 'thread.json')));
@@ -101,8 +101,8 @@ assert.deepEqual(
 
 fs.writeFileSync(path.join(mainScope.codexHomeDir, 'thread.json'), 'main-thread');
 fs.writeFileSync(path.join(agentScope.codexHomeDir, 'thread.json'), 'agent-thread');
-setSession('workspace-a', 'main-thread-2', undefined, 'codex_app_server');
-setSession('workspace-a', 'agent-thread-2', 'agent-1', 'codex_app_server');
+setSession('workspace-a', 'main-thread-2');
+setSession('workspace-a', 'agent-thread-2', 'agent-1');
 
 const agentStops = [];
 const agentBroadcasts = [];
@@ -117,7 +117,7 @@ await executeSessionReset(
       },
     },
     sessions: {
-      'workspace-a': { sessionId: 'main-thread-2', runtime: 'codex_app_server' },
+      'workspace-a': { sessionId: 'main-thread-2' },
     },
     broadcast: (jid, msg) => {
       agentBroadcasts.push({ jid, msg });
@@ -132,7 +132,6 @@ await executeSessionReset(
 assert.deepEqual(agentStops, ['web:workspace-a#agent:agent-1']);
 assert.deepEqual(getRuntimeSession('workspace-a'), {
   sessionId: 'main-thread-2',
-  runtime: 'codex_app_server',
 });
 assert.equal(getRuntimeSession('workspace-a', 'agent-1'), undefined);
 assert.ok(fs.existsSync(path.join(mainScope.codexHomeDir, 'thread.json')));
@@ -144,3 +143,4 @@ assert.deepEqual(agentCursors.map((entry) => entry.jid), [
 ]);
 
 console.log('✅ session reset scope semantics checks passed');
+closeDatabase();

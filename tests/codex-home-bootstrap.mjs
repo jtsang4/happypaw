@@ -52,7 +52,7 @@ const {
   getPinnedCodexRepoCacheRoot,
   HAPPYPAW_CODEX_EXECUTABLE_ENV,
 } = await import(path.join(repoRoot, 'dist', 'codex-binary.js'));
-const { initDatabase, setSession, getRuntimeSession, getAllSessions } =
+const { initDatabase, closeDatabase, setSession, getRuntimeSession, getAllSessions } =
   dbModule;
 
 const workspaceDir = path.join(tempRoot, 'workspace');
@@ -320,19 +320,18 @@ assert.ok(!quotedContainerEnv.includes(HAPPYPAW_CODEX_EXECUTABLE_ENV));
 assert.ok(!quotedContainerEnv.includes(legacyCodexExecutableEnv));
 
 initDatabase();
-setSession('folder-a', 'thread-123', undefined, 'codex_app_server');
-setSession('folder-a', 'agent-thread-456', 'agent-1', 'codex_app_server');
+setSession('folder-a', 'thread-123');
+setSession('folder-a', 'agent-thread-456', 'agent-1');
 assert.deepEqual(getRuntimeSession('folder-a'), {
   sessionId: 'thread-123',
-  runtime: 'codex_app_server',
 });
 assert.deepEqual(getRuntimeSession('folder-a', 'agent-1'), {
   sessionId: 'agent-thread-456',
-  runtime: 'codex_app_server',
 });
 assert.deepEqual(getAllSessions(), {
-  'folder-a': { sessionId: 'thread-123', runtime: 'codex_app_server' },
+  'folder-a': { sessionId: 'thread-123' },
 });
+closeDatabase();
 
 const hostCacheRoot = path.join(tempRoot, 'host-cache');
 const downloadLog = [];

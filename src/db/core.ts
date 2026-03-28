@@ -794,6 +794,19 @@ export function initDatabase(): void {
     })();
   }
 
+  const v34Check = getRouterStateInternal('schema_version');
+  if (!v34Check || parseInt(v34Check, 10) < 34) {
+    db.exec(`
+      UPDATE registered_groups
+      SET runtime = NULL
+      WHERE runtime IS NOT NULL;
+
+      UPDATE sessions
+      SET runtime = NULL
+      WHERE runtime IS NOT NULL;
+    `);
+  }
+
   // v24→v25 migration: billing system enhancement (daily/weekly quotas, rate_multiplier, trial)
   ensureColumn('billing_plans', 'daily_cost_quota', 'REAL');
   ensureColumn('billing_plans', 'weekly_cost_quota', 'REAL');
@@ -986,7 +999,7 @@ export function initDatabase(): void {
     db.exec('ALTER TABLE agents ADD COLUMN spawned_from_jid TEXT');
   }
 
-  const SCHEMA_VERSION = '33';
+  const SCHEMA_VERSION = '34';
   db.prepare(
     'INSERT OR REPLACE INTO router_state (key, value) VALUES (?, ?)',
   ).run('schema_version', SCHEMA_VERSION);

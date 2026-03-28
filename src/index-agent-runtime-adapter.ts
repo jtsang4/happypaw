@@ -131,7 +131,6 @@ interface AgentRuntimeAdapterDeps {
     groupFolder: string,
     sessionId: string,
     agentId?: string,
-    runtime?: RuntimeType,
   ) => void;
   runHostAgent: (
     group: RegisteredGroup,
@@ -294,7 +293,7 @@ export function createIndexAgentRuntimeAdapter(deps: AgentRuntimeAdapterDeps): {
   }
 
   function getEffectiveRuntime(group: RegisteredGroup): RuntimeType {
-    return group.runtime ?? deps.getSystemSettings().defaultRuntime;
+    return deps.getSystemSettings().defaultRuntime;
   }
 
   async function setTyping(jid: string, isTyping: boolean): Promise<void> {
@@ -483,10 +482,7 @@ export function createIndexAgentRuntimeAdapter(deps: AgentRuntimeAdapterDeps): {
     const isAdminHome = isHome && group.folder === MAIN_GROUP_FOLDER;
     const runtime = getEffectiveRuntime(group);
     const sessionRecord = deps.sessions[group.folder];
-    const sessionId =
-      sessionRecord && sessionRecord.runtime === runtime
-        ? sessionRecord.sessionId
-        : undefined;
+    const sessionId = sessionRecord?.sessionId;
 
     const tasks = deps.getAllTasks();
     deps.writeTasksSnapshot(
@@ -524,15 +520,9 @@ export function createIndexAgentRuntimeAdapter(deps: AgentRuntimeAdapterDeps): {
           if (output.newSessionId && output.status !== 'error') {
             const nextSession: RuntimeSessionRecord = {
               sessionId: output.newSessionId,
-              runtime,
             };
             deps.sessions[group.folder] = nextSession;
-            deps.setSession(
-              group.folder,
-              output.newSessionId,
-              undefined,
-              runtime,
-            );
+            deps.setSession(group.folder, output.newSessionId, undefined);
           }
           await onOutput(output);
         }
@@ -596,10 +586,9 @@ export function createIndexAgentRuntimeAdapter(deps: AgentRuntimeAdapterDeps): {
       if (output.newSessionId && output.status !== 'error') {
         const nextSession: RuntimeSessionRecord = {
           sessionId: output.newSessionId,
-          runtime,
         };
         deps.sessions[group.folder] = nextSession;
-        deps.setSession(group.folder, output.newSessionId, undefined, runtime);
+        deps.setSession(group.folder, output.newSessionId, undefined);
       }
 
       if (output.status === 'closed') {

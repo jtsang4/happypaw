@@ -1,4 +1,4 @@
-import type { ExecutionMode, RegisteredGroup, RuntimeType } from '../types.js';
+import type { ExecutionMode, RegisteredGroup } from '../types.js';
 
 function parseExecutionMode(
   raw: string | null,
@@ -11,19 +11,6 @@ function parseExecutionMode(
     );
   }
   return 'container';
-}
-
-function parseRuntimeType(
-  raw: string | null,
-  context: string,
-): RuntimeType | undefined {
-  if (raw === 'codex_app_server') return raw;
-  if (raw !== null && raw !== '') {
-    console.warn(
-      `Invalid runtime "${raw}" for ${context}, falling back to system default`,
-    );
-  }
-  return undefined;
 }
 
 /** Raw row shape from registered_groups table — single source of truth for column mapping. */
@@ -63,7 +50,6 @@ function parseGroupRow(
       ? JSON.parse(row.container_config)
       : undefined,
     executionMode: parseExecutionMode(row.execution_mode, `group ${row.jid}`),
-    runtime: parseRuntimeType(row.runtime, `group ${row.jid}`),
     customCwd: row.custom_cwd ?? undefined,
     initSourcePath: row.init_source_path ?? undefined,
     initGitUrl: row.init_git_url ?? undefined,
@@ -92,9 +78,4 @@ function parseActivationMode(
   return 'auto';
 }
 
-export {
-  parseExecutionMode,
-  parseRuntimeType,
-  parseGroupRow,
-  type RegisteredGroupRow,
-};
+export { parseExecutionMode, parseGroupRow, type RegisteredGroupRow };

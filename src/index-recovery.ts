@@ -491,7 +491,6 @@ export function recoverConversationAgents(deps: {
               agentId,
               agentName: agent.name,
               folder: agent.group_folder,
-              runtime: persistedAgentSession.runtime,
             },
             'Recovery: clearing stale persisted agent runtime state before requeue',
           );

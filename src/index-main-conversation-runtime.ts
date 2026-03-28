@@ -535,11 +535,7 @@ export function createMainConversationRuntime(
       | { status: 'success' | 'error' | 'closed'; error?: string }
       | undefined;
     const activeMainSession = getRuntimeSession(effectiveGroup.folder);
-    let activeSessionId =
-      activeMainSession &&
-      activeMainSession.runtime === deps.getEffectiveRuntime(effectiveGroup)
-        ? activeMainSession.sessionId
-        : undefined;
+    let activeSessionId = activeMainSession?.sessionId;
     try {
       output = await deps.runAgent(
         effectiveGroup,

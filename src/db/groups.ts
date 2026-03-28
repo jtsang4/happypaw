@@ -29,7 +29,7 @@ export function setRegisteredGroup(jid: string, group: RegisteredGroup): void {
     group.added_at,
     group.containerConfig ? JSON.stringify(group.containerConfig) : null,
     group.executionMode ?? 'container',
-    group.runtime ?? null,
+    null,
     group.customCwd ?? null,
     group.initSourcePath ?? null,
     group.initGitUrl ?? null,

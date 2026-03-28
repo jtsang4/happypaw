@@ -182,7 +182,7 @@ interface ResolvedProvider {
 }
 
 function getEffectiveRuntime(group: RegisteredGroup): RuntimeType {
-  return group.runtime ?? getSystemSettings().defaultRuntime;
+  return getSystemSettings().defaultRuntime;
 }
 
 function buildCodexBridgeCommand(executionMode: 'container' | 'host'): {
