@@ -608,6 +608,7 @@ async function runScenario(name, sessionId, options = {}) {
         isAdminHome: false,
         turnId: 'turn-from-host',
         images: options.images,
+        ...options.containerInputOverrides,
       },
       memoryRecall: 'memory recall prompt',
       images: options.images,
@@ -676,6 +677,57 @@ assert.ok(
       entry.streamEvent?.text === '你好，Codex',
   ),
   JSON.stringify(fresh.outputs, null, 2),
+);
+
+const agentThreadGuidelines = await runScenario(
+  'agent-thread-guidelines',
+  undefined,
+  {
+    containerInputOverrides: {
+      agentId: 'agent-1',
+      agentName: '会话助手',
+    },
+  },
+);
+const agentThreadStartLine = fs
+  .readFileSync(path.join(agentThreadGuidelines.tempRoot, 'requests.log'), 'utf8')
+  .split('\n')
+  .find((line) => line.startsWith('thread/start '));
+assert.ok(agentThreadStartLine, 'agent thread scenario logs thread/start payload');
+const agentThreadStartPayload = JSON.parse(
+  agentThreadStartLine.slice('thread/start '.length),
+);
+const agentThreadBaseInstructions =
+  agentThreadStartPayload.params?.baseInstructions || '';
+assert.match(
+  agentThreadBaseInstructions,
+  /不要用 `send_message` 发送"收到"之类的确认消息/,
+  'agent-thread guidance still blocks acknowledgement spam via send_message',
+);
+assert.match(
+  agentThreadBaseInstructions,
+  /正式答复整合为一条最终输出/,
+  'agent-thread guidance still prefers a single final assistant reply',
+);
+assert.match(
+  agentThreadBaseInstructions,
+  /允许使用 `send_message` 发送侧边消息/,
+  'agent-thread guidance explicitly allows send_message side-channel usage',
+);
+assert.match(
+  agentThreadBaseInstructions,
+  /`send_message` 之后继续完成当前回合/,
+  'agent-thread guidance keeps the final reply separate after side-channel updates',
+);
+assert.doesNotMatch(
+  agentThreadBaseInstructions,
+  /每次回复只产生一条消息/,
+  'agent-thread guidance no longer hard-suppresses multi-message continuity',
+);
+assert.doesNotMatch(
+  agentThreadBaseInstructions,
+  /执行超过 2 分钟的长任务/,
+  'agent-thread guidance no longer blocks progress updates behind a strict 2-minute threshold',
 );
 assert.ok(
   fresh.outputs.some(
