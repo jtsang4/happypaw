@@ -76,18 +76,28 @@ assert.doesNotMatch(
 const agentDefinitionsSource = read('src/routes/agent-definitions.ts');
 assert.match(
   agentDefinitionsSource,
-  /\.factory', 'droids'/u,
-  'agent definition management should use the current non-Claude storage directory',
+  /\.codex', 'agents'/u,
+  'agent definition management should use Codex custom-agent storage',
 );
 assert.match(
   agentDefinitionsSource,
-  /ensureAgentDefinitionFrontmatter/u,
-  'agent definition writes should preserve required frontmatter for existing stored definitions',
+  /ensureTomlAgentContent/u,
+  'agent definition writes should preserve required TOML structure for stored definitions',
+);
+assert.match(
+  agentDefinitionsSource,
+  /process\.cwd\(\), '\.codex', 'agents'/u,
+  'agent definition management should default to workspace-local Codex agent storage',
+);
+assert.match(
+  agentDefinitionsSource,
+  /os\.homedir\(\), '\.codex', 'agents'/u,
+  'agent definition management should support optional user-global Codex agent storage only when selected',
 );
 assert.doesNotMatch(
   agentDefinitionsSource,
-  /\.claude', 'agents'/u,
-  'agent definition management should not use Claude agent storage',
+  /\.claude', 'agents'|\.factory', 'droids'/u,
+  'agent definition management should not use Claude or Factory droid storage',
 );
 
 const containerRunnerSource = read('src/container-runner.ts');
@@ -136,8 +146,13 @@ assert.match(
 const agentDefinitionsPage = read('web/src/pages/AgentDefinitionsPage.tsx');
 assert.match(
   agentDefinitionsPage,
-  /\.factory\/droids\/\*\.md/u,
-  'agent definition UI should mention the current implementation storage path',
+  /\.codex\/agents\/\*\.toml/u,
+  'agent definition UI should mention Codex TOML agent storage',
+);
+assert.match(
+  agentDefinitionsPage,
+  /不会自动探测或接管/u,
+  'agent definition UI should explain the explicit opt-in global toggle semantics',
 );
 assert.doesNotMatch(
   agentDefinitionsPage,
@@ -146,8 +161,8 @@ assert.doesNotMatch(
 );
 assert.match(
   agentDefinitionsPage,
-  /model: inherit/u,
-  'new agent definition templates should include compatible frontmatter',
+  /model = "inherit"/u,
+  'new agent definition templates should include compatible TOML defaults',
 );
 
 console.log('✅ helper-ops-cutover assertions passed');
