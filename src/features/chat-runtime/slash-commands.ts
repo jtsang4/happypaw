@@ -28,7 +28,7 @@ import {
   formatWorkspaceList,
   resolveLocationInfo,
   type WorkspaceInfo,
-} from '../im/im-command-utils.js';
+} from '../im/commands/im-command-utils.js';
 import { logger } from '../../logger.js';
 import { ensureAgentDirectories, stripVirtualJidSuffix } from '../../utils.js';
 import { broadcastAgentStatus, broadcastNewMessage } from '../../web.js';

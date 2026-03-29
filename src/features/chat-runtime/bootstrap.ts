@@ -62,7 +62,7 @@ import type {
   RuntimeSessionRecord,
 } from '../../types.js';
 import { stripVirtualJidSuffix } from '../../utils.js';
-import { abortAllStreamingSessions } from '../im/feishu/streaming-card/index.js';
+import { abortAllStreamingSessions } from '../im/channels/feishu/streaming-card/index.js';
 import {
   shutdownTerminals,
   shutdownWebServer,
@@ -1063,10 +1063,6 @@ export function createBootstrapRuntime(deps: IndexBootstrapDeps): {
       allActiveUsers = allActiveUsers.concat(result.users);
       if (allActiveUsers.length >= result.total) break;
       page++;
-    }
-
-    for (const user of allActiveUsers) {
-      if (user.role === 'admin') imManager.registerAdminUser(user.id);
     }
 
     let anyFeishuConnected = false;

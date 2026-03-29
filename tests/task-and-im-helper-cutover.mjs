@@ -42,7 +42,7 @@ const [
   ),
   import(path.join(repoRoot, 'dist', 'config.js')),
   import(path.join(repoRoot, 'dist', 'runtime-config.js')),
-  import(path.join(repoRoot, 'dist', 'features', 'im', 'im-command-utils.js')),
+  import(path.join(repoRoot, 'dist', 'features', 'im', 'commands', 'im-command-utils.js')),
   import(
     path.join(
       repoRoot,

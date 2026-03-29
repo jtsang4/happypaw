@@ -1,5 +1,5 @@
 import * as lark from '@larksuiteoapi/node-sdk';
-import { logger } from '../../../../logger.js';
+import { logger } from '../../../../../logger.js';
 import {
   CARD_MD_LIMIT,
   CARD_SIZE_LIMIT,

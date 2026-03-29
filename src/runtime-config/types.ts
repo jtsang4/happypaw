@@ -129,6 +129,7 @@ export interface SystemSettings {
 }
 
 export interface EncryptedSecrets {
+  keyId?: string;
   iv: string;
   tag: string;
   data: string;

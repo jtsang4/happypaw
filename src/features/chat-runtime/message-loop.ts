@@ -1,4 +1,4 @@
-import { interruptibleSleep } from '../im/message-notifier.js';
+import { interruptibleSleep } from '../im/messaging/notifier.js';
 import { getChannelType } from '../im/im-channel.js';
 import {
   getMessagesSince,

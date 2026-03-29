@@ -83,7 +83,7 @@ import {
   broadcastNewMessage,
   invalidateAllowedUserCache,
 } from '../../../web.js';
-import { getStreamingSession } from '../../im/feishu/streaming-card/index.js';
+import { getStreamingSession } from '../../im/channels/feishu/streaming-card/index.js';
 import {
   clearSessionRuntimeFiles,
   clearWorkspaceRuntimeState,

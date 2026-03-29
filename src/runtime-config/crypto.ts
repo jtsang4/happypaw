@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 
-import { CONFIG_DIR, CONFIG_KEY_FILE, normalizeSecret } from './shared.js';
+import { CONFIG_DIR, CONFIG_KEYRING_FILE, normalizeSecret } from './shared.js';
 import type { EncryptedSecrets } from './types.js';
 
 interface FeishuSecretPayload {
@@ -25,50 +25,114 @@ interface WeChatSecretPayload {
   botToken: string;
 }
 
-export function getOrCreateEncryptionKey(): Buffer {
-  fs.mkdirSync(CONFIG_DIR, { recursive: true });
-
-  const existingKeyPath = resolveExistingKeyPath();
-  if (existingKeyPath) {
-    const raw = fs.readFileSync(existingKeyPath, 'utf-8').trim();
-    const key = Buffer.from(raw, 'hex');
-    if (key.length === 32) return key;
-    throw new Error('Invalid encryption key file');
-  }
-
-  const key = crypto.randomBytes(32);
-  fs.writeFileSync(CONFIG_KEY_FILE, key.toString('hex') + '\n', {
-    encoding: 'utf-8',
-    mode: 0o600,
-  });
-  return key;
+interface RuntimeConfigKeyringV1 {
+  version: 1;
+  activeKeyId: string;
+  keys: Record<string, string>;
 }
 
-function resolveExistingKeyPath(): string | null {
-  if (fs.existsSync(CONFIG_KEY_FILE)) {
-    return CONFIG_KEY_FILE;
+const KEYRING_VERSION = 1;
+const INITIAL_KEY_ID = 'main';
+
+export function getOrCreateEncryptionKey(): Buffer {
+  return getActiveEncryptionKey().key;
+}
+
+function getActiveEncryptionKey(): { keyId: string; key: Buffer } {
+  fs.mkdirSync(CONFIG_DIR, { recursive: true });
+
+  const keyring = getOrCreateKeyring();
+  const activeKeyHex = keyring.keys[keyring.activeKeyId];
+  if (!activeKeyHex) {
+    throw new Error('Invalid runtime config keyring');
+  }
+  return {
+    keyId: keyring.activeKeyId,
+    key: decodeKeyHex(activeKeyHex),
+  };
+}
+
+function getOrCreateKeyring(): RuntimeConfigKeyringV1 {
+  const existing = readKeyringFile();
+  if (existing) {
+    return existing;
   }
 
-  const candidates = fs
-    .readdirSync(CONFIG_DIR, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith('.key'))
-    .map((entry) => path.join(CONFIG_DIR, entry.name));
+  const created = buildKeyring(crypto.randomBytes(32).toString('hex'));
+  writeKeyringFile(created);
+  return created;
+}
 
-  if (candidates.length !== 1) {
+function readKeyringFile(): RuntimeConfigKeyringV1 | null {
+  if (!fs.existsSync(CONFIG_KEYRING_FILE)) {
     return null;
   }
 
-  const [migratedKeySourcePath] = candidates;
-  const raw = fs.readFileSync(migratedKeySourcePath, 'utf-8');
-  fs.writeFileSync(CONFIG_KEY_FILE, raw, {
-    encoding: 'utf-8',
-    mode: 0o600,
-  });
-  return CONFIG_KEY_FILE;
+  const parsed = JSON.parse(
+    fs.readFileSync(CONFIG_KEYRING_FILE, 'utf-8'),
+  ) as Partial<RuntimeConfigKeyringV1>;
+  if (parsed.version !== KEYRING_VERSION) {
+    throw new Error('Invalid runtime config keyring');
+  }
+  if (
+    !parsed.activeKeyId ||
+    typeof parsed.activeKeyId !== 'string' ||
+    !parsed.keys ||
+    typeof parsed.keys !== 'object'
+  ) {
+    throw new Error('Invalid runtime config keyring');
+  }
+  const activeKeyHex = parsed.keys[parsed.activeKeyId];
+  if (typeof activeKeyHex !== 'string') {
+    throw new Error('Invalid runtime config keyring');
+  }
+  decodeKeyHex(activeKeyHex);
+  for (const value of Object.values(parsed.keys)) {
+    if (typeof value !== 'string') {
+      throw new Error('Invalid runtime config keyring');
+    }
+    decodeKeyHex(value);
+  }
+
+  return {
+    version: KEYRING_VERSION,
+    activeKeyId: parsed.activeKeyId,
+    keys: parsed.keys,
+  };
+}
+
+function buildKeyring(keyHex: string): RuntimeConfigKeyringV1 {
+  decodeKeyHex(keyHex);
+  return {
+    version: KEYRING_VERSION,
+    activeKeyId: INITIAL_KEY_ID,
+    keys: {
+      [INITIAL_KEY_ID]: keyHex,
+    },
+  };
+}
+
+function writeKeyringFile(keyring: RuntimeConfigKeyringV1): void {
+  fs.writeFileSync(
+    CONFIG_KEYRING_FILE,
+    JSON.stringify(keyring, null, 2) + '\n',
+    {
+      encoding: 'utf-8',
+      mode: 0o600,
+    },
+  );
+}
+
+function decodeKeyHex(keyHex: string): Buffer {
+  const key = Buffer.from(keyHex, 'hex');
+  if (key.length !== 32) {
+    throw new Error('Invalid encryption key material');
+  }
+  return key;
 }
 
 function encryptPayload(payload: unknown): EncryptedSecrets {
-  const key = getOrCreateEncryptionKey();
+  const { keyId, key } = getActiveEncryptionKey();
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
 
@@ -77,6 +141,7 @@ function encryptPayload(payload: unknown): EncryptedSecrets {
   const tag = cipher.getAuthTag();
 
   return {
+    keyId,
     iv: iv.toString('base64'),
     tag: tag.toString('base64'),
     data: encrypted.toString('base64'),
@@ -84,7 +149,7 @@ function encryptPayload(payload: unknown): EncryptedSecrets {
 }
 
 function decryptPayload(secrets: EncryptedSecrets): Record<string, unknown> {
-  const key = getOrCreateEncryptionKey();
+  const key = resolveKeyForSecret(secrets);
   const iv = Buffer.from(secrets.iv, 'base64');
   const tag = Buffer.from(secrets.tag, 'base64');
   const encrypted = Buffer.from(secrets.data, 'base64');
@@ -97,6 +162,22 @@ function decryptPayload(secrets: EncryptedSecrets): Record<string, unknown> {
       'utf-8',
     ),
   ) as Record<string, unknown>;
+}
+
+function resolveKeyForSecret(secrets: EncryptedSecrets): Buffer {
+  const keyring = getOrCreateKeyring();
+  if (secrets.keyId) {
+    const keyHex = keyring.keys[secrets.keyId];
+    if (!keyHex) {
+      throw new Error('Unknown runtime config key');
+    }
+    return decodeKeyHex(keyHex);
+  }
+  const fallbackKeyHex = keyring.keys[keyring.activeKeyId];
+  if (!fallbackKeyHex) {
+    throw new Error('Invalid runtime config keyring');
+  }
+  return decodeKeyHex(fallbackKeyHex);
 }
 
 export function encryptFeishuSecret(

@@ -177,6 +177,20 @@ export function hasHostExecutionPermission(user: AuthUser): boolean {
   return user.role === 'admin';
 }
 
+type GroupWithJid = RegisteredGroup & { jid: string };
+
+function isHomeGroup(group: GroupWithJid): boolean {
+  return group.is_home === true;
+}
+
+function isGroupOwner(group: GroupWithJid, userId: string): boolean {
+  return group.created_by === userId;
+}
+
+function hasGroupMembership(group: GroupWithJid, userId: string): boolean {
+  return getGroupMemberRole(group.folder, userId) !== null;
+}
+
 /**
  * Check if a user can access (view messages, send messages to) a group.
  * All users (including admin) follow the same visibility rules:
@@ -187,24 +201,11 @@ export function hasHostExecutionPermission(user: AuthUser): boolean {
  */
 export function canAccessGroup(
   user: { id: string; role: UserRole },
-  group: RegisteredGroup & { jid: string },
+  group: GroupWithJid,
 ): boolean {
-  if (group.is_home) return group.created_by === user.id;
-  // IM groups require canonical ownership metadata.
-  if (!group.jid.startsWith('web:')) {
-    if (group.created_by === user.id) return true;
-    // Check membership for IM groups sharing a non-home folder
-    if (getGroupMemberRole(group.folder, user.id) !== null) return true;
-    return false;
-  }
-  // folder === 'main': only accessible by the admin who owns it (via created_by or group_members)
-  if (group.folder === 'main') {
-    if (group.created_by === user.id) return true;
-    return getGroupMemberRole(group.folder, user.id) !== null;
-  }
-  if (group.created_by === user.id) return true;
-  // Check group_members table for shared workspaces
-  return getGroupMemberRole(group.folder, user.id) !== null;
+  if (isHomeGroup(group)) return isGroupOwner(group, user.id);
+  if (isGroupOwner(group, user.id)) return true;
+  return hasGroupMembership(group, user.id);
 }
 
 /**
@@ -215,11 +216,9 @@ export function canAccessGroup(
  */
 export function canModifyGroup(
   user: { id: string; role: UserRole },
-  group: RegisteredGroup & { jid: string },
+  group: GroupWithJid,
 ): boolean {
-  if (group.is_home) return group.created_by === user.id;
-  if (!group.jid.startsWith('web:')) return group.created_by === user.id;
-  return group.created_by === user.id;
+  return isGroupOwner(group, user.id);
 }
 
 /**
@@ -229,10 +228,9 @@ export function canModifyGroup(
  */
 export function canManageGroupMembers(
   user: { id: string; role: UserRole },
-  group: RegisteredGroup & { jid: string },
+  group: GroupWithJid,
 ): boolean {
-  if (group.is_home) return false;
-  return group.created_by === user.id;
+  return !isHomeGroup(group) && isGroupOwner(group, user.id);
 }
 
 /**
@@ -241,8 +239,7 @@ export function canManageGroupMembers(
  */
 export function canDeleteGroup(
   user: { id: string; role: UserRole },
-  group: RegisteredGroup & { jid: string },
+  group: GroupWithJid,
 ): boolean {
-  if (group.is_home) return false;
-  return canModifyGroup(user, group);
+  return !isHomeGroup(group) && isGroupOwner(group, user.id);
 }

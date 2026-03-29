@@ -8,7 +8,7 @@ const repoRoot = '/Users/jtsang/Documents/workspace/github/jtsang4/happypaw';
 
 const feishu = await import(
   pathToFileURL(
-    path.join(repoRoot, 'dist', 'features', 'im', 'feishu', 'index.js'),
+    path.join(repoRoot, 'dist', 'features', 'im', 'channels', 'feishu', 'index.js'),
   ).href
 );
 const streaming = await import(

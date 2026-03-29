@@ -23,11 +23,11 @@ import {
   registerStreamingSession,
   type StreamingCardController,
   unregisterStreamingSession,
-} from '../im/feishu/streaming-card/index.js';
+} from '../im/channels/feishu/streaming-card/index.js';
 import { getChannelType, extractChatId } from '../im/im-channel.js';
 import { imManager } from '../im/im-manager.js';
 import { logger } from '../../logger.js';
-import { normalizeImageAttachments } from '../im/message-attachments.js';
+import { normalizeImageAttachments } from '../im/messaging/attachments.js';
 import {
   buildInterruptedReply,
   buildOverflowPartialReply,

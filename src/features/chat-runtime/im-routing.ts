@@ -21,9 +21,9 @@ import { imManager } from '../im/im-manager.js';
 import { logger } from '../../logger.js';
 import type { GroupQueue } from './group-queue.js';
 import type { MessageCursor, RegisteredGroup } from '../../types.js';
-import { getStreamingSession } from '../im/feishu/streaming-card/index.js';
+import { getStreamingSession } from '../im/channels/feishu/streaming-card/index.js';
 import type { ConnectFeishuOptions } from '../im/im-manager.js';
-import { verifyPairingCode } from '../im/telegram-pairing.js';
+import { verifyPairingCode } from '../im/channels/telegram/pairing.js';
 import {
   getActiveImReplyRouteSnapshotPath as getFolderImReplyRouteSnapshotPath,
   persistActiveImReplyRouteSnapshot,

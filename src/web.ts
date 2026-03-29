@@ -94,7 +94,7 @@ import { executeSessionReset } from './features/chat-runtime/commands.js';
 import {
   normalizeImageAttachments,
   toAgentImages,
-} from './features/im/message-attachments.js';
+} from './features/im/messaging/attachments.js';
 
 // --- App Setup ---
 

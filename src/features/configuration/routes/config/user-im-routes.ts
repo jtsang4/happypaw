@@ -317,7 +317,7 @@ export function registerUserImRoutes(configRoutes: ConfigRoutesApp): void {
 
       try {
         const { generatePairingCode } =
-          await import('../../../im/telegram-pairing.js');
+          await import('../../../im/channels/telegram/pairing.js');
         const result = generatePairingCode(user.id);
         return c.json(result);
       } catch (err) {
@@ -567,7 +567,7 @@ export function registerUserImRoutes(configRoutes: ConfigRoutesApp): void {
 
     try {
       const { generatePairingCode } =
-        await import('../../../im/telegram-pairing.js');
+        await import('../../../im/channels/telegram/pairing.js');
       const result = generatePairingCode(user.id);
       return c.json(result);
     } catch (err) {

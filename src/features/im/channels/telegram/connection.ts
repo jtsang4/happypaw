@@ -8,16 +8,16 @@ import {
   storeChatMetadata,
   storeMessageDirect,
   updateChatName,
-} from '../../db.js';
-import { notifyNewImMessage } from './message-notifier.js';
-import { broadcastNewMessage } from '../../web.js';
-import { logger } from '../../logger.js';
+} from '../../../../db.js';
+import { notifyNewImMessage } from '../../messaging/notifier.js';
+import { broadcastNewMessage } from '../../../../web.js';
+import { logger } from '../../../../logger.js';
 import {
   saveDownloadedFile,
   MAX_FILE_SIZE,
   FileTooLargeError,
-} from './im-downloader.js';
-import { detectImageMimeType } from '../../image-detector.js';
+} from '../../messaging/downloader.js';
+import { detectImageMimeType } from '../../../../image-detector.js';
 // ─── TelegramConnection Interface ──────────────────────────────
 
 export interface TelegramConnectionConfig {
@@ -1203,66 +1203,4 @@ export function createTelegramConnection(
   };
 
   return connection;
-}
-
-// ─── Backward-compatible global singleton ──────────────────────
-// @deprecated — 旧的顶层导出函数，内部使用一个默认全局实例。
-// 后续由 imManager 替代。
-
-let _defaultInstance: TelegramConnection | null = null;
-
-/**
- * @deprecated Use createTelegramConnection() factory instead. Will be replaced by imManager.
- */
-export async function connectTelegram(
-  opts: TelegramConnectOpts,
-): Promise<void> {
-  const { getTelegramProviderConfig } = await import('../../runtime-config.js');
-  const config = getTelegramProviderConfig();
-  if (!config.botToken) {
-    logger.info('Telegram bot token not configured, skipping');
-    return;
-  }
-
-  _defaultInstance = createTelegramConnection({
-    botToken: config.botToken,
-    proxyUrl: config.proxyUrl,
-  });
-
-  return _defaultInstance.connect(opts);
-}
-
-/**
- * @deprecated Use TelegramConnection.sendMessage() instead.
- */
-export async function sendTelegramMessage(
-  chatId: string,
-  text: string,
-  localImagePaths?: string[],
-): Promise<void> {
-  if (!_defaultInstance) {
-    logger.warn(
-      { chatId },
-      'Telegram bot not initialized, skip sending message',
-    );
-    return;
-  }
-  return _defaultInstance.sendMessage(chatId, text, localImagePaths);
-}
-
-/**
- * @deprecated Use TelegramConnection.disconnect() instead.
- */
-export async function disconnectTelegram(): Promise<void> {
-  if (_defaultInstance) {
-    await _defaultInstance.disconnect();
-    _defaultInstance = null;
-  }
-}
-
-/**
- * @deprecated Use TelegramConnection.isConnected() instead.
- */
-export function isTelegramConnected(): boolean {
-  return _defaultInstance?.isConnected() ?? false;
 }

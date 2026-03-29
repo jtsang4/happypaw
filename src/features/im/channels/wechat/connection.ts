@@ -16,13 +16,16 @@ import {
   storeChatMetadata,
   storeMessageDirect,
   updateChatName,
-} from '../../db.js';
-import { notifyNewImMessage } from './message-notifier.js';
-import { broadcastNewMessage } from '../../web.js';
-import { logger } from '../../logger.js';
-import { saveDownloadedFile, MAX_FILE_SIZE } from './im-downloader.js';
-import { detectImageMimeType } from '../../image-detector.js';
-import { downloadAndDecryptMedia } from './wechat-crypto.js';
+} from '../../../../db.js';
+import { notifyNewImMessage } from '../../messaging/notifier.js';
+import { broadcastNewMessage } from '../../../../web.js';
+import { logger } from '../../../../logger.js';
+import {
+  saveDownloadedFile,
+  MAX_FILE_SIZE,
+} from '../../messaging/downloader.js';
+import { detectImageMimeType } from '../../../../image-detector.js';
+import { downloadAndDecryptMedia } from './crypto.js';
 
 // ─── Constants ──────────────────────────────────────────────────
 

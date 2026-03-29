@@ -31,8 +31,8 @@ import {
   registerMessageIdMapping,
   registerStreamingSession,
   unregisterStreamingSession,
-} from '../im/feishu/streaming-card/index.js';
-import type { StreamingCardController } from '../im/feishu/streaming-card/index.js';
+} from '../im/channels/feishu/streaming-card/index.js';
+import type { StreamingCardController } from '../im/channels/feishu/streaming-card/index.js';
 import type { GroupQueue } from './group-queue.js';
 import { feedStreamEventToCard } from './main-conversation-runtime.js';
 import {

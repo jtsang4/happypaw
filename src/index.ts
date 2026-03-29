@@ -6,7 +6,7 @@ import {
   POLL_INTERVAL,
   TIMEZONE,
 } from './config.js';
-import { interruptibleSleep } from './features/im/message-notifier.js';
+import { interruptibleSleep } from './features/im/messaging/notifier.js';
 import {
   runContainerAgent,
   runHostAgent,
@@ -49,14 +49,14 @@ import {
   hasActiveStreamingSession,
   abortAllStreamingSessions,
   getStreamingSession,
-} from './features/im/feishu/streaming-card/index.js';
+} from './features/im/channels/feishu/streaming-card/index.js';
 import {
   formatContextMessages,
   formatWorkspaceList,
   formatSystemStatus,
   resolveLocationInfo,
   type WorkspaceInfo,
-} from './features/im/im-command-utils.js';
+} from './features/im/commands/im-command-utils.js';
 import { getSystemSettings } from './runtime-config.js';
 import { GroupQueue } from './features/chat-runtime/group-queue.js';
 import {

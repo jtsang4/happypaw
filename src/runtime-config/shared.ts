@@ -21,7 +21,10 @@ export const SYSTEM_SETTINGS_FILE = path.join(
   CONFIG_DIR,
   'system-settings.json',
 );
-export const CONFIG_KEY_FILE = path.join(CONFIG_DIR, 'runtime-config.key');
+export const CONFIG_KEYRING_FILE = path.join(
+  CONFIG_DIR,
+  'runtime-config.keys.json',
+);
 export const USER_IM_CONFIG_DIR = path.join(DATA_DIR, 'config', 'user-im');
 export const CONTAINER_ENV_DIR = path.join(DATA_DIR, 'config', 'container-env');
 

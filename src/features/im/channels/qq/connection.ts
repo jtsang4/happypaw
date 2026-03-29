@@ -17,12 +17,15 @@ import {
   storeChatMetadata,
   storeMessageDirect,
   updateChatName,
-} from '../../db.js';
-import { notifyNewImMessage } from './message-notifier.js';
-import { broadcastNewMessage } from '../../web.js';
-import { logger } from '../../logger.js';
-import { saveDownloadedFile, MAX_FILE_SIZE } from './im-downloader.js';
-import { detectImageMimeType } from '../../image-detector.js';
+} from '../../../../db.js';
+import { notifyNewImMessage } from '../../messaging/notifier.js';
+import { broadcastNewMessage } from '../../../../web.js';
+import { logger } from '../../../../logger.js';
+import {
+  saveDownloadedFile,
+  MAX_FILE_SIZE,
+} from '../../messaging/downloader.js';
+import { detectImageMimeType } from '../../../../image-detector.js';
 // ─── Constants ──────────────────────────────────────────────────
 
 const QQ_TOKEN_URL = 'https://bots.qq.com/app/getAppAccessToken';
