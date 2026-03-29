@@ -23,17 +23,11 @@ const codexConfigModule = await import(
 const dbModule = await import(path.join(repoRoot, 'dist', 'db.js'));
 
 const {
-  getLegacyProviderConfig,
   getCodexProviderConfig,
-  buildLegacyEnvLines,
-  createProvider,
-  getEnabledProviders,
   buildContainerEnvLines,
   getContainerEnvConfig,
-  saveOfficialCustomEnv,
   saveContainerEnvConfig,
   shellQuoteEnvLines,
-  updateProvider,
 } = runtimeConfigModule;
 const {
   INTERNAL_MCP_BRIDGE_ID,
@@ -194,82 +188,15 @@ assert.ok(merged[INTERNAL_MCP_BRIDGE_ID]);
 assert.equal(merged[INTERNAL_MCP_BRIDGE_ID].command, 'node');
 assert.equal(merged[LEGACY_PRODUCT_ID], undefined);
 
-const legacyCodexExecutableEnv = toLegacyProductEnvToken(
+const compatCodexExecutableEnv = toLegacyProductEnvToken(
   HAPPYPAW_CODEX_EXECUTABLE_ENV,
 );
-const createdProvider = createProvider({
-  name: 'Pinned Provider',
-  type: 'third_party',
-  anthropicBaseUrl: 'https://provider.example.com',
-  anthropicAuthToken: 'provider-secret-token',
-  enabled: true,
-  customEnv: {
-    SAFE_PROVIDER_FLAG: '1',
-    [HAPPYPAW_CODEX_EXECUTABLE_ENV]: '/tmp/provider-rogue-codex',
-    [legacyCodexExecutableEnv]: '/tmp/provider-rogue-legacy-codex',
-  },
-});
-assert.deepEqual(createdProvider.customEnv, {
-  SAFE_PROVIDER_FLAG: '1',
-});
-const routeUpdatedProvider = updateProvider(getEnabledProviders()[0].id, {
-  customEnv: {
-    SAFE_PROVIDER_FLAG: '2',
-    EXTRA_SAFE_FLAG: 'yes',
-    [HAPPYPAW_CODEX_EXECUTABLE_ENV]: '/tmp/provider-route-rogue-codex',
-    [legacyCodexExecutableEnv]: '/tmp/provider-route-rogue-legacy-codex',
-  },
-});
-assert.deepEqual(routeUpdatedProvider.customEnv, {
-  SAFE_PROVIDER_FLAG: '2',
-  EXTRA_SAFE_FLAG: 'yes',
-});
-const activeProviderEnvLines = buildLegacyEnvLines(getLegacyProviderConfig());
-assert.ok(activeProviderEnvLines.includes('SAFE_PROVIDER_FLAG=2'));
-assert.ok(activeProviderEnvLines.includes('EXTRA_SAFE_FLAG=yes'));
-assert.ok(
-  !activeProviderEnvLines.some((line) =>
-    line.startsWith(`${HAPPYPAW_CODEX_EXECUTABLE_ENV}=`),
-  ),
-);
-assert.ok(
-  !activeProviderEnvLines.some((line) =>
-    line.startsWith(`${legacyCodexExecutableEnv}=`),
-  ),
-);
-const explicitProviderEnvLines = buildLegacyEnvLines(
-  getLegacyProviderConfig(),
-  {
-    SAFE_PROVIDER_FLAG: '3',
-    [HAPPYPAW_CODEX_EXECUTABLE_ENV]: '/tmp/direct-rogue-codex',
-    [legacyCodexExecutableEnv]: '/tmp/direct-rogue-legacy-codex',
-  },
-);
-assert.ok(explicitProviderEnvLines.includes('SAFE_PROVIDER_FLAG=3'));
-assert.ok(
-  !explicitProviderEnvLines.some((line) =>
-    line.startsWith(`${HAPPYPAW_CODEX_EXECUTABLE_ENV}=`),
-  ),
-);
-assert.ok(
-  !explicitProviderEnvLines.some((line) =>
-    line.startsWith(`${legacyCodexExecutableEnv}=`),
-  ),
-);
-const officialCustomEnv = saveOfficialCustomEnv({
-  SAFE_OFFICIAL_FLAG: '1',
-  [HAPPYPAW_CODEX_EXECUTABLE_ENV]: '/tmp/official-rogue-codex',
-  [legacyCodexExecutableEnv]: '/tmp/official-rogue-legacy-codex',
-});
-assert.deepEqual(officialCustomEnv, {
-  SAFE_OFFICIAL_FLAG: '1',
-});
 saveContainerEnvConfig('folder-env', {
   customEnv: {
     SAFE_FLAG: '1',
     OPENAI_BASE_URL: 'https://rogue.example/v1',
     [HAPPYPAW_CODEX_EXECUTABLE_ENV]: '/tmp/rogue-codex',
-    [legacyCodexExecutableEnv]: '/tmp/rogue-legacy-codex',
+    [compatCodexExecutableEnv]: '/tmp/rogue-legacy-codex',
   },
 });
 assert.deepEqual(getContainerEnvConfig('folder-env').customEnv, {
@@ -293,7 +220,7 @@ fs.writeFileSync(
         SAFE_FLAG: '1',
         OPENAI_BASE_URL: 'https://persisted-rogue.example/v1',
         [HAPPYPAW_CODEX_EXECUTABLE_ENV]: '/tmp/persisted-rogue-codex',
-        [legacyCodexExecutableEnv]: '/tmp/persisted-rogue-legacy-codex',
+        [compatCodexExecutableEnv]: '/tmp/persisted-rogue-legacy-codex',
       },
     },
     null,
@@ -305,11 +232,11 @@ assert.deepEqual(inheritedReservedEnv.customEnv, {
   SAFE_FLAG: '1',
 });
 const containerEnvLines = buildContainerEnvLines(
-  getLegacyProviderConfig(),
   inheritedReservedEnv,
-  undefined,
   providerConfig,
 );
+assert.ok(containerEnvLines.includes('OPENAI_API_KEY=test-openai-key'));
+assert.ok(containerEnvLines.includes('OPENAI_MODEL=gpt-5.1-codex'));
 assert.ok(containerEnvLines.includes('SAFE_FLAG=1'));
 assert.ok(
   !containerEnvLines.some((line) => line.startsWith('OPENAI_BASE_URL=')),
@@ -322,12 +249,12 @@ assert.ok(
 );
 assert.ok(
   !containerEnvLines.some((line) =>
-    line.startsWith(`${legacyCodexExecutableEnv}=`),
+    line.startsWith(`${compatCodexExecutableEnv}=`),
   ),
 );
 const quotedContainerEnv = shellQuoteEnvLines(containerEnvLines).join('\n');
 assert.ok(!quotedContainerEnv.includes(HAPPYPAW_CODEX_EXECUTABLE_ENV));
-assert.ok(!quotedContainerEnv.includes(legacyCodexExecutableEnv));
+assert.ok(!quotedContainerEnv.includes(compatCodexExecutableEnv));
 
 initDatabase();
 setSession('folder-a', 'thread-123');

@@ -18,7 +18,7 @@ const [
   { Hono },
   configRoutesModule,
   codexRoutesModule,
-  legacySystemRoutesModule,
+  systemRoutesModule,
   userImRoutesModule,
   userImWeChatBindingsRoutesModule,
   runtimeConfigModule,
@@ -33,7 +33,7 @@ const [
   import(path.join(repoRoot, 'dist', 'routes', 'config.js')),
   import(path.join(repoRoot, 'dist', 'routes', 'config', 'codex-routes.js')),
   import(
-    path.join(repoRoot, 'dist', 'routes', 'config', 'legacy-system-routes.js')
+    path.join(repoRoot, 'dist', 'routes', 'config', 'system-routes.js')
   ),
   import(path.join(repoRoot, 'dist', 'routes', 'config', 'user-im-routes.js')),
   import(
@@ -63,7 +63,7 @@ const groupRoutes = (
   await import(path.join(repoRoot, 'dist', 'routes', 'groups.js'))
 ).default;
 const { registerCodexRoutes } = codexRoutesModule;
-const { registerLegacyAndSystemRoutes } = legacySystemRoutesModule;
+const { registerSystemRoutes } = systemRoutesModule;
 const { registerUserImRoutes } = userImRoutesModule;
 const { registerUserImWeChatAndBindingRoutes } =
   userImWeChatBindingsRoutesModule;
@@ -110,7 +110,7 @@ const app = new Hono();
 app.use('*', authMiddleware);
 app.route('/api/groups', groupRoutes);
 registerCodexRoutes(app);
-registerLegacyAndSystemRoutes(app);
+registerSystemRoutes(app);
 registerUserImRoutes(app);
 registerUserImWeChatAndBindingRoutes(app);
 
@@ -159,15 +159,6 @@ assert.match(
 const routePaths = app.routes.map((route) => route.path);
 assert.ok(routePaths.includes('/codex'));
 assert.ok(routePaths.includes('/codex/secrets'));
-assert.ok(
-  !routePaths.includes('/claude'),
-  'contracted config routes should not register legacy /claude endpoint',
-);
-assert.ok(
-  !routePaths.some((route) => route.startsWith('/claude/')),
-  'contracted config routes should not register any /claude/* endpoints',
-);
-
 const codexResponse = await app.request('/codex', {
   headers: { Cookie: cookie },
 });
@@ -229,15 +220,6 @@ assert.equal(
   'blank openaiBaseUrl submissions should clear the stored runtime override',
 );
 
-const legacyResponse = await app.request('/claude', {
-  headers: { Cookie: cookie },
-});
-assert.equal(
-  legacyResponse.status,
-  404,
-  'legacy provider config endpoint should be absent from the composed config routes',
-);
-
 const tempWorkspaceFolder = 'env-contraction-workspace';
 const tempWorkspaceJid = 'web:env-contraction';
 dbSharedModule.db
@@ -284,42 +266,6 @@ const workspaceEnvResponse = await app.request(
 assert.equal(workspaceEnvResponse.status, 200);
 const workspaceEnvPayload = await workspaceEnvResponse.json();
 assert.deepEqual(workspaceEnvPayload, { customEnv: {} });
-for (const forbiddenKey of [
-  'anthropicBaseUrl',
-  'anthropicAuthTokenMasked',
-  'anthropicApiKeyMasked',
-  'claudeCodeOauthTokenMasked',
-  'hasAnthropicAuthToken',
-  'hasAnthropicApiKey',
-  'hasLegacyCodeOauthToken',
-  'anthropicModel',
-]) {
-  assert.ok(
-    !(forbiddenKey in workspaceEnvPayload),
-    `workspace env payload should not expose ${forbiddenKey}`,
-  );
-}
-
-const rejectedLegacyEnvResponse = await app.request(
-  `/api/groups/${encodeURIComponent(tempWorkspaceJid)}/env`,
-  {
-    method: 'PUT',
-    headers: {
-      Cookie: cookie,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      anthropicBaseUrl: 'https://legacy.example.com',
-      customEnv: { SAFE_FLAG: '1' },
-    }),
-  },
-);
-assert.equal(
-  rejectedLegacyEnvResponse.status,
-  400,
-  'workspace env route should reject legacy provider-shaped fields',
-);
-
 const updatedWorkspaceEnvResponse = await app.request(
   `/api/groups/${encodeURIComponent(tempWorkspaceJid)}/env`,
   {

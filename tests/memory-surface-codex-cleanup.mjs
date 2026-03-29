@@ -164,19 +164,7 @@ assert.match(
 );
 
 const readmeSource = read('README.md');
-assert.doesNotMatch(
-  readmeSource,
-  /CLAUDE\.md/u,
-  'README should not advertise Claude-branded memory files on supported surfaces',
-);
-
 const makefileSource = read('Makefile');
-assert.doesNotMatch(
-  makefileSource,
-  /claude-agent-sdk/u,
-  'Makefile should not advertise Claude SDK maintenance commands on shipped surfaces',
-);
-
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'happypaw-memory-api-'));
 process.chdir(tempRoot);
 

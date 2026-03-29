@@ -130,7 +130,7 @@ function makeFakeCodexScript(scriptPath, requestLogPath, options = {}) {
   const failResumeThreadId = options.failResumeThreadId ?? null;
   const internalBridgeStatusName =
     options.internalBridgeStatusName ?? 'happypaw';
-  const legacyMcpServerName = ['happy', 'claw'].join('');
+  const compatMcpServerName = ['happy', 'claw'].join('');
   const requiredBridgeTools = JSON.stringify([
     'cancel_task',
     'get_context',
@@ -179,7 +179,7 @@ function makeFakeCodexScript(scriptPath, requestLogPath, options = {}) {
 const fs = require('node:fs');
 const requestLogPath = ${JSON.stringify(requestLogPath)};
 const failResumeThreadId = ${JSON.stringify(failResumeThreadId)};
-const legacyMcpServerName = ${JSON.stringify(legacyMcpServerName)};
+const compatMcpServerName = ${JSON.stringify(compatMcpServerName)};
 const requiredBridgeTools = ${requiredBridgeTools};
 const mcpStatuses = ${mcpStatuses};
 const configWarnings = ${configWarnings};
@@ -391,7 +391,7 @@ process.stdin.on('data', (chunk) => {
             item: {
               type: 'mcpToolCall',
               id: 'item_mcp',
-              server: legacyMcpServerName,
+              server: compatMcpServerName,
               tool: 'send_message',
               arguments: { text: 'compatibility ping' }
             }
@@ -406,7 +406,7 @@ process.stdin.on('data', (chunk) => {
             item: {
               type: 'mcpToolCall',
               id: 'item_mcp',
-              server: legacyMcpServerName,
+              server: compatMcpServerName,
               tool: 'send_message',
               arguments: { text: 'compatibility ping' }
             }
@@ -650,7 +650,7 @@ async function runScenario(name, sessionId, options = {}) {
 }
 
 const fresh = await runScenario('fresh', undefined);
-const legacyMcpToolName = ['mcp', ['happy', 'claw'].join(''), 'send_message'].join(
+const compatMcpToolName = ['mcp', ['happy', 'claw'].join(''), 'send_message'].join(
   '__',
 );
 assert.deepEqual(fresh.requestOrder.slice(0, 4), [
@@ -819,7 +819,7 @@ assert.ok(
     (entry) =>
       entry.status === 'stream' &&
       entry.streamEvent?.eventType === 'tool_use_start' &&
-      entry.streamEvent?.toolName === legacyMcpToolName &&
+      entry.streamEvent?.toolName === compatMcpToolName &&
       entry.streamEvent?.toolUseId === 'item_mcp',
   ),
   'legacy MCP server names still map to the compatibility tool-use name',

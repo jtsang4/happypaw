@@ -21,7 +21,7 @@ import {
   normalizeSecret,
   normalizeTelegramProxyUrl,
   CODEX_CONFIG_FILE,
-  CLAUDE_CONFIG_DIR,
+  CONFIG_DIR,
 } from './shared.js';
 import {
   readStoredFeishuConfig,
@@ -161,7 +161,7 @@ function writeStoredCodexConfig(config: CodexProviderConfig): void {
     secret: encryptCodexSecret({ openaiApiKey: config.openaiApiKey }),
   };
 
-  fs.mkdirSync(CLAUDE_CONFIG_DIR, { recursive: true });
+  fs.mkdirSync(CONFIG_DIR, { recursive: true });
   const tmp = `${CODEX_CONFIG_FILE}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(payload, null, 2) + '\n', 'utf-8');
   fs.renameSync(tmp, CODEX_CONFIG_FILE);
@@ -215,8 +215,8 @@ export function saveFeishuProviderConfig(
     secret: encryptFeishuSecret({ appSecret: normalized.appSecret }),
   };
 
-  fs.mkdirSync(CLAUDE_CONFIG_DIR, { recursive: true });
-  const filePath = path.join(CLAUDE_CONFIG_DIR, 'feishu-provider.json');
+  fs.mkdirSync(CONFIG_DIR, { recursive: true });
+  const filePath = path.join(CONFIG_DIR, 'feishu-provider.json');
   const tmp = `${filePath}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(payload, null, 2) + '\n', 'utf-8');
   fs.renameSync(tmp, filePath);
@@ -285,8 +285,8 @@ export function saveTelegramProviderConfig(
     secret: encryptTelegramSecret({ botToken: normalized.botToken }),
   };
 
-  fs.mkdirSync(CLAUDE_CONFIG_DIR, { recursive: true });
-  const filePath = path.join(CLAUDE_CONFIG_DIR, 'telegram-provider.json');
+  fs.mkdirSync(CONFIG_DIR, { recursive: true });
+  const filePath = path.join(CONFIG_DIR, 'telegram-provider.json');
   const tmp = `${filePath}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(payload, null, 2) + '\n', 'utf-8');
   fs.renameSync(tmp, filePath);

@@ -826,9 +826,9 @@ groupRoutes.delete('/:jid', authMiddleware, async (c) => {
   }
   // Search by actual JID; also check legacy folder-based format for backward compat
   const mainBoundByJid = getGroupsByTargetMainJid(jid);
-  const legacyMainJid = `web:${existing.folder}`;
+  const folderMainJid = `web:${existing.folder}`;
   const mainBoundByFolder =
-    legacyMainJid !== jid ? getGroupsByTargetMainJid(legacyMainJid) : [];
+    folderMainJid !== jid ? getGroupsByTargetMainJid(folderMainJid) : [];
   const mainBoundJids = new Set(mainBoundByJid.map((l) => l.jid));
   const mainBound = [
     ...mainBoundByJid,

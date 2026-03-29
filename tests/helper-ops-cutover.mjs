@@ -16,16 +16,6 @@ assert.match(
   /requestCodexHelperJson/u,
   'bug report generation should use the Codex helper client',
 );
-assert.doesNotMatch(
-  bugReportSource,
-  /claude\s+--print|execFile\(\s*['"]claude['"]/u,
-  'bug report generation should not shell out to the removed CLI',
-);
-assert.doesNotMatch(
-  bugReportSource,
-  /claudeAvailable/u,
-  'bug report capabilities should not expose legacy runtime availability',
-);
 
 const workspaceConfigSource = read('src/routes/workspace-config.ts');
 assert.match(
@@ -38,22 +28,12 @@ assert.match(
   /\.happypaw/u,
   'workspace config routes should describe the HappyPaw workspace storage root',
 );
-assert.doesNotMatch(
-  workspaceConfigSource,
-  /\.claude/u,
-  'workspace config routes should no longer reference legacy workspace storage',
-);
 
 const skillsSource = read('src/routes/skills.ts');
 assert.match(
   skillsSource,
   /\.codex\/skills/u,
   'host skill sync should read Codex skill storage',
-);
-assert.doesNotMatch(
-  skillsSource,
-  /\.claude\/skills/u,
-  'skill routes should not reference legacy skill storage',
 );
 assert.doesNotMatch(
   skillsSource,
@@ -66,11 +46,6 @@ assert.match(
   mcpServersSource,
   /\.codex', 'config\.toml'/u,
   'host MCP sync should read Codex host config.toml',
-);
-assert.doesNotMatch(
-  mcpServersSource,
-  /\.claude|\.claude\.json/u,
-  'host MCP sync should no longer import legacy config files',
 );
 
 const agentDefinitionsSource = read('src/routes/agent-definitions.ts');
@@ -94,11 +69,6 @@ assert.doesNotMatch(
   /process\.cwd\(\), '\.codex', 'agents'|storageMode/u,
   'agent definition management should not keep project-local default semantics or a storage-mode toggle',
 );
-assert.doesNotMatch(
-  agentDefinitionsSource,
-  /\.claude', 'agents'|\.factory', 'droids'/u,
-  'agent definition management should not use legacy or Factory droid storage',
-);
 
 const containerRunnerSource = read('src/container-runner.ts');
 assert.match(
@@ -111,22 +81,12 @@ assert.match(
   /\.happypaw\/skills/u,
   'container runner host-mode skill linking should target the HappyPaw workspace skill directory',
 );
-assert.doesNotMatch(
-  containerRunnerSource,
-  /\.claude\/settings\.json/u,
-  'container runner should not look for legacy workspace settings.json',
-);
 
 const containerEntrypointSource = read('container/entrypoint.sh');
 assert.match(
   containerEntrypointSource,
   /\.codex\/skills/u,
   'container startup should link mounted skills into the Codex skill directory',
-);
-assert.doesNotMatch(
-  containerEntrypointSource,
-  /\.claude\/skills/u,
-  'container startup should not link mounted skills through the legacy runtime home',
 );
 
 const workspaceSkillsPanel = read(

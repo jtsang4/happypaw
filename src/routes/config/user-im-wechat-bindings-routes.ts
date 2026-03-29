@@ -411,12 +411,12 @@ export function registerUserImWeChatAndBindingRoutes(
       const force = body.force === true;
       const replyPolicy =
         body.reply_policy === 'mirror' ? 'mirror' : 'source_only';
-      const legacyMainJid = `web:${targetGroup.folder}`;
+      const folderMainJid = `web:${targetGroup.folder}`;
       const hasConflict =
         !!imGroup.target_agent_id ||
         (imGroup.target_main_jid &&
           imGroup.target_main_jid !== targetMainJid &&
-          imGroup.target_main_jid !== legacyMainJid);
+          imGroup.target_main_jid !== folderMainJid);
       if (hasConflict && !force) {
         return c.json({ error: 'IM group is already bound elsewhere' }, 409);
       }

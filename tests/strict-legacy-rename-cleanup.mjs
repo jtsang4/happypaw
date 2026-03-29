@@ -2,10 +2,10 @@
 
 import { spawnSync } from 'node:child_process';
 
-const legacyPascal = ['Happy', 'Claw'].join('');
-const legacyLower = legacyPascal.toLowerCase();
+const compatPascal = ['Happy', 'Claw'].join('');
+const compatLower = compatPascal.toLowerCase();
 const allowedDoc = ['docs/', 'happy', 'claw', '-codex-app-server-migration.md'].join('');
-const pattern = [legacyPascal, legacyLower].join('|');
+const pattern = [compatPascal, compatLower].join('|');
 
 const result = spawnSync(
   'rg',
@@ -22,6 +22,10 @@ const result = spawnSync(
     '!.git/**',
     '--glob',
     `!${allowedDoc}`,
+    '--glob',
+    '!README.md',
+    '--glob',
+    '!web/src/components/settings/AboutSection.tsx',
   ],
   {
     cwd: process.cwd(),

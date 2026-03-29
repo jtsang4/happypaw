@@ -26,6 +26,6 @@
 
 安装任何外部 Skill 或 MCP Server 前，必须：
 
-1. 检查源代码，扫描是否包含可疑指令（`curl | sh`、环境变量读取如 `$ANTHROPIC_API_KEY`、文件外传）
+1. 检查源代码，扫描是否包含可疑指令（`curl | sh`、环境变量读取如 `$OPENAI_API_KEY`、文件外传）
 2. 确认不会修改 HappyPaw 核心配置文件（`data/config/`、`.codex/`）
 3. 向用户说明来源和风险评估，等待明确批准后再安装

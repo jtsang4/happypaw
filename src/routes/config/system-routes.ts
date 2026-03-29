@@ -11,7 +11,6 @@ import {
   TelegramConfigSchema,
 } from '../../schemas.js';
 import {
-  appendLegacyConfigAudit,
   getAppearanceConfig,
   getFeishuProviderConfig,
   getFeishuProviderConfigWithSource,
@@ -27,13 +26,11 @@ import {
   toPublicFeishuProviderConfig,
   toPublicTelegramProviderConfig,
 } from '../../runtime-config.js';
-import type { AuthUser } from '../../types.js';
 import { clearBillingEnabledCache } from '../../billing.js';
 import {
   createTelegramApiAgent,
   destroyTelegramApiAgent,
   getConfigDeps,
-  logDeprecationOnce,
   type ConfigRoutesApp,
 } from './shared.js';
 
@@ -42,14 +39,8 @@ function toPublicSystemSettings() {
   return rest;
 }
 
-export function registerLegacyAndSystemRoutes(
-  configRoutes: ConfigRoutesApp,
-): void {
+export function registerSystemRoutes(configRoutes: ConfigRoutesApp): void {
   configRoutes.get('/feishu', authMiddleware, systemConfigMiddleware, (c) => {
-    logDeprecationOnce(
-      'GET /api/config/feishu',
-      'GET /api/config/user-im/feishu',
-    );
     try {
       const { config, source } = getFeishuProviderConfigWithSource();
       const pub = toPublicFeishuProviderConfig(config, source);
@@ -120,10 +111,6 @@ export function registerLegacyAndSystemRoutes(
   );
 
   configRoutes.get('/telegram', authMiddleware, systemConfigMiddleware, (c) => {
-    logDeprecationOnce(
-      'GET /api/config/telegram',
-      'GET /api/config/user-im/telegram',
-    );
     try {
       const { config, source } = getTelegramProviderConfigWithSource();
       const pub = toPublicTelegramProviderConfig(config, source);
@@ -285,12 +272,7 @@ export function registerLegacyAndSystemRoutes(
       }
 
       try {
-        const actor = (c.get('user') as AuthUser).username;
         const saved = saveRegistrationConfig(validation.data);
-        appendLegacyConfigAudit(actor, 'update_registration_config', [
-          'allowRegistration',
-          'requireInviteCode',
-        ]);
         return c.json(saved);
       } catch (err) {
         const message =

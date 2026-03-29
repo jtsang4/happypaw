@@ -79,7 +79,7 @@ export function AboutSection() {
               <ExternalLink className="w-3 h-3" />
             </a>
             <p className="mt-1 leading-relaxed">
-              HappyClaw 是基于 Claude Agent SDK 开发的个人 AI 助手，本项目在 HappyClaw 的基础上，将底层运行时完全改为 Codex，并进行分化。
+              HappyClaw 是一个较早的个人 AI 助手项目，本项目在 HappyClaw 的基础上，将底层运行时完全改为 Codex，并进行分化。
             </p>
           </div>
           <div>

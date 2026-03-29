@@ -580,7 +580,7 @@ router.put('/:jid/im-binding', authMiddleware, async (c) => {
     return c.json({ error: 'Forbidden' }, 403);
   }
   const targetMainJid = jid; // Use actual registered JID (not folder-based)
-  const legacyMainJid = `web:${group.folder}`;
+  const folderMainJid = `web:${group.folder}`;
   const force = body.force === true;
   // Only update reply_policy if explicitly provided; otherwise preserve existing value
   const replyPolicy =
@@ -593,7 +593,7 @@ router.put('/:jid/im-binding', authMiddleware, async (c) => {
     !!imGroup.target_agent_id ||
     (imGroup.target_main_jid &&
       imGroup.target_main_jid !== targetMainJid &&
-      imGroup.target_main_jid !== legacyMainJid);
+      imGroup.target_main_jid !== folderMainJid);
   if (hasConflict && !force) {
     return c.json({ error: 'IM group is already bound elsewhere' }, 409);
   }
@@ -660,10 +660,10 @@ router.delete('/:jid/im-binding/:imJid', authMiddleware, async (c) => {
     return c.json({ error: 'Forbidden' }, 403);
   }
   const targetMainJid = jid; // Use actual registered JID (not folder-based)
-  const legacyMainJid = `web:${group.folder}`;
+  const folderMainJid = `web:${group.folder}`;
   if (
     imGroup.target_main_jid !== targetMainJid &&
-    imGroup.target_main_jid !== legacyMainJid
+    imGroup.target_main_jid !== folderMainJid
   ) {
     return c.json({ error: 'IM group is not bound to this workspace' }, 400);
   }

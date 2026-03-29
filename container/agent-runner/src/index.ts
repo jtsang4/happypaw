@@ -41,8 +41,6 @@ const IPC_INPUT_CLOSE_SENTINEL = path.join(IPC_INPUT_DIR, '_close');
 const IPC_INPUT_DRAIN_SENTINEL = path.join(IPC_INPUT_DIR, '_drain');
 const IPC_INPUT_INTERRUPT_SENTINEL = path.join(IPC_INPUT_DIR, '_interrupt');
 const IPC_FALLBACK_POLL_MS = 5000;
-const GLOBAL_CLAUDE_MD_MAX_CHARS = 8000;
-
 const SECURITY_RULES_PATH = path.join(
   path.dirname(new URL(import.meta.url).pathname),
   '..',

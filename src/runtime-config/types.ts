@@ -1,60 +1,5 @@
 import type { RuntimeType } from '../types.js';
 
-export type LegacyProviderMode = 'official' | 'third_party';
-
-export interface LegacyOAuthCredentials {
-  accessToken: string;
-  refreshToken: string;
-  expiresAt: number;
-  scopes: string[];
-}
-
-export interface LegacyProviderConfig {
-  anthropicBaseUrl: string;
-  anthropicAuthToken: string;
-  anthropicApiKey: string;
-  claudeCodeOauthToken: string;
-  claudeOAuthCredentials: LegacyOAuthCredentials | null;
-  anthropicModel: string;
-  updatedAt: string | null;
-}
-
-export interface LegacyProviderPublicConfig {
-  anthropicBaseUrl: string;
-  anthropicModel: string;
-  updatedAt: string | null;
-  hasAnthropicAuthToken: boolean;
-  hasAnthropicApiKey: boolean;
-  hasLegacyCodeOauthToken: boolean;
-  anthropicAuthTokenMasked: string | null;
-  anthropicApiKeyMasked: string | null;
-  claudeCodeOauthTokenMasked: string | null;
-  hasLegacyOAuthCredentials: boolean;
-  claudeOAuthCredentialsExpiresAt: number | null;
-  claudeOAuthCredentialsAccessTokenMasked: string | null;
-}
-
-export interface LegacyThirdPartyProfile {
-  id: string;
-  name: string;
-  anthropicBaseUrl: string;
-  anthropicAuthToken: string;
-  anthropicModel: string;
-  updatedAt: string | null;
-  customEnv: Record<string, string>;
-}
-
-export interface LegacyThirdPartyProfilePublic {
-  id: string;
-  name: string;
-  anthropicBaseUrl: string;
-  anthropicModel: string;
-  updatedAt: string | null;
-  hasAnthropicAuthToken: boolean;
-  anthropicAuthTokenMasked: string | null;
-  customEnv: Record<string, string>;
-}
-
 export interface FeishuProviderConfig {
   appId: string;
   appSecret: string;
@@ -108,49 +53,6 @@ export interface CodexProviderPublicConfig {
   hasOpenaiApiKey: boolean;
   openaiApiKeyMasked: string | null;
   source: CodexConfigSource;
-}
-
-export interface BalancingConfig {
-  strategy: 'round-robin' | 'weighted-round-robin' | 'failover';
-  unhealthyThreshold: number;
-  recoveryIntervalMs: number;
-}
-
-export interface UnifiedProvider {
-  id: string;
-  name: string;
-  type: 'official' | 'third_party';
-  enabled: boolean;
-  weight: number;
-  anthropicBaseUrl: string;
-  anthropicAuthToken: string;
-  anthropicModel: string;
-  anthropicApiKey: string;
-  claudeCodeOauthToken: string;
-  claudeOAuthCredentials: LegacyOAuthCredentials | null;
-  customEnv: Record<string, string>;
-  updatedAt: string;
-}
-
-export interface UnifiedProviderPublic {
-  id: string;
-  name: string;
-  type: 'official' | 'third_party';
-  enabled: boolean;
-  weight: number;
-  anthropicBaseUrl: string;
-  anthropicModel: string;
-  hasAnthropicAuthToken: boolean;
-  anthropicAuthTokenMasked: string | null;
-  hasAnthropicApiKey: boolean;
-  anthropicApiKeyMasked: string | null;
-  hasLegacyCodeOauthToken: boolean;
-  claudeCodeOauthTokenMasked: string | null;
-  hasLegacyOAuthCredentials: boolean;
-  claudeOAuthCredentialsExpiresAt: number | null;
-  claudeOAuthCredentialsAccessTokenMasked: string | null;
-  customEnv: Record<string, string>;
-  updatedAt: string;
 }
 
 export interface ContainerEnvConfig {
@@ -224,13 +126,6 @@ export interface SystemSettings {
   billingMinStartBalanceUsd: number;
   billingCurrency: string;
   billingCurrencyRate: number;
-}
-
-export interface SecretPayload {
-  anthropicAuthToken: string;
-  anthropicApiKey: string;
-  claudeCodeOauthToken: string;
-  claudeOAuthCredentials?: LegacyOAuthCredentials | null;
 }
 
 export interface EncryptedSecrets {

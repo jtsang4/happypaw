@@ -15,22 +15,22 @@ const workspaceRoutePath = path.join(
   'routes',
   'workspace-config.ts',
 );
-const legacyProductPath = path.join(repoRoot, 'src', 'legacy-product.ts');
+const compatProductPath = path.join(repoRoot, 'src', 'legacy-product.ts');
 
-const [userRouteSource, workspaceRouteSource, legacyProductSource] =
+const [userRouteSource, workspaceRouteSource, compatProductSource] =
   await Promise.all([
     readFile(userRoutePath, 'utf8'),
     readFile(workspaceRoutePath, 'utf8'),
-    readFile(legacyProductPath, 'utf8'),
+    readFile(compatProductPath, 'utf8'),
   ]);
 
 assert.match(
-  legacyProductSource,
+  compatProductSource,
   /export const INTERNAL_MCP_BRIDGE_ID = CURRENT_PRODUCT_ID;/,
   'legacy product module defines the reserved internal MCP bridge id',
 );
 assert.match(
-  legacyProductSource,
+  compatProductSource,
   /export function isReservedMcpServerId\(value: string\)/,
   'legacy product module exposes a shared reserved-id guard',
 );

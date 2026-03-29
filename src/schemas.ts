@@ -154,47 +154,6 @@ export const MemoryGlobalSchema = z.object({
   content: z.string(),
 });
 
-export const LegacyConfigSchema = z.object({
-  anthropicBaseUrl: z.string(),
-  anthropicModel: z.string().max(128).optional(),
-});
-
-export const LegacyThirdPartyProfileCreateSchema = z.object({
-  name: z.string().min(1).max(64),
-  anthropicBaseUrl: z.string().max(2000),
-  anthropicAuthToken: z.string().max(2000),
-  anthropicModel: z.string().max(128).optional(),
-  customEnv: z.record(z.string().max(256), z.string().max(4096)).optional(),
-});
-
-export const LegacyThirdPartyProfilePatchSchema = z
-  .object({
-    name: z.string().min(1).max(64).optional(),
-    anthropicBaseUrl: z.string().max(2000).optional(),
-    anthropicModel: z.string().max(128).optional(),
-    customEnv: z.record(z.string().max(256), z.string().max(4096)).optional(),
-  })
-  .refine(
-    (data) =>
-      typeof data.name === 'string' ||
-      typeof data.anthropicBaseUrl === 'string' ||
-      typeof data.anthropicModel === 'string' ||
-      data.customEnv !== undefined,
-    { message: 'At least one profile field must be provided' },
-  );
-
-export const LegacyThirdPartyProfileSecretsSchema = z
-  .object({
-    anthropicAuthToken: z.string().max(2000).optional(),
-    clearAnthropicAuthToken: z.boolean().optional(),
-  })
-  .refine(
-    (data) =>
-      typeof data.anthropicAuthToken === 'string' ||
-      data.clearAnthropicAuthToken === true,
-    { message: 'At least one secret field must be provided' },
-  );
-
 export const GroupPatchSchema = z.object({
   name: z.string().min(1).max(MAX_GROUP_NAME_LEN).optional(),
   is_pinned: z.boolean().optional(),
@@ -352,48 +311,6 @@ export const InviteCreateSchema = z.object({
   expires_in_hours: z.number().int().min(1).max(8760).optional(),
 });
 
-export const LegacyOAuthCredentialsSchema = z.object({
-  accessToken: z.string().min(1),
-  refreshToken: z.string().min(1),
-  expiresAt: z.number(),
-  scopes: z.array(z.string()).default([]),
-});
-
-export const LegacySecretsSchema = z
-  .object({
-    anthropicAuthToken: z.string().optional(),
-    clearAnthropicAuthToken: z.boolean().optional(),
-    anthropicApiKey: z.string().optional(),
-    clearAnthropicApiKey: z.boolean().optional(),
-    claudeCodeOauthToken: z.string().optional(),
-    clearLegacyCodeOauthToken: z.boolean().optional(),
-    claudeOAuthCredentials: LegacyOAuthCredentialsSchema.optional(),
-    clearLegacyOAuthCredentials: z.boolean().optional(),
-  })
-  .refine(
-    (data) => {
-      const hasAnthropicAuthToken =
-        typeof data.anthropicAuthToken === 'string' ||
-        data.clearAnthropicAuthToken === true;
-      const hasAnthropicApiKey =
-        typeof data.anthropicApiKey === 'string' ||
-        data.clearAnthropicApiKey === true;
-      const hasLegacyCodeOauthToken =
-        typeof data.claudeCodeOauthToken === 'string' ||
-        data.clearLegacyCodeOauthToken === true;
-      const hasLegacyOAuthCredentials =
-        data.claudeOAuthCredentials !== undefined ||
-        data.clearLegacyOAuthCredentials === true;
-      return (
-        hasAnthropicAuthToken ||
-        hasAnthropicApiKey ||
-        hasLegacyCodeOauthToken ||
-        hasLegacyOAuthCredentials
-      );
-    },
-    { message: 'At least one secret field must be provided' },
-  );
-
 export const FeishuConfigSchema = z
   .object({
     appId: z.string().max(2000).optional(),
@@ -444,7 +361,7 @@ export const QQConfigSchema = z
     { message: 'At least one config field must be provided' },
   );
 
-export const LegacyCustomEnvSchema = z.object({
+export const ContainerEnvPatchSchema = z.object({
   customEnv: z.record(z.string().max(256), z.string().max(4096)),
 });
 
@@ -625,89 +542,6 @@ export const BugReportGenerateSchema = z.object({
 export const BugReportSubmitSchema = z.object({
   title: z.string().min(1).max(256),
   body: z.string().min(1).max(65536),
-});
-
-// ─── 统一供应商 (V4) ────────────────────────────────────────
-
-export const UnifiedProviderCreateSchema = z
-  .object({
-    name: z.string().min(1).max(64),
-    type: z.enum(['official', 'third_party']),
-    anthropicBaseUrl: z.string().max(2000).optional(),
-    anthropicAuthToken: z.string().max(2000).optional(),
-    anthropicModel: z.string().max(128).optional(),
-    anthropicApiKey: z.string().max(2000).optional(),
-    claudeCodeOauthToken: z.string().max(2000).optional(),
-    claudeOAuthCredentials: LegacyOAuthCredentialsSchema.optional(),
-    customEnv: z.record(z.string().max(256), z.string().max(4096)).optional(),
-    weight: z.number().int().min(1).max(100).optional(),
-    enabled: z.boolean().optional(),
-  })
-  .superRefine((data, ctx) => {
-    if (
-      data.type === 'third_party' &&
-      !data.anthropicBaseUrl?.trim() &&
-      !data.anthropicAuthToken?.trim()
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['anthropicBaseUrl'],
-        message: '第三方供应商需要提供 Base URL 或 Auth Token',
-      });
-    }
-  });
-
-export const UnifiedProviderPatchSchema = z
-  .object({
-    name: z.string().min(1).max(64).optional(),
-    anthropicBaseUrl: z.string().max(2000).optional(),
-    anthropicModel: z.string().max(128).optional(),
-    customEnv: z.record(z.string().max(256), z.string().max(4096)).optional(),
-    weight: z.number().int().min(1).max(100).optional(),
-  })
-  .refine(
-    (data) =>
-      data.name !== undefined ||
-      data.anthropicBaseUrl !== undefined ||
-      data.anthropicModel !== undefined ||
-      data.customEnv !== undefined ||
-      data.weight !== undefined,
-    { message: 'At least one field must be provided' },
-  );
-
-export const UnifiedProviderSecretsSchema = z
-  .object({
-    anthropicAuthToken: z.string().max(2000).optional(),
-    clearAnthropicAuthToken: z.boolean().optional(),
-    anthropicApiKey: z.string().max(2000).optional(),
-    clearAnthropicApiKey: z.boolean().optional(),
-    claudeCodeOauthToken: z.string().max(2000).optional(),
-    clearLegacyCodeOauthToken: z.boolean().optional(),
-    claudeOAuthCredentials: LegacyOAuthCredentialsSchema.optional(),
-    clearLegacyOAuthCredentials: z.boolean().optional(),
-  })
-  .refine(
-    (data) => {
-      return (
-        typeof data.anthropicAuthToken === 'string' ||
-        data.clearAnthropicAuthToken === true ||
-        typeof data.anthropicApiKey === 'string' ||
-        data.clearAnthropicApiKey === true ||
-        typeof data.claudeCodeOauthToken === 'string' ||
-        data.clearLegacyCodeOauthToken === true ||
-        data.claudeOAuthCredentials !== undefined ||
-        data.clearLegacyOAuthCredentials === true
-      );
-    },
-    { message: 'At least one secret field must be provided' },
-  );
-
-export const BalancingConfigSchema = z.object({
-  strategy: z
-    .enum(['round-robin', 'weighted-round-robin', 'failover'])
-    .optional(),
-  unhealthyThreshold: z.number().int().min(1).max(20).optional(),
-  recoveryIntervalMs: z.number().int().min(30000).max(3600000).optional(),
 });
 
 export const WeChatConfigSchema = z.object({

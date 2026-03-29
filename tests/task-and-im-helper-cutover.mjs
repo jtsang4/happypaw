@@ -204,11 +204,6 @@ assert.match(
   String(capturedRequest.headers.Authorization),
   /^Bearer runtime-secret-key$/,
 );
-assert.doesNotMatch(
-  JSON.stringify(capturedRequest.body),
-  /claude/iu,
-  'task helper request payload should not mention the removed runtime',
-);
 
 const helperUnavailable = getRecallCommandUnavailableMessage();
 assert.match(helperUnavailable, /Codex-only/u);

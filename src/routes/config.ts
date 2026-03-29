@@ -4,7 +4,7 @@ import { Hono } from 'hono';
 
 import type { Variables } from '../web-context.js';
 import { registerCodexRoutes } from './config/codex-routes.js';
-import { registerLegacyAndSystemRoutes } from './config/legacy-system-routes.js';
+import { registerSystemRoutes } from './config/system-routes.js';
 import { injectConfigDeps } from './config/shared.js';
 import { registerUserImRoutes } from './config/user-im-routes.js';
 import { registerUserImWeChatAndBindingRoutes } from './config/user-im-wechat-bindings-routes.js';
@@ -12,7 +12,7 @@ import { registerUserImWeChatAndBindingRoutes } from './config/user-im-wechat-bi
 const configRoutes = new Hono<{ Variables: Variables }>();
 
 registerCodexRoutes(configRoutes);
-registerLegacyAndSystemRoutes(configRoutes);
+registerSystemRoutes(configRoutes);
 registerUserImRoutes(configRoutes);
 registerUserImWeChatAndBindingRoutes(configRoutes);
 

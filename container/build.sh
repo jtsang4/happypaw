@@ -31,7 +31,7 @@ echo "Building HappyPaw agent container image..."
 echo "Image: ${IMAGE_NAME}:${TAG}"
 echo "Pinned Codex: version=${CODEX_VERSION} release=${CODEX_RELEASE_TAG} path=${CODEX_EXECUTABLE_PATH}"
 
-# Build with Docker (CACHEBUST ensures claude-code is always latest)
+# Build with Docker (CACHEBUST ensures the pinned Codex binary layer stays fresh)
 # --progress=plain ensures clean line-based output for piped log capture (WebSocket streaming)
 docker build --progress=plain \
   --build-arg CACHEBUST="$(date +%s)" \

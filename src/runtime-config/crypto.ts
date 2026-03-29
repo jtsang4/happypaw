@@ -1,12 +1,9 @@
 import crypto from 'crypto';
 import fs from 'fs';
+import path from 'path';
 
-import {
-  CLAUDE_CONFIG_DIR,
-  CLAUDE_CONFIG_KEY_FILE,
-  normalizeSecret,
-} from './shared.js';
-import type { EncryptedSecrets, SecretPayload } from './types.js';
+import { CONFIG_DIR, CONFIG_KEY_FILE, normalizeSecret } from './shared.js';
+import type { EncryptedSecrets } from './types.js';
 
 interface FeishuSecretPayload {
   appSecret: string;
@@ -29,21 +26,45 @@ interface WeChatSecretPayload {
 }
 
 export function getOrCreateEncryptionKey(): Buffer {
-  fs.mkdirSync(CLAUDE_CONFIG_DIR, { recursive: true });
+  fs.mkdirSync(CONFIG_DIR, { recursive: true });
 
-  if (fs.existsSync(CLAUDE_CONFIG_KEY_FILE)) {
-    const raw = fs.readFileSync(CLAUDE_CONFIG_KEY_FILE, 'utf-8').trim();
+  const existingKeyPath = resolveExistingKeyPath();
+  if (existingKeyPath) {
+    const raw = fs.readFileSync(existingKeyPath, 'utf-8').trim();
     const key = Buffer.from(raw, 'hex');
     if (key.length === 32) return key;
     throw new Error('Invalid encryption key file');
   }
 
   const key = crypto.randomBytes(32);
-  fs.writeFileSync(CLAUDE_CONFIG_KEY_FILE, key.toString('hex') + '\n', {
+  fs.writeFileSync(CONFIG_KEY_FILE, key.toString('hex') + '\n', {
     encoding: 'utf-8',
     mode: 0o600,
   });
   return key;
+}
+
+function resolveExistingKeyPath(): string | null {
+  if (fs.existsSync(CONFIG_KEY_FILE)) {
+    return CONFIG_KEY_FILE;
+  }
+
+  const candidates = fs
+    .readdirSync(CONFIG_DIR, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.key'))
+    .map((entry) => path.join(CONFIG_DIR, entry.name));
+
+  if (candidates.length !== 1) {
+    return null;
+  }
+
+  const [migratedKeySourcePath] = candidates;
+  const raw = fs.readFileSync(migratedKeySourcePath, 'utf-8');
+  fs.writeFileSync(CONFIG_KEY_FILE, raw, {
+    encoding: 'utf-8',
+    mode: 0o600,
+  });
+  return CONFIG_KEY_FILE;
 }
 
 function encryptPayload(payload: unknown): EncryptedSecrets {
@@ -76,48 +97,6 @@ function decryptPayload(secrets: EncryptedSecrets): Record<string, unknown> {
       'utf-8',
     ),
   ) as Record<string, unknown>;
-}
-
-export function encryptSecrets(payload: SecretPayload): EncryptedSecrets {
-  return encryptPayload(payload);
-}
-
-export function decryptSecrets(secrets: EncryptedSecrets): SecretPayload {
-  const parsed = decryptPayload(secrets);
-  const result: SecretPayload = {
-    anthropicAuthToken: normalizeSecret(
-      parsed.anthropicAuthToken ?? '',
-      'anthropicAuthToken',
-    ),
-    anthropicApiKey: normalizeSecret(
-      parsed.anthropicApiKey ?? '',
-      'anthropicApiKey',
-    ),
-    claudeCodeOauthToken: normalizeSecret(
-      parsed.claudeCodeOauthToken ?? '',
-      'claudeCodeOauthToken',
-    ),
-  };
-
-  if (
-    parsed.claudeOAuthCredentials &&
-    typeof parsed.claudeOAuthCredentials === 'object'
-  ) {
-    const creds = parsed.claudeOAuthCredentials as Record<string, unknown>;
-    if (
-      typeof creds.accessToken === 'string' &&
-      typeof creds.refreshToken === 'string'
-    ) {
-      result.claudeOAuthCredentials = {
-        accessToken: creds.accessToken,
-        refreshToken: creds.refreshToken,
-        expiresAt: typeof creds.expiresAt === 'number' ? creds.expiresAt : 0,
-        scopes: Array.isArray(creds.scopes) ? (creds.scopes as string[]) : [],
-      };
-    }
-  }
-
-  return result;
 }
 
 export function encryptFeishuSecret(

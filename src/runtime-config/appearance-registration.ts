@@ -4,7 +4,7 @@ import { logger } from '../logger.js';
 import type { AppearanceConfig, RegistrationConfig } from './types.js';
 import {
   APPEARANCE_CONFIG_FILE,
-  CLAUDE_CONFIG_DIR,
+  CONFIG_DIR,
   DEFAULT_APPEARANCE_CONFIG,
   REGISTRATION_CONFIG_FILE,
 } from './shared.js';
@@ -51,7 +51,7 @@ export function saveRegistrationConfig(
     requireInviteCode: next.requireInviteCode,
     updatedAt: new Date().toISOString(),
   };
-  fs.mkdirSync(CLAUDE_CONFIG_DIR, { recursive: true });
+  fs.mkdirSync(CONFIG_DIR, { recursive: true });
   const tmp = `${REGISTRATION_CONFIG_FILE}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(config, null, 2) + '\n', 'utf-8');
   fs.renameSync(tmp, REGISTRATION_CONFIG_FILE);
@@ -105,7 +105,7 @@ export function saveAppearanceConfig(
     aiAvatarColor: next.aiAvatarColor,
     updatedAt: new Date().toISOString(),
   };
-  fs.mkdirSync(CLAUDE_CONFIG_DIR, { recursive: true });
+  fs.mkdirSync(CONFIG_DIR, { recursive: true });
   const tmp = `${APPEARANCE_CONFIG_FILE}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(config, null, 2) + '\n', 'utf-8');
   fs.renameSync(tmp, APPEARANCE_CONFIG_FILE);

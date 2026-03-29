@@ -312,18 +312,18 @@ html.theme-orange .floating-nav-item.active::before {
    Uses direct font-family overrides because @theme inline
    bakes values into utilities at build time.
    ===================================================== */
-html.font-anthropic body,
-html.font-anthropic input,
-html.font-anthropic textarea,
-html.font-anthropic button {
+html.font-serif-ui body,
+html.font-serif-ui input,
+html.font-serif-ui textarea,
+html.font-serif-ui button {
   font-family: 'DM Sans', system-ui, 'Segoe UI', Roboto, sans-serif;
 }
-html.font-anthropic .font-serif {
+html.font-serif-ui .font-serif {
   font-family: Georgia, 'Noto Serif SC', 'Times New Roman', serif;
 }
-html.font-anthropic code,
-html.font-anthropic pre,
-html.font-anthropic .font-mono {
+html.font-serif-ui code,
+html.font-serif-ui pre,
+html.font-serif-ui .font-mono {
   font-family: 'Söhne Mono', 'Fira Code', ui-monospace, monospace;
 }
 

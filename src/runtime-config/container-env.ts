@@ -4,7 +4,6 @@ import path from 'path';
 import { logger } from '../logger.js';
 import { getCodexProviderConfig } from './im-config.js';
 import type {
-  LegacyProviderConfig,
   CodexProviderConfig,
   ContainerEnvConfig,
   ContainerEnvPublicConfig,
@@ -15,7 +14,6 @@ import {
   ENV_KEY_RE,
   sanitizeEnvValue,
 } from './shared.js';
-import { buildLegacyEnvLines } from './claude-provider.js';
 
 function containerEnvPath(folder: string): string {
   if (folder.includes('..') || folder.includes('/')) {
@@ -98,29 +96,22 @@ export function toPublicContainerEnvConfig(
   };
 }
 
-export function mergeLegacyEnvConfig(
-  global: LegacyProviderConfig,
-  _override: ContainerEnvConfig,
-): LegacyProviderConfig {
-  return {
-    anthropicBaseUrl: global.anthropicBaseUrl,
-    anthropicAuthToken: global.anthropicAuthToken,
-    anthropicApiKey: global.anthropicApiKey,
-    claudeCodeOauthToken: global.claudeCodeOauthToken,
-    claudeOAuthCredentials: global.claudeOAuthCredentials,
-    anthropicModel: global.anthropicModel,
-    updatedAt: global.updatedAt,
-  };
+export function shellQuoteEnvLines(lines: string[]): string[] {
+  return lines.map((line) => {
+    const eqIdx = line.indexOf('=');
+    if (eqIdx <= 0) return line;
+    const key = line.slice(0, eqIdx);
+    const value = line.slice(eqIdx + 1);
+    const quoted = "'" + value.replace(/'/g, "'\\''") + "'";
+    return `${key}=${quoted}`;
+  });
 }
 
 export function buildContainerEnvLines(
-  global: LegacyProviderConfig,
   override: ContainerEnvConfig,
-  profileCustomEnv?: Record<string, string>,
   codexConfig?: CodexProviderConfig,
 ): string[] {
-  const merged = mergeLegacyEnvConfig(global, override);
-  const lines = buildLegacyEnvLines(merged, profileCustomEnv);
+  const lines: string[] = [];
 
   const effectiveCodexConfig = codexConfig ?? getCodexProviderConfig();
   if (effectiveCodexConfig.openaiApiKey) {

@@ -40,7 +40,6 @@ bun.lockb
 .factory/
 
 # Local tooling metadata
-.claude/
 .mcp.json
 /.omc/
 .trae/

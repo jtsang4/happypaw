@@ -1,4 +1,3 @@
-import crypto from 'crypto';
 import path from 'path';
 
 import { ASSISTANT_NAME, DATA_DIR } from '../config.js';
@@ -10,62 +9,27 @@ import {
 import type { RuntimeType } from '../types.js';
 
 const MAX_FIELD_LENGTH = 2000;
-export const CURRENT_CONFIG_VERSION = 3;
-export const DEFAULT_THIRD_PARTY_PROFILE_ID = 'default';
-export const DEFAULT_THIRD_PARTY_PROFILE_NAME = '默认第三方';
-export const OFFICIAL_CLAUDE_PROFILE_ID = '__official__';
-
-export const CLAUDE_CONFIG_DIR = path.join(DATA_DIR, 'config');
-export const CLAUDE_CONFIG_FILE = path.join(
-  CLAUDE_CONFIG_DIR,
-  'claude-provider.json',
-);
-export const CLAUDE_CONFIG_KEY_FILE = path.join(
-  CLAUDE_CONFIG_DIR,
-  'claude-provider.key',
-);
-export const CLAUDE_CONFIG_AUDIT_FILE = path.join(
-  CLAUDE_CONFIG_DIR,
-  'claude-provider.audit.log',
-);
-export const CLAUDE_CUSTOM_ENV_FILE = path.join(
-  CLAUDE_CONFIG_DIR,
-  'claude-custom-env.json',
-);
-export const FEISHU_CONFIG_FILE = path.join(
-  CLAUDE_CONFIG_DIR,
-  'feishu-provider.json',
-);
+export const CONFIG_DIR = path.join(DATA_DIR, 'config');
+export const FEISHU_CONFIG_FILE = path.join(CONFIG_DIR, 'feishu-provider.json');
 export const TELEGRAM_CONFIG_FILE = path.join(
-  CLAUDE_CONFIG_DIR,
+  CONFIG_DIR,
   'telegram-provider.json',
 );
-export const CODEX_CONFIG_FILE = path.join(
-  CLAUDE_CONFIG_DIR,
-  'codex-provider.json',
-);
+export const CODEX_CONFIG_FILE = path.join(CONFIG_DIR, 'codex-provider.json');
 export const REGISTRATION_CONFIG_FILE = path.join(
-  CLAUDE_CONFIG_DIR,
+  CONFIG_DIR,
   'registration.json',
 );
-export const APPEARANCE_CONFIG_FILE = path.join(
-  CLAUDE_CONFIG_DIR,
-  'appearance.json',
-);
+export const APPEARANCE_CONFIG_FILE = path.join(CONFIG_DIR, 'appearance.json');
 export const SYSTEM_SETTINGS_FILE = path.join(
-  CLAUDE_CONFIG_DIR,
+  CONFIG_DIR,
   'system-settings.json',
 );
+export const CONFIG_KEY_FILE = path.join(CONFIG_DIR, 'runtime-config.key');
 export const USER_IM_CONFIG_DIR = path.join(DATA_DIR, 'config', 'user-im');
 export const CONTAINER_ENV_DIR = path.join(DATA_DIR, 'config', 'container-env');
 
 export const ENV_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
-export const RESERVED_CLAUDE_ENV_KEYS = new Set([
-  'CLAUDE_CODE_OAUTH_TOKEN',
-  'ANTHROPIC_BASE_URL',
-  'ANTHROPIC_AUTH_TOKEN',
-  'ANTHROPIC_MODEL',
-]);
 export const RESERVED_INFRASTRUCTURE_ENV_VARS = new Set([
   'HAPPYPAW_WORKSPACE_GROUP',
   'HAPPYPAW_WORKSPACE_GLOBAL',
@@ -76,7 +40,6 @@ export const RESERVED_INFRASTRUCTURE_ENV_VARS = new Set([
   toLegacyProductEnvToken('HAPPYPAW_WORKSPACE_GLOBAL'),
   toLegacyProductEnvToken('HAPPYPAW_WORKSPACE_IPC'),
   toLegacyProductEnvToken(HAPPYPAW_CODEX_EXECUTABLE_ENV),
-  'CLAUDE_CONFIG_DIR',
 ]);
 export const DANGEROUS_ENV_VARS = new Set([
   'OPENAI_BASE_URL',
@@ -114,7 +77,6 @@ export const DANGEROUS_ENV_VARS = new Set([
   ...RESERVED_INFRASTRUCTURE_ENV_VARS,
 ]);
 export const MAX_CUSTOM_ENV_ENTRIES = 50;
-export const MAX_THIRD_PARTY_PROFILES = 20;
 
 export function normalizeSecret(input: unknown, fieldName: string): string {
   if (typeof input !== 'string') {
@@ -124,40 +86,6 @@ export function normalizeSecret(input: unknown, fieldName: string): string {
   const value = input.replace(/\s+/g, '').replace(/[^\x00-\x7F]/g, '');
   if (value.length > MAX_FIELD_LENGTH) {
     throw new Error(`Field too long: ${fieldName}`);
-  }
-  return value;
-}
-
-export function normalizeBaseUrl(input: unknown): string {
-  if (typeof input !== 'string') {
-    throw new Error('Invalid field: anthropicBaseUrl');
-  }
-  const value = input.trim();
-  if (!value) return '';
-  if (value.length > MAX_FIELD_LENGTH) {
-    throw new Error('Field too long: anthropicBaseUrl');
-  }
-
-  let parsed: URL;
-  try {
-    parsed = new URL(value);
-  } catch {
-    throw new Error('Invalid field: anthropicBaseUrl');
-  }
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    throw new Error('Invalid field: anthropicBaseUrl');
-  }
-  return value;
-}
-
-export function normalizeModel(input: unknown): string {
-  if (typeof input !== 'string') {
-    throw new Error('Invalid field: anthropicModel');
-  }
-  const value = input.trim();
-  if (!value) return '';
-  if (value.length > 128) {
-    throw new Error('Field too long: anthropicModel');
   }
   return value;
 }
@@ -269,7 +197,6 @@ export function sanitizeEnvValue(value: string): string {
 export function sanitizeCustomEnvMap(
   input: Record<string, string>,
   options?: {
-    skipReservedLegacyKeys?: boolean;
     skipReservedInfrastructureKeys?: boolean;
   },
 ): Record<string, string> {
@@ -284,9 +211,6 @@ export function sanitizeCustomEnvMap(
   for (const [key, rawValue] of entries) {
     if (!ENV_KEY_RE.test(key)) {
       throw new Error(`Invalid env key: ${key}`);
-    }
-    if (options?.skipReservedLegacyKeys && RESERVED_CLAUDE_ENV_KEYS.has(key)) {
-      continue;
     }
     if (
       options?.skipReservedInfrastructureKeys &&
@@ -346,10 +270,6 @@ export function parseFloatEnv(
   if (!envVar) return fallback;
   const parsed = parseFloat(envVar);
   return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-export function randomProfileId(): string {
-  return crypto.randomBytes(8).toString('hex');
 }
 
 export const DEFAULT_APPEARANCE_CONFIG = {

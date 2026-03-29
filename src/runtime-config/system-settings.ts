@@ -3,7 +3,7 @@ import fs from 'fs';
 import { logger } from '../logger.js';
 import type { SystemSettings } from './types.js';
 import {
-  CLAUDE_CONFIG_DIR,
+  CONFIG_DIR,
   normalizeRuntimeType,
   parseFloatEnv,
   parseIntEnv,
@@ -258,7 +258,7 @@ export function saveSystemSettings(
   if (merged.billingMinStartBalanceUsd > 1000000)
     merged.billingMinStartBalanceUsd = 1000000;
 
-  fs.mkdirSync(CLAUDE_CONFIG_DIR, { recursive: true });
+  fs.mkdirSync(CONFIG_DIR, { recursive: true });
   const tmp = `${SYSTEM_SETTINGS_FILE}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(merged, null, 2) + '\n', 'utf-8');
   fs.renameSync(tmp, SYSTEM_SETTINGS_FILE);

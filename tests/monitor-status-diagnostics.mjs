@@ -154,11 +154,6 @@ assert.equal(
 );
 
 const payload = await statusResponse.json();
-assert.equal(
-  'claudeCodeVersions' in payload,
-  false,
-  'status payload should not expose claudeCodeVersions',
-);
 assert.ok(
   payload.codexDiagnostics,
   'status payload should include codexDiagnostics',

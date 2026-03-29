@@ -4,9 +4,7 @@ import type { Hono } from 'hono';
 import { ProxyAgent } from 'proxy-agent';
 
 import { setRegisteredGroup } from '../../db.js';
-import { logger } from '../../logger.js';
 import {
-  appendLegacyConfigAudit,
   getUserFeishuConfig,
   getUserQQConfig,
   getUserTelegramConfig,
@@ -25,20 +23,6 @@ export function injectConfigDeps(d: WebDeps): void {
 
 export function getConfigDeps(): WebDeps | null {
   return deps;
-}
-
-function requireConfigDeps(): WebDeps {
-  if (!deps) {
-    throw new Error('Server not initialized');
-  }
-  return deps;
-}
-
-export interface LegacyApplyResultPayload {
-  success: boolean;
-  stoppedCount: number;
-  failedCount: number;
-  error?: string;
 }
 
 /**
@@ -79,51 +63,6 @@ export function createTelegramApiAgent(
 
 export function destroyTelegramApiAgent(agent: HttpsAgent | ProxyAgent): void {
   agent.destroy();
-}
-
-export async function applyLegacyConfigToAllGroups(
-  actor: string,
-  metadata?: Record<string, unknown>,
-): Promise<LegacyApplyResultPayload> {
-  const activeDeps = requireConfigDeps();
-  const groupJids = Object.keys(activeDeps.getRegisteredGroups());
-  const results = await Promise.allSettled(
-    groupJids.map((jid) => activeDeps.queue.stopGroup(jid)),
-  );
-  const failedCount = results.filter((r) => r.status === 'rejected').length;
-  const stoppedCount = groupJids.length - failedCount;
-
-  appendLegacyConfigAudit(actor, 'apply_to_all_flows', ['queue.stopGroup'], {
-    stoppedCount,
-    failedCount,
-    ...(metadata || {}),
-  });
-
-  if (failedCount > 0) {
-    return {
-      success: false,
-      stoppedCount,
-      failedCount,
-      error: `${failedCount} container(s) failed to stop`,
-    };
-  }
-
-  return {
-    success: true,
-    stoppedCount,
-    failedCount: 0,
-  };
-}
-
-const deprecationLogged = new Set<string>();
-
-export function logDeprecationOnce(
-  endpoint: string,
-  replacement: string,
-): void {
-  if (deprecationLogged.has(endpoint)) return;
-  logger.warn(`Deprecated: ${endpoint} — use ${replacement} instead`);
-  deprecationLogged.add(endpoint);
 }
 
 export function resolveProxyInfo(
