@@ -129,13 +129,13 @@ assert.match(
 );
 assert.match(
   memoryPageSource,
-  /CLAUDE\\\.md/u,
-  'Memory page sanitization should mask legacy CLAUDE.md wording from visible snippets',
+  /AGENTS\\\.md/u,
+  'Memory page sanitization should mask AGENTS.md wording from visible snippets',
 );
 assert.match(
   memoryPageSource,
-  /Claude/iu,
-  'Memory page sanitization should mask legacy Claude wording from visible snippets',
+  /\\.codex/iu,
+  'Memory page sanitization should mask .codex wording from visible snippets',
 );
 assert.match(
   memoryPageSource,
@@ -262,16 +262,16 @@ fs.mkdirSync(path.join(tempRoot, 'data', 'groups', 'flow-demo'), {
 fs.mkdirSync(path.join(tempRoot, 'data', 'memory', 'flow-demo'), {
   recursive: true,
 });
-fs.mkdirSync(path.join(tempRoot, 'data', 'sessions', 'main', '.claude'), {
+fs.mkdirSync(path.join(tempRoot, 'data', 'sessions', 'main', '.codex'), {
   recursive: true,
 });
 
 fs.writeFileSync(
-  path.join(tempRoot, 'data', 'groups', 'user-global', 'admin-user', 'CLAUDE.md'),
+  path.join(tempRoot, 'data', 'groups', 'user-global', 'admin-user', 'AGENTS.md'),
   'global preference',
 );
 fs.writeFileSync(
-  path.join(tempRoot, 'data', 'groups', 'main', 'CLAUDE.md'),
+  path.join(tempRoot, 'data', 'groups', 'main', 'AGENTS.md'),
   'main preference',
 );
 fs.writeFileSync(
@@ -283,7 +283,7 @@ fs.writeFileSync(
   'workspace timeline entry',
 );
 fs.writeFileSync(
-  path.join(tempRoot, 'data', 'sessions', 'main', '.claude', 'settings.json'),
+  path.join(tempRoot, 'data', 'sessions', 'main', '.codex', 'settings.json'),
   '{"memory":"session"}',
 );
 
@@ -316,9 +316,9 @@ assert.ok(
 assert.ok(
   sourcesPayload.sources.every(
     (source) =>
-      !/CLAUDE\.md|\.claude/u.test(`${source.locator} ${source.label}`),
+      !/AGENTS\.md|\.codex/u.test(`${source.locator} ${source.label}`),
   ),
-  'Memory sources should not emit Claude-era raw paths on supported surfaces',
+  'Memory sources should not emit raw runtime paths on supported surfaces',
 );
 
 const globalSource = sourcesPayload.sources.find(
@@ -342,8 +342,8 @@ assert.match(
 );
 assert.doesNotMatch(
   sessionSource.label,
-  /\.claude/u,
-  'Session memory labels should not expose .claude paths',
+  /\.codex/u,
+  'Session memory labels should not expose .codex paths',
 );
 
 const fileResponse = await app.request(
@@ -364,22 +364,22 @@ assert.ok(
   'Memory file payloads should not expose raw path fields',
 );
 
-const legacyFileResponse = await app.request(
-  `/api/memory/file?${new URLSearchParams({ path: 'data/groups/main/CLAUDE.md' })}`,
+const primaryFileResponse = await app.request(
+  `/api/memory/file?${new URLSearchParams({ path: 'data/groups/main/AGENTS.md' })}`,
   {
     headers: { Cookie: cookie },
   },
 );
 assert.equal(
-  legacyFileResponse.status,
+  primaryFileResponse.status,
   200,
-  'Memory file reads should still accept legacy raw paths for compatibility',
+  'Memory file reads should accept AGENTS.md primary paths',
 );
-const legacyFilePayload = await legacyFileResponse.json();
+const primaryFilePayload = await primaryFileResponse.json();
 assert.equal(
-  legacyFilePayload.locator,
+  primaryFilePayload.locator,
   'memory://workspace/main/primary',
-  'Legacy path reads should still emit the public locator contract',
+  'Primary path reads should emit the public locator contract',
 );
 
 const searchResponse = await app.request(
@@ -397,9 +397,9 @@ assert.ok(
 );
 assert.ok(
   searchPayload.hits.every(
-    (hit) => !/CLAUDE\.md|\.claude/u.test(`${hit.locator} ${hit.label ?? ''}`),
+    (hit) => !/AGENTS\.md|\.codex/u.test(`${hit.locator} ${hit.label ?? ''}`),
   ),
-  'Memory search hits should not expose Claude-era raw paths',
+  'Memory search hits should not expose raw runtime paths',
 );
 
 const writeResponse = await app.request('/api/memory/file', {
@@ -409,20 +409,20 @@ const writeResponse = await app.request('/api/memory/file', {
     'Content-Type': 'application/json',
   },
   body: JSON.stringify({
-    path: 'data/groups/flow-demo/CLAUDE.md',
+    path: 'data/groups/flow-demo/AGENTS.md',
     content: 'updated flow memory',
   }),
 });
 assert.equal(
   writeResponse.status,
   200,
-  'Memory writes should still accept legacy raw paths for compatibility',
+  'Memory writes should accept AGENTS.md primary paths',
 );
 const writePayload = await writeResponse.json();
 assert.equal(
   writePayload.locator,
   'memory://workspace/flow-demo/primary',
-  'Legacy path writes should still emit the public locator contract',
+  'Primary path writes should emit the public locator contract',
 );
 
 const packageSource = JSON.parse(read('package.json'));

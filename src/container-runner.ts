@@ -512,26 +512,26 @@ function buildVolumeMounts(
     });
   }
 
-  // Admin's ~/.claude/ config: mount CLAUDE.md and rules/ into /workspace/
+  // Admin's ~/.codex config: mount AGENTS.md and rules/ into /workspace/
   // so the SDK's directory traversal (cwd → root) discovers them at /workspace/ level.
   // Only for admin-created workspaces (ownerHomeFolder === 'main').
   const isCreatorAdmin = ownerHomeFolder === 'main';
   if (isCreatorAdmin) {
-    const hostMemoryDir = path.join(os.homedir(), '.claude');
-    const hostMemoryFile = path.join(hostMemoryDir, 'CLAUDE.md');
+    const hostMemoryDir = path.join(os.homedir(), '.codex');
+    const hostMemoryFile = path.join(hostMemoryDir, 'AGENTS.md');
     const hostMemoryRulesDir = path.join(hostMemoryDir, 'rules');
 
     if (fs.existsSync(hostMemoryFile)) {
       mounts.push({
         hostPath: hostMemoryFile,
-        containerPath: '/workspace/CLAUDE.md',
+        containerPath: '/workspace/AGENTS.md',
         readonly: true,
       });
     }
     if (fs.existsSync(hostMemoryRulesDir)) {
       mounts.push({
         hostPath: hostMemoryRulesDir,
-        containerPath: '/workspace/.claude/rules',
+        containerPath: '/workspace/.codex/rules',
         readonly: true,
       });
     }

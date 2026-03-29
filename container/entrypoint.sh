@@ -10,7 +10,7 @@ umask 0000
 # Host uid may differ from container node user (uid 1000), especially in
 # rootless podman where uid remapping causes EACCES on bind mounts.
 # Running as root here so chown works regardless of host uid.
-chown -R node:node /home/node/.claude /home/node/.codex 2>/dev/null || true
+chown -R node:node /home/node/.codex 2>/dev/null || true
 chown -R node:node /workspace/group /workspace/global /workspace/memory /workspace/ipc 2>/dev/null || true
 
 # Source environment variables from mounted env file
@@ -55,7 +55,7 @@ chmod 644 /tmp/input.json
 # (e.g. settings.json), which the host backend (agent user) cannot read.
 # The trap runs as root after the node process exits.
 cleanup() {
-  chmod -R a+rwX /home/node/.claude /home/node/.codex 2>/dev/null || true
+  chmod -R a+rwX /home/node/.codex 2>/dev/null || true
   chmod -R a+rwX /workspace/group 2>/dev/null || true
 }
 trap cleanup EXIT

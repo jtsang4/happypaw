@@ -44,7 +44,7 @@ for (const dir of [
   fs.mkdirSync(dir, { recursive: true });
 }
 
-fs.writeFileSync(path.join(groupDir, 'CLAUDE.md'), 'workspace memory');
+fs.writeFileSync(path.join(groupDir, 'AGENTS.md'), 'workspace memory');
 fs.writeFileSync(path.join(memoryDir, '2026-03-26.md'), 'memory');
 fs.writeFileSync(path.join(ipcDir, 'stale.json'), '{}');
 fs.writeFileSync(path.join(envDir, 'env'), 'KEY=value');

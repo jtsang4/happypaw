@@ -25,7 +25,7 @@ dev: ## 启动前后端（首次自动安装依赖和构建容器镜像）
 	@if [ ! -d node_modules ] || [ package.json -nt node_modules ] || [ web/package.json -nt web/node_modules ] || [ container/agent-runner/package.json -nt container/agent-runner/node_modules ]; then echo "📦 依赖有更新，安装依赖..."; $(MAKE) install; fi
 	@$(PKG) run prepare:pinned-codex
 	@$(MAKE) _ensure-docker-image
-	@$(PKG) --prefix container/agent-runner run build --silent 2>/dev/null || $(PKG) --prefix container/agent-runner run build
+	@cd container/agent-runner && $(PKG) run build
 	@echo "🚀 使用 $(PKG) 启动..."
 	$(PKG) run dev:all
 

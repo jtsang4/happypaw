@@ -64,10 +64,6 @@ export {
   toPublicContainerEnvConfig,
   mergeLegacyEnvConfig,
   buildContainerEnvLines,
-  writeCredentialsFile,
-  updateAllSessionCredentials,
-  detectLocalLegacyAuth,
-  importLocalLegacyCredentials,
 } from './runtime-config/container-env.js';
 
 export {
@@ -99,7 +95,6 @@ export type {
   FeishuConfigSource,
   FeishuProviderConfig,
   FeishuProviderPublicConfig,
-  LocalLegacyAuthStatus,
   RegistrationConfig,
   SystemSettings,
   TelegramConfigSource,

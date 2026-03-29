@@ -59,7 +59,7 @@ export async function executeSessionReset(
     );
   }
 
-  // 2. Clear .claude/ session files (preserve settings.json)
+  // 2. Clear .codex/ session files (preserve settings.json)
   clearSessionFiles(folder, agentId);
 
   // 3. Delete session from DB (+ in-memory cache for main session)

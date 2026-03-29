@@ -138,7 +138,7 @@ export function createIndexStateBootstrap(
     const flagFile = path.join(DATA_DIR, 'config', '.memory-migration-v1-done');
     if (fs.existsSync(flagFile)) return;
 
-    const oldGlobalMd = path.join(GROUPS_DIR, 'global', 'CLAUDE.md');
+    const oldGlobalMd = path.join(GROUPS_DIR, 'global', 'AGENTS.md');
     const userGlobalBase = path.join(GROUPS_DIR, 'user-global');
 
     let migrationSucceeded = true;
@@ -156,12 +156,12 @@ export function createIndexStateBootstrap(
       if (firstAdmin && fs.existsSync(oldGlobalMd)) {
         const adminDir = path.join(userGlobalBase, firstAdmin.id);
         fs.mkdirSync(adminDir, { recursive: true });
-        const target = path.join(adminDir, 'CLAUDE.md');
+        const target = path.join(adminDir, 'AGENTS.md');
         if (!fs.existsSync(target)) {
           fs.copyFileSync(oldGlobalMd, target);
           logger.info(
             { userId: firstAdmin.id, src: oldGlobalMd, dst: target },
-            'Migrated global CLAUDE.md to admin user-global',
+            'Migrated global AGENTS.md to admin user-global',
           );
         }
         copiedLegacyGlobal = true;
@@ -362,7 +362,7 @@ export function createIndexStateBootstrap(
     const templatePath = path.resolve(
       process.cwd(),
       'config',
-      'global-claude-md.template.md',
+      'global-agents-md.template.md',
     );
     if (fs.existsSync(templatePath)) {
       const template = fs.readFileSync(templatePath, 'utf-8');
@@ -379,19 +379,19 @@ export function createIndexStateBootstrap(
         for (const user of allUsers) {
           const userDir = path.join(userGlobalBase, user.id);
           fs.mkdirSync(userDir, { recursive: true });
-          const userMemoryFile = path.join(userDir, 'CLAUDE.md');
+          const userMemoryFile = path.join(userDir, 'AGENTS.md');
           if (!fs.existsSync(userMemoryFile)) {
             try {
               fs.writeFileSync(userMemoryFile, template, { flag: 'wx' });
               logger.info(
                 { userId: user.id },
-                'Initialized user-global CLAUDE.md from template',
+                'Initialized user-global AGENTS.md from template',
               );
             } catch (err: unknown) {
               if ((err as NodeJS.ErrnoException).code !== 'EEXIST') {
                 logger.warn(
                   { userId: user.id, err },
-                  'Failed to initialize user-global CLAUDE.md',
+                  'Failed to initialize user-global AGENTS.md',
                 );
               }
             }
@@ -400,7 +400,7 @@ export function createIndexStateBootstrap(
       } catch (err) {
         logger.warn(
           { err },
-          'Failed to initialize user-global CLAUDE.md files',
+          'Failed to initialize user-global AGENTS.md files',
         );
       }
     }

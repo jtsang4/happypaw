@@ -1,16 +1,13 @@
 import fs from 'fs';
 import path from 'path';
 
-import { DATA_DIR } from '../config.js';
 import { logger } from '../logger.js';
 import { getCodexProviderConfig } from './im-config.js';
 import type {
-  LegacyOAuthCredentials,
   LegacyProviderConfig,
   CodexProviderConfig,
   ContainerEnvConfig,
   ContainerEnvPublicConfig,
-  LocalLegacyAuthStatus,
 } from './types.js';
 import {
   CONTAINER_ENV_DIR,
@@ -93,13 +90,6 @@ export function deleteContainerEnvConfig(folder: string): void {
   }
 }
 
-function maskSecret(value: string): string | null {
-  if (!value) return null;
-  if (value.length <= 8)
-    return `${'*'.repeat(Math.max(value.length - 2, 1))}${value.slice(-2)}`;
-  return `${value.slice(0, 3)}${'*'.repeat(Math.max(value.length - 7, 4))}${value.slice(-4)}`;
-}
-
 export function toPublicContainerEnvConfig(
   config: ContainerEnvConfig,
 ): ContainerEnvPublicConfig {
@@ -152,140 +142,4 @@ export function buildContainerEnvLines(
   }
 
   return lines;
-}
-
-export function writeCredentialsFile(
-  sessionDir: string,
-  config: LegacyProviderConfig,
-): void {
-  const creds = config.claudeOAuthCredentials;
-  if (!creds) return;
-
-  const credentialsData = {
-    claudeAiOauth: {
-      accessToken: creds.accessToken,
-      refreshToken: creds.refreshToken,
-      expiresAt: creds.expiresAt,
-      scopes: creds.scopes,
-    },
-  };
-
-  const filePath = path.join(sessionDir, '.credentials.json');
-  const tmp = `${filePath}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(credentialsData, null, 2) + '\n', {
-    encoding: 'utf-8',
-    mode: 0o644,
-  });
-  fs.renameSync(tmp, filePath);
-}
-
-export function updateAllSessionCredentials(
-  config: LegacyProviderConfig,
-): void {
-  if (!config.claudeOAuthCredentials) return;
-
-  const sessionsDir = path.join(DATA_DIR, 'sessions');
-  try {
-    if (!fs.existsSync(sessionsDir)) return;
-    for (const folder of fs.readdirSync(sessionsDir)) {
-      const claudeDir = path.join(sessionsDir, folder, '.claude');
-      if (fs.existsSync(claudeDir) && fs.statSync(claudeDir).isDirectory()) {
-        try {
-          writeCredentialsFile(claudeDir, config);
-        } catch (err) {
-          logger.warn(
-            { err, folder },
-            'Failed to write .credentials.json for session',
-          );
-        }
-      }
-      const agentsDir = path.join(sessionsDir, folder, 'agents');
-      if (fs.existsSync(agentsDir) && fs.statSync(agentsDir).isDirectory()) {
-        for (const agentId of fs.readdirSync(agentsDir)) {
-          const agentLegacyDir = path.join(agentsDir, agentId, '.claude');
-          if (
-            fs.existsSync(agentLegacyDir) &&
-            fs.statSync(agentLegacyDir).isDirectory()
-          ) {
-            try {
-              writeCredentialsFile(agentLegacyDir, config);
-            } catch (err) {
-              logger.warn(
-                { err, folder, agentId },
-                'Failed to write .credentials.json for agent session',
-              );
-            }
-          }
-        }
-      }
-    }
-  } catch (err) {
-    logger.warn({ err }, 'Failed to update session credentials');
-  }
-}
-
-function readLocalOAuthCredentials(): {
-  accessToken: string;
-  refreshToken: string;
-  expiresAt?: number;
-  scopes?: string[];
-} | null {
-  const homeDir = process.env.HOME || '/root';
-  const credFile = path.join(homeDir, '.claude', '.credentials.json');
-
-  try {
-    if (!fs.existsSync(credFile)) return null;
-
-    const content = JSON.parse(fs.readFileSync(credFile, 'utf-8'));
-    const oauth = content?.claudeAiOauth;
-
-    if (oauth?.accessToken && oauth?.refreshToken) {
-      return {
-        accessToken: oauth.accessToken,
-        refreshToken: oauth.refreshToken,
-        expiresAt:
-          typeof oauth.expiresAt === 'number' ? oauth.expiresAt : undefined,
-        scopes: Array.isArray(oauth.scopes) ? oauth.scopes : undefined,
-      };
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-export function detectLocalLegacyAuth(): LocalLegacyAuthStatus {
-  const oauth = readLocalOAuthCredentials();
-
-  if (oauth) {
-    return {
-      detected: true,
-      hasCredentials: true,
-      expiresAt: oauth.expiresAt ?? null,
-      accessTokenMasked: maskSecret(oauth.accessToken),
-    };
-  }
-
-  const homeDir = process.env.HOME || '/root';
-  const credFile = path.join(homeDir, '.claude', '.credentials.json');
-  const fileExists = fs.existsSync(credFile);
-
-  return {
-    detected: fileExists,
-    hasCredentials: false,
-    expiresAt: null,
-    accessTokenMasked: null,
-  };
-}
-
-export function importLocalLegacyCredentials(): LegacyOAuthCredentials | null {
-  const oauth = readLocalOAuthCredentials();
-  if (!oauth) return null;
-
-  return {
-    accessToken: oauth.accessToken,
-    refreshToken: oauth.refreshToken,
-    expiresAt: oauth.expiresAt ?? Date.now() + 8 * 3600_000,
-    scopes: oauth.scopes ?? [],
-  };
 }

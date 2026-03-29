@@ -208,7 +208,7 @@ fs.mkdirSync(groupDir, { recursive: true });
 fs.mkdirSync(globalDir, { recursive: true });
 fs.mkdirSync(memoryDir, { recursive: true });
 fs.mkdirSync(ipcInputDir, { recursive: true });
-fs.mkdirSync(path.join(homeDir, '.claude'), { recursive: true });
+fs.mkdirSync(path.join(homeDir, '.codex'), { recursive: true });
 fs.mkdirSync(codexHome, { recursive: true });
 
 const fakeCodexPath = path.join(binDir, 'codex');

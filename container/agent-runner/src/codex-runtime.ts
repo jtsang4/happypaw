@@ -13,7 +13,7 @@ import { summarizeToolInput } from './utils.js';
 
 const OUTPUT_MARKER_TURN_ID_PREFIX = 'codex-turn-';
 const IMAGE_MAX_DIMENSION = 8000;
-const GLOBAL_CLAUDE_MD_MAX_CHARS = 8000;
+const GLOBAL_AGENTS_MD_MAX_CHARS = 8000;
 const INTERRUPT_SETTLE_TIMEOUT_MS = 5_000;
 const STAGED_IMAGE_DIR_NAME = '.happypaw-input-images';
 const LEGACY_MCP_SERVER_NAME = ['happy', 'claw'].join('');
@@ -477,14 +477,14 @@ function buildRuntimePromptContext(
   memoryRecall: string,
 ): { extraDirs: string[]; systemPromptAppend: string } {
   const { isHome } = deps.normalizeHomeFlags(containerInput);
-  const globalMemoryFilePath = path.join(deps.WORKSPACE_GLOBAL, 'CLAUDE.md');
+  const globalMemoryFilePath = path.join(deps.WORKSPACE_GLOBAL, 'AGENTS.md');
 
   let globalMemoryContent = '';
   if (isHome && fs.existsSync(globalMemoryFilePath)) {
     globalMemoryContent = fs.readFileSync(globalMemoryFilePath, 'utf-8');
     globalMemoryContent = deps.truncateWithHeadTail(
       globalMemoryContent,
-      GLOBAL_CLAUDE_MD_MAX_CHARS,
+      GLOBAL_AGENTS_MD_MAX_CHARS,
     );
   }
 

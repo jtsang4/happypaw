@@ -36,9 +36,8 @@ interface MemorySearchHit {
 
 const VISIBLE_MEMORY_TEXT_REPLACEMENTS: Array<[pattern: RegExp, replacement: string]> = [
   [/memory:\/\/[^\s]+/gi, '记忆源'],
-  [/CLAUDE\.md/gi, '主记忆文件'],
-  [/\.claude(?:\/[^\s`"'，。、；：,)\]）}]*)?/gi, '自动记忆目录'],
-  [/Claude/gi, '系统'],
+  [/AGENTS\.md/gi, '主记忆文件'],
+  [/\.codex(?:\/[^\s`"'，。、；：,)\]）}]*)?/gi, '自动记忆目录'],
 ];
 
 function getErrorMessage(err: unknown, fallback: string): string {

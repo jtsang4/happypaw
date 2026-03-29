@@ -33,7 +33,7 @@ assert('"ok." → noise', isSystemMaintenanceNoise('ok.'));
 assert('"OK。" → noise', isSystemMaintenanceNoise('OK。'));
 assert('"好的" → noise', isSystemMaintenanceNoise('好的'));
 assert('"好的。" → noise', isSystemMaintenanceNoise('好的。'));
-assert('"已更新 CLAUDE.md" → noise', isSystemMaintenanceNoise('已更新 CLAUDE.md'));
+assert('"已更新 AGENTS.md" → noise', isSystemMaintenanceNoise('已更新 AGENTS.md'));
 assert('"已完成记忆刷新" → noise', isSystemMaintenanceNoise('已完成记忆刷新'));
 assert('"已刷新" → noise', isSystemMaintenanceNoise('已刷新'));
 assert('"记忆已保存" → noise', isSystemMaintenanceNoise('记忆已保存'));

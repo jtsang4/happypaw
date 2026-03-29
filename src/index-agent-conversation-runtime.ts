@@ -459,7 +459,7 @@ export function createIndexAgentConversationRuntime(
           }
         }
         // Suppress system-maintenance noise from auto_continue outputs (issue #275).
-        // Short acknowledgements ("OK", "已更新 CLAUDE.md") that leak from the
+        // Short acknowledgements ("OK", "已更新 AGENTS.md") that leak from the
         // compaction pipeline are dropped; substantive continuations pass through.
         if (
           output.sourceKind === 'auto_continue' &&

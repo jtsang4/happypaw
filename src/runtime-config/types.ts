@@ -167,13 +167,6 @@ export interface RegistrationConfig {
   updatedAt: string | null;
 }
 
-export interface LocalLegacyAuthStatus {
-  detected: boolean;
-  hasCredentials: boolean;
-  expiresAt: number | null;
-  accessTokenMasked: string | null;
-}
-
 export interface AppearanceConfig {
   appName: string;
   aiName: string;

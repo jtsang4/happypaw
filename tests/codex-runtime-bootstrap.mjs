@@ -560,7 +560,7 @@ async function runScenario(name, sessionId, options = {}) {
   fs.mkdirSync(globalDir, { recursive: true });
   fs.mkdirSync(memoryDir, { recursive: true });
   fs.mkdirSync(ipcInputDir, { recursive: true });
-  fs.mkdirSync(path.join(homeDir, '.claude'), { recursive: true });
+  fs.mkdirSync(path.join(homeDir, '.codex'), { recursive: true });
   fs.mkdirSync(codeHome, { recursive: true });
 
   const fakeCodex = path.join(binDir, 'codex');
@@ -1168,7 +1168,7 @@ fs.writeFileSync(
   Buffer.from(makePngBase64(), 'base64'),
 );
 fs.writeFileSync(path.join(bridgeWorkspace, 'report.pdf'), '%PDF-1.4\n');
-fs.writeFileSync(path.join(bridgeWorkspace, 'CLAUDE.md'), '偏好：喝热美式\n');
+fs.writeFileSync(path.join(bridgeWorkspace, 'AGENTS.md'), '偏好：喝热美式\n');
 fs.writeFileSync(
   path.join(bridgeMemory, '2026-03-26.md'),
   '### 2026-03-26T00:00:00.000Z\n今天跟进 MCP bridge。\n',

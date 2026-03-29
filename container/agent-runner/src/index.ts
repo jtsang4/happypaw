@@ -349,7 +349,7 @@ function buildMemoryRecallPrompt(isHome: boolean, isAdminHome: boolean): string 
       '获知重要信息后**必须立即保存**，不要等到上下文压缩。',
       '根据信息的**时效性**选择存储位置：',
       '',
-      '#### 全局记忆（永久）→ 直接编辑 `/workspace/global/CLAUDE.md`',
+      '#### 全局记忆（永久）→ 直接编辑 `/workspace/global/AGENTS.md`',
       '',
       '**优先使用全局记忆。** 适用于所有**跨会话仍然有用**的信息：',
       '- 用户身份：姓名、生日、联系方式、地址、工作单位',
@@ -374,7 +374,7 @@ function buildMemoryRecallPrompt(isHome: boolean, isAdminHome: boolean): string 
       '',
       '#### 判断标准',
       '> **默认优先全局记忆。** 问自己：这条信息下次对话还可能用到吗？',
-      '> - 是 / 可能 → **全局记忆**（编辑 `/workspace/global/CLAUDE.md`）',
+      '> - 是 / 可能 → **全局记忆**（编辑 `/workspace/global/AGENTS.md`）',
       '> - 明确只跟今天有关 → 日期记忆（`memory_append`）',
       '> - 用户说「记住这个」→ **一定写全局记忆**',
       '',
@@ -391,10 +391,10 @@ function buildMemoryRecallPrompt(isHome: boolean, isAdminHome: boolean): string 
     '需要回忆过去的决策、偏好或项目上下文时使用这些工具。',
     '',
     '### 本地记忆',
-    '重要信息直接记录在当前工作区的 CLAUDE.md 或其他文件中。',
+    '重要信息直接记录在当前工作区的 AGENTS.md 或其他文件中。',
     '当前会话上下文由 Codex 线程持久化，重要长期信息仍应写入记忆文件。',
     '',
-    '全局记忆（`/workspace/global/CLAUDE.md`）为只读参考。',
+    '全局记忆（`/workspace/global/AGENTS.md`）为只读参考。',
   ].join('\n');
 }
 

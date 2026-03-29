@@ -29,6 +29,8 @@ const MAX_MEMORY_FILE_LENGTH = 500_000;
 const MEMORY_LIST_LIMIT = 500;
 const MEMORY_SEARCH_LIMIT = 120;
 const MEMORY_LOCATOR_PREFIX = 'memory://';
+const PRIMARY_MEMORY_FILE = 'AGENTS.md';
+const RUNTIME_MEMORY_DIR = '.codex';
 const MEMORY_SOURCE_EXTENSIONS = new Set([
   '.md',
   '.txt',
@@ -111,30 +113,21 @@ function workspaceLabel(folder: string): string {
   return folder === 'main' ? '主会话' : folder;
 }
 
-function sessionRuntimeFlavor(runtimeDir: string): 'managed' | 'legacy' {
-  return runtimeDir === '.codex' ? 'managed' : 'legacy';
-}
-
-function runtimeDirForFlavor(flavor: string): '.codex' | '.claude' {
-  return flavor === 'legacy' ? '.claude' : '.codex';
-}
-
 function buildSessionMemoryDescriptor(
   folder: string,
   sessionParts: string[],
 ): Pick<MemorySource, 'locator' | 'scope' | 'kind' | 'label'> {
   const workspace = workspaceLabel(folder);
-  const runtimeDirs = new Set(['.claude', '.codex']);
+  const runtimeDirs = new Set([RUNTIME_MEMORY_DIR]);
 
   if (runtimeDirs.has(sessionParts[0] ?? '')) {
-    const flavor = sessionRuntimeFlavor(sessionParts[0] as string);
     const runtimePath = sessionParts.slice(1).join('/') || 'settings.json';
     return {
       locator: encodeLocator(
         'session',
         folder,
         'root',
-        flavor,
+        'managed',
         ...sessionParts.slice(1),
       ),
       scope: 'session',
@@ -145,7 +138,6 @@ function buildSessionMemoryDescriptor(
 
   if (sessionParts[0] === 'agents' && runtimeDirs.has(sessionParts[2] ?? '')) {
     const agentId = sessionParts[1] || 'unknown-agent';
-    const flavor = sessionRuntimeFlavor(sessionParts[2] as string);
     const runtimePath = sessionParts.slice(3).join('/') || 'settings.json';
     return {
       locator: encodeLocator(
@@ -153,7 +145,7 @@ function buildSessionMemoryDescriptor(
         folder,
         'agents',
         agentId,
-        flavor,
+        'managed',
         ...sessionParts.slice(3),
       ),
       scope: 'session',
@@ -164,7 +156,6 @@ function buildSessionMemoryDescriptor(
 
   if (sessionParts[0] === 'tasks' && runtimeDirs.has(sessionParts[2] ?? '')) {
     const taskId = sessionParts[1] || 'unknown-task';
-    const flavor = sessionRuntimeFlavor(sessionParts[2] as string);
     const runtimePath = sessionParts.slice(3).join('/') || 'settings.json';
     return {
       locator: encodeLocator(
@@ -172,7 +163,7 @@ function buildSessionMemoryDescriptor(
         folder,
         'tasks',
         taskId,
-        flavor,
+        'managed',
         ...sessionParts.slice(3),
       ),
       scope: 'session',
@@ -199,7 +190,7 @@ function toPublicLocator(relativePath: string): string {
   ) {
     const userId = parts[3] || 'unknown-user';
     const name = parts.slice(4);
-    if (name.length === 1 && name[0] === 'CLAUDE.md') {
+    if (name.length === 1 && name[0] === PRIMARY_MEMORY_FILE) {
       return encodeLocator('user-global', userId, 'primary');
     }
     return encodeLocator('user-global', userId, 'files', ...name);
@@ -208,7 +199,7 @@ function toPublicLocator(relativePath: string): string {
   if (parts[0] === 'data' && parts[1] === 'groups') {
     const folder = parts[2] || 'unknown';
     const name = parts.slice(3);
-    if (name.length === 1 && name[0] === 'CLAUDE.md') {
+    if (name.length === 1 && name[0] === PRIMARY_MEMORY_FILE) {
       return encodeLocator('workspace', folder, 'primary');
     }
     return encodeLocator('workspace', folder, 'files', ...name);
@@ -234,7 +225,7 @@ function locatorToRelativePath(locator: string): string {
   if (parts[0] === 'user-global' && parts.length >= 3) {
     const userId = parts[1];
     if (parts[2] === 'primary' && parts.length === 3) {
-      return `data/groups/user-global/${userId}/CLAUDE.md`;
+      return `data/groups/user-global/${userId}/${PRIMARY_MEMORY_FILE}`;
     }
     if (parts[2] === 'files' && parts.length >= 4) {
       return `data/groups/user-global/${userId}/${parts.slice(3).join('/')}`;
@@ -244,7 +235,7 @@ function locatorToRelativePath(locator: string): string {
   if (parts[0] === 'workspace' && parts.length >= 3) {
     const folder = parts[1];
     if (parts[2] === 'primary' && parts.length === 3) {
-      return `data/groups/${folder}/CLAUDE.md`;
+      return `data/groups/${folder}/${PRIMARY_MEMORY_FILE}`;
     }
     if (parts[2] === 'files' && parts.length >= 4) {
       return `data/groups/${folder}/${parts.slice(3).join('/')}`;
@@ -257,19 +248,19 @@ function locatorToRelativePath(locator: string): string {
   if (parts[0] === 'session' && parts.length >= 4) {
     const folder = parts[1];
     if (parts[2] === 'root' && parts.length >= 5) {
-      return `data/sessions/${folder}/${runtimeDirForFlavor(parts[3])}/${parts
+      return `data/sessions/${folder}/${RUNTIME_MEMORY_DIR}/${parts
         .slice(4)
         .join('/')}`;
     }
     if (parts[2] === 'agents' && parts.length >= 6) {
-      return `data/sessions/${folder}/agents/${parts[3]}/${runtimeDirForFlavor(
-        parts[4],
-      )}/${parts.slice(5).join('/')}`;
+      return `data/sessions/${folder}/agents/${parts[3]}/${RUNTIME_MEMORY_DIR}/${parts
+        .slice(5)
+        .join('/')}`;
     }
     if (parts[2] === 'tasks' && parts.length >= 6) {
-      return `data/sessions/${folder}/tasks/${parts[3]}/${runtimeDirForFlavor(
-        parts[4],
-      )}/${parts.slice(5).join('/')}`;
+      return `data/sessions/${folder}/tasks/${parts[3]}/${RUNTIME_MEMORY_DIR}/${parts
+        .slice(5)
+        .join('/')}`;
     }
     if (parts[2] === 'files' && parts.length >= 4) {
       return `data/sessions/${folder}/${parts.slice(3).join('/')}`;
@@ -362,17 +353,17 @@ function classifyMemorySource(
   relativePath: string,
 ): Pick<MemorySource, 'locator' | 'scope' | 'kind' | 'label' | 'ownerName'> {
   const parts = relativePath.split('/');
-  // data/groups/user-global/{userId}/CLAUDE.md
+  // data/groups/user-global/{userId}/AGENTS.md
   if (
     parts[0] === 'data' &&
     parts[1] === 'groups' &&
     parts[2] === 'user-global'
   ) {
     const userId = parts[3] || 'unknown';
-    const name = parts.slice(4).join('/') || 'CLAUDE.md';
+    const name = parts.slice(4).join('/') || PRIMARY_MEMORY_FILE;
     const owner = getUserById(userId);
     const ownerLabel = owner ? owner.display_name || owner.username : userId;
-    const isPrimaryMemory = name === 'CLAUDE.md';
+    const isPrimaryMemory = name === PRIMARY_MEMORY_FILE;
     return {
       locator: isPrimaryMemory
         ? encodeLocator('user-global', userId, 'primary')
@@ -385,8 +376,8 @@ function classifyMemorySource(
       ownerName: ownerLabel,
     };
   }
-  // data/groups/main/CLAUDE.md
-  if (relativePath === 'data/groups/main/CLAUDE.md') {
+  // data/groups/main/AGENTS.md
+  if (relativePath === `data/groups/main/${PRIMARY_MEMORY_FILE}`) {
     return {
       locator: encodeLocator('workspace', 'main', 'primary'),
       scope: 'main',
@@ -409,7 +400,7 @@ function classifyMemorySource(
   if (parts[0] === 'data' && parts[1] === 'groups') {
     const folder = parts[2] || 'unknown';
     const name = parts.slice(3).join('/');
-    const isPrimaryMemory = name === 'CLAUDE.md';
+    const isPrimaryMemory = name === PRIMARY_MEMORY_FILE;
     const kind = isPrimaryMemory ? 'primary' : 'note';
     return {
       locator: isPrimaryMemory
@@ -456,8 +447,8 @@ function readMemoryFile(
   };
 }
 
-// 记忆路径中禁止写入的系统子目录（CLAUDE.md 除外，它是记忆文件）
-const MEMORY_BLOCKED_DIRS = ['logs', '.claude', 'conversations'];
+// 记忆路径中禁止写入的系统子目录（AGENTS.md 除外，它是主记忆文件）
+const MEMORY_BLOCKED_DIRS = ['logs', '.codex', 'conversations'];
 
 function isBlockedMemoryPath(normalizedPath: string): boolean {
   const parts = normalizedPath.split('/');
@@ -554,11 +545,11 @@ function listMemorySources(user: AuthUser): MemorySource[] {
   }
 
   // 1. User-global memory: each user only sees their own
-  files.add(path.join(USER_GLOBAL_DIR, user.id, 'CLAUDE.md'));
+  files.add(path.join(USER_GLOBAL_DIR, user.id, PRIMARY_MEMORY_FILE));
 
   // 2. Group memories: filter by ownership
   for (const folder of accessibleFolders) {
-    files.add(path.join(GROUPS_DIR, folder, 'CLAUDE.md'));
+    files.add(path.join(GROUPS_DIR, folder, PRIMARY_MEMORY_FILE));
   }
 
   // 3. Scan group directories (filtered by access)
@@ -801,7 +792,7 @@ memoryRoutes.put('/file', authMiddleware, async (c) => {
 memoryRoutes.get('/global', authMiddleware, (c) => {
   try {
     const user = c.get('user') as AuthUser;
-    const userGlobalPath = `data/groups/user-global/${user.id}/CLAUDE.md`;
+    const userGlobalPath = `data/groups/user-global/${user.id}/${PRIMARY_MEMORY_FILE}`;
     return c.json(readMemoryFile(userGlobalPath, user));
   } catch (err) {
     logger.error({ err }, 'Failed to read user global memory');
@@ -827,7 +818,7 @@ memoryRoutes.put('/global', authMiddleware, async (c) => {
 
   try {
     const user = c.get('user') as AuthUser;
-    const userGlobalPath = `data/groups/user-global/${user.id}/CLAUDE.md`;
+    const userGlobalPath = `data/groups/user-global/${user.id}/${PRIMARY_MEMORY_FILE}`;
     return c.json(
       writeMemoryFile(userGlobalPath, validation.data.content, user),
     );

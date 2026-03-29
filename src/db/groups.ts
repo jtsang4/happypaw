@@ -203,15 +203,15 @@ export function ensureUserHomeGroup(
   // Ensure chat row exists
   ensureChatExists(jid);
 
-  // Create user-global memory directory and initialize CLAUDE.md from template
+  // Create user-global memory directory and initialize AGENTS.md from template
   const userGlobalDir = path.join(GROUPS_DIR, 'user-global', userId);
   fs.mkdirSync(userGlobalDir, { recursive: true });
-  const userMemoryFile = path.join(userGlobalDir, 'CLAUDE.md');
+  const userMemoryFile = path.join(userGlobalDir, 'AGENTS.md');
   if (!fs.existsSync(userMemoryFile)) {
     const templatePath = path.resolve(
       process.cwd(),
       'config',
-      'global-claude-md.template.md',
+      'global-agents-md.template.md',
     );
     if (fs.existsSync(templatePath)) {
       try {

@@ -22,7 +22,7 @@ export function stripAgentInternalTags(text: string): string {
  * be suppressed from IM delivery when sourceKind is 'auto_continue'.
  *
  * These are short acknowledgements that the agent generates when its session
- * transcript contains memory-flush / CLAUDE.md-update context from the
+ * transcript contains memory-flush / AGENTS.md-update context from the
  * compaction pipeline (issue #275). Substantive user-facing continuations
  * (task resumption, actual replies) are NOT noise and must pass through.
  *
@@ -41,7 +41,7 @@ export function isSystemMaintenanceNoise(text: string): boolean {
     /^已完成/,
     /^已刷新/,
     /^记忆已/,
-    /^claude\.md\s*已/,
+    /^agents\.md\s*已/,
     /^memory\s*(flush|updated)/i,
   ];
   return NOISE_PATTERNS.some((p) => p.test(normalized));

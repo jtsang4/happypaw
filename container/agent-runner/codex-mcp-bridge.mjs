@@ -11,7 +11,7 @@ const lines = [];
 
 const MEMORY_EXTENSIONS = new Set(['.md', '.txt']);
 const MEMORY_SUBDIRS = new Set(['memory', 'conversations']);
-const MEMORY_SKIP_DIRS = new Set(['logs', '.claude', '.codex', 'node_modules', '.git']);
+const MEMORY_SKIP_DIRS = new Set(['logs', '.codex', 'node_modules', '.git']);
 const MAX_MEMORY_FILE_SIZE = 512 * 1024;
 const MAX_MEMORY_APPEND_SIZE = 16 * 1024;
 const MEMORY_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -79,7 +79,7 @@ function collectMemoryFiles(baseDir, out, maxDepth, depth = 0) {
         }
       } else if (entry.isFile()) {
         if (
-          entry.name === 'CLAUDE.md' ||
+          entry.name === 'AGENTS.md' ||
           MEMORY_EXTENSIONS.has(path.extname(entry.name))
         ) {
           out.push(fullPath);
@@ -653,7 +653,7 @@ const toolSpecs = [
   {
     name: 'memory_search',
     description:
-      'Search memory files (CLAUDE.md, memory/, conversations/, and other .md/.txt files) in the current workspace.',
+      'Search memory files (AGENTS.md, memory/, conversations/, and other .md/.txt files) in the current workspace.',
     schema: z.object({
       query: z.string().describe('Search keyword or phrase'),
       max_results: z
@@ -720,7 +720,7 @@ const toolSpecs = [
     schema: z.object({
       file: z
         .string()
-        .describe('Relative path, optionally with :line (e.g. "CLAUDE.md:12" or "[memory] 2026-01-15.md")'),
+        .describe('Relative path, optionally with :line (e.g. "AGENTS.md:12" or "[memory] 2026-01-15.md")'),
       from_line: z.number().optional().describe('Starting line number (1-based)'),
       lines: z.number().optional().describe('Number of lines to read (max 200)'),
     }),
