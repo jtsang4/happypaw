@@ -280,7 +280,7 @@ router.delete('/:jid/agents/:agentId', authMiddleware, async (c) => {
   // Delete session records
   deleteSession(group.folder, agentId);
 
-  deleteAgent(agentId);
+  deleteAgent(agentId, group.folder);
 
   // Broadcast removal
   const { broadcastAgentStatus } = await import('../../../web.js');

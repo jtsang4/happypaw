@@ -148,9 +148,20 @@ export function listActiveConversationAgents(): SubAgent[] {
   ).map(mapAgentRow);
 }
 
-export function deleteAgent(id: string): void {
-  // Delete associated session
-  db.prepare('DELETE FROM sessions WHERE agent_id = ?').run(id);
+export function deleteAgent(id: string, groupFolder?: string): void {
+  const resolvedGroupFolder =
+    groupFolder ||
+    (
+      db.prepare('SELECT group_folder FROM agents WHERE id = ?').get(id) as
+        | { group_folder: string }
+        | undefined
+    )?.group_folder;
+
+  if (resolvedGroupFolder) {
+    db.prepare(
+      'DELETE FROM sessions WHERE group_folder = ? AND agent_id = ?',
+    ).run(resolvedGroupFolder, id);
+  }
   db.prepare('DELETE FROM agents WHERE id = ?').run(id);
 }
 
