@@ -442,71 +442,6 @@ flowchart TD
 | **安全** | bcrypt (12 轮) · AES-256-GCM · HMAC Cookie · RBAC · 路径遍历防护 · 挂载白名单 |
 | **IM 集成** | @larksuiteoapi/node-sdk (飞书) · grammY (Telegram) · QQ Bot API v2 (WebSocket + REST) |
 
-### 目录结构
-
-所有运行时数据统一在 `data/` 目录下，启动时自动创建，无需手动初始化。
-
-```
-happypaw/
-├── src/                          # 后端源码
-│   ├── index.ts                  #   入口：消息轮询、IPC 监听、容器生命周期
-│   ├── web.ts                    #   Hono 应用、WebSocket、静态文件
-│   ├── routes/                   #   路由（auth / groups / files / config / monitor / memory / tasks / skills / admin / browse / agents / mcp-servers）
-│   ├── feishu.ts                 #   飞书连接工厂（WebSocket 长连接）
-│   ├── telegram.ts               #   Telegram 连接工厂（Bot API）
-│   ├── qq.ts                     #   QQ 连接工厂（Bot API v2 WebSocket）
-│   ├── im-manager.ts             #   IM 连接池（per-user 飞书/Telegram/QQ 连接管理）
-│   ├── im-downloader.ts          #   IM 文件下载工具（保存到工作区 downloads/）
-│   ├── container-runner.ts       #   Docker / 宿主机进程管理
-│   ├── group-queue.ts            #   并发控制队列
-│   ├── runtime-config.ts         #   AES-256-GCM 加密配置
-│   ├── task-scheduler.ts         #   定时任务调度
-│   ├── file-manager.ts           #   文件安全（路径遍历防护）
-│   ├── mount-security.ts         #   挂载白名单 / 黑名单
-│   └── db.ts                     #   SQLite 数据层（Schema v1→v18）
-│
-├── web/                          # 前端 (React + Vite)
-│   └── src/
-│       ├── pages/                #   13 个页面
-│       ├── components/           #   UI 组件（shadcn/ui）
-│       ├── stores/               #   10 个 Zustand Store
-│       └── api/client.ts         #   统一 API 客户端
-│
-├── container/                    # Agent 容器
-│   ├── Dockerfile                #   容器镜像定义
-│   ├── build.sh                  #   构建脚本
-│   ├── agent-runner/             #   容器内执行引擎
-│   │   └── src/
-│   │       ├── index.ts          #     Agent 主循环 + 流式事件
-│   │       └── mcp-tools.ts      #     12 个 MCP 工具
-│   └── skills/                   #   项目级 Skills
-│
-├── shared/                       # 跨项目共享类型定义
-│   └── stream-event.ts           #   StreamEvent 类型单一真相源
-│
-├── scripts/                      # 构建辅助脚本
-│   ├── sync-stream-event.sh      #   同步 shared/ 类型到各子项目
-│   └── check-stream-event-sync.sh#   校验类型副本一致性
-│
-├── config/                       # 项目配置
-│   ├── default-groups.json       #   预注册群组
-│   └── mount-allowlist.json      #   容器挂载白名单
-│
-├── data/                         # 运行时数据（启动时自动创建）
-│   ├── db/messages.db            #   SQLite 数据库（WAL 模式）
-│   ├── groups/{folder}/          #   会话工作目录（Agent 可读写）
-│   │   ├── downloads/{channel}/  #     IM 文件下载（feishu/telegram/qq，按日期分子目录）
-│   │   └── <主记忆文件>          #     会话私有主记忆文件
-│   ├── groups/user-global/{id}/  #   用户全局记忆目录
-│   ├── sessions/{folder}/.codex/ #   Codex 线程 / 运行时持久化
-│   ├── ipc/{folder}/             #   IPC 通道（input / messages / tasks）
-│   ├── env/{folder}/env          #   容器环境变量文件
-│   ├── memory/{folder}/          #   日期记忆
-│   └── config/                   #   加密配置文件
-│
-└── Makefile                      # 常用命令
-```
-
 ### 开发指南
 
 ```bash
@@ -601,16 +536,6 @@ rm -rf data store groups
 3. 开发并测试：`make dev` 启动开发环境，`make typecheck` 检查类型
 4. 提交代码并推送到 Fork
 5. 创建 Pull Request 到 `main` 分支
-
-### Commit 规范
-
-Commit message 使用简体中文，格式：`类型: 描述`
-
-```
-修复: 侧边栏下拉菜单无法点击
-新增: Telegram Bot 集成
-重构: 统一消息路由逻辑
-```
 
 ### 项目结构
 
