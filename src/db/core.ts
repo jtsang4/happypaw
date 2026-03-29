@@ -97,8 +97,9 @@ export function initDatabase(): void {
       group_folder TEXT NOT NULL,
       session_id TEXT NOT NULL,
       agent_id TEXT NOT NULL DEFAULT '',
+      conversation_id TEXT NOT NULL DEFAULT '',
       runtime TEXT,
-      PRIMARY KEY (group_folder, agent_id)
+      PRIMARY KEY (group_folder, agent_id, conversation_id)
     );
     CREATE TABLE IF NOT EXISTS registered_groups (
       jid TEXT PRIMARY KEY,
@@ -464,6 +465,7 @@ export function initDatabase(): void {
   ensureColumn('messages', 'sdk_message_uuid', 'TEXT');
   ensureColumn('messages', 'source_kind', 'TEXT');
   ensureColumn('messages', 'finalization_reason', 'TEXT');
+  ensureColumn('sessions', 'conversation_id', "TEXT NOT NULL DEFAULT ''");
 
   // Add index on target_agent_id for fast lookup of IM bindings
   db.exec(
@@ -698,10 +700,11 @@ export function initDatabase(): void {
             group_folder TEXT NOT NULL,
             session_id TEXT NOT NULL,
             agent_id TEXT NOT NULL DEFAULT '',
-            PRIMARY KEY (group_folder, agent_id)
+            conversation_id TEXT NOT NULL DEFAULT '',
+            PRIMARY KEY (group_folder, agent_id, conversation_id)
           );
-          INSERT OR IGNORE INTO sessions_new (group_folder, session_id, agent_id)
-            SELECT group_folder, session_id, COALESCE(agent_id, '') FROM sessions;
+          INSERT OR IGNORE INTO sessions_new (group_folder, session_id, agent_id, conversation_id)
+            SELECT group_folder, session_id, COALESCE(agent_id, ''), COALESCE(conversation_id, '') FROM sessions;
           DROP TABLE sessions;
           ALTER TABLE sessions_new RENAME TO sessions;
         `);
@@ -710,6 +713,36 @@ export function initDatabase(): void {
   }
 
   ensureColumn('sessions', 'runtime', 'TEXT');
+
+  const sessionColumns = db
+    .prepare("PRAGMA table_info('sessions')")
+    .all() as Array<{ name: string; pk: number }>;
+  const sessionPkColumns = sessionColumns
+    .filter((column) => column.pk > 0)
+    .sort((a, b) => a.pk - b.pk)
+    .map((column) => column.name);
+  const needsConversationScopedSessions =
+    !sessionColumns.some((column) => column.name === 'conversation_id') ||
+    sessionPkColumns.join(',') !== 'group_folder,agent_id,conversation_id';
+  if (needsConversationScopedSessions) {
+    db.transaction(() => {
+      db.exec(`
+        CREATE TABLE sessions_new (
+          group_folder TEXT NOT NULL,
+          session_id TEXT NOT NULL,
+          agent_id TEXT NOT NULL DEFAULT '',
+          conversation_id TEXT NOT NULL DEFAULT '',
+          runtime TEXT,
+          PRIMARY KEY (group_folder, agent_id, conversation_id)
+        );
+        INSERT OR IGNORE INTO sessions_new (group_folder, session_id, agent_id, conversation_id, runtime)
+          SELECT group_folder, session_id, COALESCE(agent_id, ''), COALESCE(conversation_id, ''), runtime
+          FROM sessions;
+        DROP TABLE sessions;
+        ALTER TABLE sessions_new RENAME TO sessions;
+      `);
+    })();
+  }
 
   // v22: Fix target_main_jid that used folder-based JID (web:${folder})
   // instead of actual registered group JID (web:${uuid}).
@@ -999,7 +1032,7 @@ export function initDatabase(): void {
     db.exec('ALTER TABLE agents ADD COLUMN spawned_from_jid TEXT');
   }
 
-  const SCHEMA_VERSION = '34';
+  const SCHEMA_VERSION = '35';
   db.prepare(
     'INSERT OR REPLACE INTO router_state (key, value) VALUES (?, ?)',
   ).run('schema_version', SCHEMA_VERSION);

@@ -277,23 +277,48 @@ export function getRouterStateByPrefix(
 
 // --- Session accessors ---
 
+export interface RuntimeSessionScope {
+  agentId?: string | null;
+  conversationId?: string | null;
+}
+
+function normalizeRuntimeSessionScope(
+  scope?: string | RuntimeSessionScope | null,
+): {
+  agentId: string;
+  conversationId: string;
+} {
+  if (typeof scope === 'string') {
+    return {
+      agentId: scope,
+      conversationId: '',
+    };
+  }
+  return {
+    agentId: scope?.agentId || '',
+    conversationId: scope?.conversationId || '',
+  };
+}
+
 export function getSession(
   groupFolder: string,
-  agentId?: string | null,
+  scope?: string | RuntimeSessionScope | null,
 ): string | undefined {
-  return getRuntimeSession(groupFolder, agentId)?.sessionId;
+  return getRuntimeSession(groupFolder, scope)?.sessionId;
 }
 
 export function getRuntimeSession(
   groupFolder: string,
-  agentId?: string | null,
+  scope?: string | RuntimeSessionScope | null,
 ): RuntimeSessionRecord | undefined {
-  const effectiveAgentId = agentId || '';
+  const { agentId, conversationId } = normalizeRuntimeSessionScope(scope);
   const row = db
     .prepare(
-      'SELECT session_id FROM sessions WHERE group_folder = ? AND agent_id = ?',
+      'SELECT session_id FROM sessions WHERE group_folder = ? AND agent_id = ? AND conversation_id = ?',
     )
-    .get(groupFolder, effectiveAgentId) as { session_id: string } | undefined;
+    .get(groupFolder, agentId, conversationId) as
+    | { session_id: string }
+    | undefined;
   if (!row) return undefined;
   return {
     sessionId: row.session_id,
@@ -303,24 +328,24 @@ export function getRuntimeSession(
 export function setSession(
   groupFolder: string,
   sessionId: string,
-  agentId?: string | null,
+  scope?: string | RuntimeSessionScope | null,
   _runtime?: unknown,
 ): void {
-  const effectiveAgentId = agentId || '';
+  const { agentId, conversationId } = normalizeRuntimeSessionScope(scope);
   db.prepare(
-    `INSERT INTO sessions (group_folder, session_id, agent_id, runtime) VALUES (?, ?, ?, NULL)
-     ON CONFLICT(group_folder, agent_id) DO UPDATE SET session_id = excluded.session_id, runtime = NULL`,
-  ).run(groupFolder, sessionId, effectiveAgentId);
+    `INSERT INTO sessions (group_folder, session_id, agent_id, conversation_id, runtime) VALUES (?, ?, ?, ?, NULL)
+     ON CONFLICT(group_folder, agent_id, conversation_id) DO UPDATE SET session_id = excluded.session_id, runtime = NULL`,
+  ).run(groupFolder, sessionId, agentId, conversationId);
 }
 
 export function deleteSession(
   groupFolder: string,
-  agentId?: string | null,
+  scope?: string | RuntimeSessionScope | null,
 ): void {
-  const effectiveAgentId = agentId || '';
+  const { agentId, conversationId } = normalizeRuntimeSessionScope(scope);
   db.prepare(
-    'DELETE FROM sessions WHERE group_folder = ? AND agent_id = ?',
-  ).run(groupFolder, effectiveAgentId);
+    'DELETE FROM sessions WHERE group_folder = ? AND agent_id = ? AND conversation_id = ?',
+  ).run(groupFolder, agentId, conversationId);
 }
 
 export function deleteAllSessionsForFolder(groupFolder: string): void {
@@ -330,7 +355,7 @@ export function deleteAllSessionsForFolder(groupFolder: string): void {
 export function getAllSessions(): Record<string, RuntimeSessionRecord> {
   const rows = db
     .prepare(
-      "SELECT group_folder, session_id FROM sessions WHERE agent_id = ''",
+      "SELECT group_folder, session_id FROM sessions WHERE agent_id = '' AND conversation_id = ''",
     )
     .all() as Array<{ group_folder: string; session_id: string }>;
   const result: Record<string, RuntimeSessionRecord> = {};
