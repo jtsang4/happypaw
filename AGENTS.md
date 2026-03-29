@@ -449,7 +449,9 @@ output/
 
 ### 9.2 提交与评审规范
 
-- **Git commit message 使用简体中文**：`类型: 简要描述`
+- **Git commit message 必须使用英文并遵循 Conventional Commits 1.0.0 规范**：`<type>[optional scope]: <description>`
+- 推荐使用小写类型，如：`feat`、`fix`、`refactor`、`docs`、`test`、`chore`
+- 涉及破坏性变更时，必须使用 `!` 或 `BREAKING CHANGE:` 脚注显式标记
 - PR 标题与 commit message 一致
 - Issue 标题使用小写英文前缀：`bug:` / `feat:` / `perf:`
 
