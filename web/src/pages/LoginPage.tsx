@@ -151,8 +151,8 @@ export function LoginPage() {
         {/* Footer */}
         <p className="text-center text-sm text-muted-foreground mt-4">
           HappyPaw - Powered by{' '}
-          <a href="https://github.com/riba2534" target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary/80">
-            riba2534
+          <a href="https://github.com/jtsang4" target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary/80">
+            jtsang4
           </a>
         </p>
       </div>

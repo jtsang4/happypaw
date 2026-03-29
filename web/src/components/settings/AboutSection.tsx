@@ -39,7 +39,7 @@ export function AboutSection() {
         </div>
         <div className="flex items-center gap-3">
           <Code2 className="w-4 h-4 text-muted-foreground shrink-0" />
-          <span className="text-sm text-foreground">作者：riba2534</span>
+          <span className="text-sm text-foreground">作者：jtsang4</span>
         </div>
         <div className="flex items-center gap-3">
           <Bug className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -68,6 +68,20 @@ export function AboutSection() {
           <h3 className="text-sm font-medium text-foreground">灵感来源</h3>
         </div>
         <div className="space-y-4 text-sm text-muted-foreground">
+          <div>
+            <a
+              href="https://github.com/riba2534/happyclaw"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:text-primary/80 font-medium inline-flex items-center gap-1"
+            >
+              HappyClaw
+              <ExternalLink className="w-3 h-3" />
+            </a>
+            <p className="mt-1 leading-relaxed">
+              HappyClaw 是基于 Claude Agent SDK 开发的个人 AI 助手，本项目在 HappyClaw 的基础上，将底层运行时完全改为 Codex，并进行分化。
+            </p>
+          </div>
           <div>
             <a
               href="https://github.com/slopus/happy"

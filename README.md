@@ -12,7 +12,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-teal.svg?style=for-the-badge" alt="License" /></a>
   <a href="https://nodejs.org"><img src="https://img.shields.io/badge/Node.js-%3E%3D20-339933?style=for-the-badge&logo=nodedotjs&logoColor=white" alt="Node.js" /></a>
   <img src="https://img.shields.io/badge/TypeScript-5.7-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" />
-  <a href="https://github.com/jtsang4/happypaw/stargazers"><img src="https://img.shields.io/github/stars/riba2534/happypaw?style=for-the-badge&color=f5a623" alt="GitHub Stars" /></a>
+  <a href="https://github.com/jtsang4/happypaw/stargazers"><img src="https://img.shields.io/github/stars/jtsang4/happypaw?style=for-the-badge&color=f5a623" alt="GitHub Stars" /></a>
 </p>
 
 <p align="center">
