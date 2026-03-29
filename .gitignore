@@ -37,6 +37,7 @@ bun.lockb
 .docker-build-sentinel
 *.tsbuildinfo
 .happypaw/
+.factory/
 
 # Local tooling metadata
 .claude/

@@ -62,7 +62,7 @@ HappyPaw 是一个自托管的多用户 AI Agent 系统。它通过 HappyPaw 管
 - **移动端 PWA** — 针对移动端深度优化，支持一键安装到桌面，iOS / Android 均已适配，随时随地通过手机访问 AI Agent
 - **多端消息统一路由** — 飞书 WebSocket 长连接（富文本卡片、Reaction 反馈）、Telegram Bot API、QQ Bot API v2、微信 iLink Bot、Web 界面统一接入与回复
 
-> 项目借鉴了 [OpenClaw](https://github.com/nicepkg/OpenClaw) 的容器化架构，并保留多会话协作思路：多个独立 Agent 会话并行工作，各自拥有隔离的工作空间和持久记忆，结果通过 IM 渠道送达。
+> HappyPaw 不是从零开始另起炉灶，而是以 [HappyClaw](https://github.com/riba2534/happyclaw) 为底座持续分化演进而来：在继承其产品形态与部分工程基础的前提下，本项目对底层运行逻辑进行了系统性重构，将原有运行时体系完整替换为 Codex，并围绕自托管、多用户隔离、Web / IM 统一接入等方向继续扩展。感谢 HappyClaw 项目提供的坚实起点。
 
 ## 核心能力
 
