@@ -30,16 +30,28 @@ const [
   slashCommandsModule,
 ] = await Promise.all([
   import('hono'),
-  import(path.join(repoRoot, 'dist', 'routes', 'tasks.js')),
+  import(
+    path.join(repoRoot, 'dist', 'features', 'tasks', 'routes', 'tasks.js')
+  ),
   import(path.join(repoRoot, 'dist', 'db', 'core.js')),
   import(path.join(repoRoot, 'dist', 'db', 'shared.js')),
   import(path.join(repoRoot, 'dist', 'db', 'users-auth.js')),
-  import(path.join(repoRoot, 'dist', 'auth.js')),
-  import(path.join(repoRoot, 'dist', 'routes', 'auth.js')),
+  import(path.join(repoRoot, 'dist', 'features', 'auth', 'auth.js')),
+  import(
+    path.join(repoRoot, 'dist', 'features', 'auth', 'routes', 'auth.js')
+  ),
   import(path.join(repoRoot, 'dist', 'config.js')),
   import(path.join(repoRoot, 'dist', 'runtime-config.js')),
-  import(path.join(repoRoot, 'dist', 'im-command-utils.js')),
-  import(path.join(repoRoot, 'dist', 'index-slash-commands.js')),
+  import(path.join(repoRoot, 'dist', 'features', 'im', 'im-command-utils.js')),
+  import(
+    path.join(
+      repoRoot,
+      'dist',
+      'features',
+      'chat-runtime',
+      'slash-commands.js',
+    )
+  ),
 ]);
 
 const tasksRoutes = tasksRoutesModule.default;

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import { api } from '../api/client';
-import type { Permission, UserPublic } from './auth';
+import { api } from '../api/client.ts';
+import type { Permission, UserPublic } from './auth.ts';
 
 export type PermissionTemplateKey =
   | 'admin_full'

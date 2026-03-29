@@ -1,7 +1,7 @@
 import { create } from 'zustand';
-import { api } from '../api/client';
-import type { GroupInfo, GroupMember } from '../types';
-import { useChatStore } from './chat';
+import { api } from '../api/client.ts';
+import type { GroupInfo, GroupMember } from '../types.ts';
+import { useChatStore } from './chat.ts';
 
 export type { GroupInfo };
 

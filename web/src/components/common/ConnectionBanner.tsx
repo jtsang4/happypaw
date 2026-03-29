@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Loader2, WifiOff, CheckCircle2 } from 'lucide-react';
-import { useConnectionStatus, type ConnectionStatus } from '../../hooks/useConnectionStatus';
+import { useConnectionStatus, type ConnectionStatus } from '../../hooks/useConnectionStatus.ts';
 
 /**
  * ConnectionBanner uses absolute positioning to overlay the content

@@ -4,8 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import type { McpServer } from '../../stores/mcp-servers';
-import { useMcpServersStore } from '../../stores/mcp-servers';
+import type { McpServer } from '../../stores/mcp-servers.ts';
+import { useMcpServersStore } from '../../stores/mcp-servers.ts';
 
 interface McpServerDetailProps {
   server: McpServer | null;

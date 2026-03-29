@@ -9,18 +9,29 @@ import { pathToFileURL } from 'node:url';
 const repoRoot = '/Users/jtsang/Documents/workspace/github/jtsang4/happypaw';
 
 const { createIpcRuntime } = await import(
-  pathToFileURL(path.join(repoRoot, 'dist', 'index-ipc-runtime.js')).href
+  pathToFileURL(
+    path.join(repoRoot, 'dist', 'features', 'chat-runtime', 'ipc-runtime.js'),
+  ).href
 );
 
 const [indexSource, ipcRuntimeSource] = await Promise.all([
   fs.readFile(path.join(repoRoot, 'src', 'index.ts'), 'utf8'),
-  fs.readFile(path.join(repoRoot, 'src', 'index-ipc-runtime.ts'), 'utf8'),
+  fs.readFile(
+    path.join(
+      repoRoot,
+      'src',
+      'features',
+      'chat-runtime',
+      'ipc-runtime.ts',
+    ),
+    'utf8',
+  ),
 ]);
 
 assert.match(
   ipcRuntimeSource,
   /export function createIpcRuntime/,
-  'index-ipc-runtime.ts exports the extracted IPC runtime factory',
+  'ipc-runtime.ts exports the extracted IPC runtime factory',
 );
 assert.doesNotMatch(
   indexSource,

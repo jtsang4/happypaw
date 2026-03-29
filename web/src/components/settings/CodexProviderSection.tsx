@@ -2,12 +2,12 @@ import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { api } from '../../api/client';
+import { api } from '../../api/client.ts';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import type { CodexConfigPublic } from './types';
-import { getErrorMessage } from './types';
+import type { CodexConfigPublic } from './types.ts';
+import { getErrorMessage } from './types.ts';
 
 export function CodexProviderSection() {
   const [config, setConfig] = useState<CodexConfigPublic | null>(null);

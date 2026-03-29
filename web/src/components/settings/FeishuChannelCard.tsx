@@ -6,8 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { api } from '../../api/client';
-import { getErrorMessage } from './types';
+import { api } from '../../api/client.ts';
+import { getErrorMessage } from './types.ts';
 
 interface UserFeishuConfig {
   appId: string;

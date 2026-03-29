@@ -3,9 +3,9 @@ import {
   RefreshCw, Zap, ArrowUpRight, ArrowDownRight, DollarSign,
   MessageSquare, Database, Filter, Info,
 } from 'lucide-react';
-import { useUsageStore } from '../stores/usage';
-import { useAuthStore } from '../stores/auth';
-import { formatTokens } from '../components/billing/utils';
+import { useUsageStore } from '../stores/usage.ts';
+import { useAuthStore } from '../stores/auth.ts';
+import { formatTokens } from '../components/billing/utils.ts';
 import { PageHeader } from '@/components/common/PageHeader';
 import { SkeletonStatCards } from '@/components/common/Skeletons';
 import { Button } from '@/components/ui/button';

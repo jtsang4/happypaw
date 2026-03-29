@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
-import { useAuthStore } from '../stores/auth';
+import { useAuthStore } from '../stores/auth.ts';
 import { LogoLoading } from '../components/common/LogoLoading';
-import { api } from '../api/client';
+import { api } from '../api/client.ts';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';

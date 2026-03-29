@@ -1,4 +1,4 @@
-import { replaceInApp, withBasePath } from '../utils/url';
+import { replaceInApp, withBasePath } from '../utils/url.ts';
 
 type WsHandler = (data: any) => void;
 

@@ -3,8 +3,8 @@
  * Manages project-level configs under the workspace's Codex-compatible config directory.
  */
 import { create } from 'zustand';
-import { api } from '../api/client';
-import { extractErrorMessage } from '../utils/error';
+import { api } from '../api/client.ts';
+import { extractErrorMessage } from '../utils/error.ts';
 
 // --- Skills ---
 

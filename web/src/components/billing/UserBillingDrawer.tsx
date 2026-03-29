@@ -21,10 +21,10 @@ import {
   type UserBillingOverview,
   type BalanceTransaction,
   type SubscriptionHistoryItem,
-} from '../../stores/billing';
-import { useCurrency } from './utils';
+} from '../../stores/billing.ts';
+import { useCurrency } from './utils.ts';
 import { ProgressBar } from './ProgressBar';
-import { api } from '../../api/client';
+import { api } from '../../api/client.ts';
 
 const TX_SOURCE_LABELS: Record<string, string> = {
   admin_manual_recharge: '后台充值',

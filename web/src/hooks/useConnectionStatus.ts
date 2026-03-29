@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { wsManager } from '../api/ws';
+import { wsManager } from '../api/ws.ts';
 
 export type ConnectionStatus = 'connected' | 'reconnecting' | 'offline';
 

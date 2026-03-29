@@ -3,11 +3,11 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { NavRail } from './NavRail';
 import { BottomTabBar } from './BottomTabBar';
 import { ConnectionBanner } from '../common/ConnectionBanner';
-import { wsManager } from '../../api/ws';
-import { useTheme } from '../../hooks/useTheme';
-import { useBillingStore } from '../../stores/billing';
-import { useGroupsStore } from '../../stores/groups';
-import { useChatStore } from '../../stores/chat';
+import { wsManager } from '../../api/ws.ts';
+import { useTheme } from '../../hooks/useTheme.ts';
+import { useBillingStore } from '../../stores/billing.ts';
+import { useGroupsStore } from '../../stores/groups.ts';
+import { useChatStore } from '../../stores/chat.ts';
 
 export function AppLayout() {
   const location = useLocation();

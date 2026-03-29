@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 
-import { useAuthStore } from '../stores/auth';
+import { useAuthStore } from '../stores/auth.ts';
 import { SettingsNav } from '../components/settings/SettingsNav';
 import { CodexProviderSection } from '../components/settings/CodexProviderSection';
 import { RegistrationSection } from '../components/settings/RegistrationSection';
@@ -20,7 +20,7 @@ import { AgentDefinitionsPage } from './AgentDefinitionsPage';
 import { UsersPage } from './UsersPage';
 import { BindingsSection } from '../components/settings/BindingsSection';
 import { Card, CardContent } from '@/components/ui/card';
-import type { SettingsTab } from '../components/settings/types';
+import type { SettingsTab } from '../components/settings/types.ts';
 
 const VALID_TABS: SettingsTab[] = ['codex', 'registration', 'appearance', 'system', 'profile', 'my-channels', 'security', 'groups', 'memory', 'skills', 'mcp-servers', 'agent-definitions', 'users', 'about', 'bindings'];
 const SYSTEM_TABS: SettingsTab[] = ['codex', 'registration', 'appearance', 'system'];

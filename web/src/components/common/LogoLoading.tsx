@@ -1,4 +1,4 @@
-import { APP_BASE } from '../../utils/url';
+import { APP_BASE } from '../../utils/url.ts';
 
 interface LogoLoadingProps {
   /** Show full animated logo with wordmark */

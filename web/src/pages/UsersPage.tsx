@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PageHeader } from '@/components/common/PageHeader';
 import { Card, CardContent } from '@/components/ui/card';
-import { useAuthStore } from '../stores/auth';
+import { useAuthStore } from '../stores/auth.ts';
 import { UserListTab } from '../components/users/UserListTab';
 import { InviteCodesTab } from '../components/users/InviteCodesTab';
 import { AuditLogTab } from '../components/users/AuditLogTab';

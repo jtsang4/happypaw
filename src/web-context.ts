@@ -2,7 +2,7 @@
 
 import { WebSocket } from 'ws';
 import { RegisteredGroup, RuntimeSessionRecord, UserRole } from './types.js';
-import { GroupQueue } from './group-queue.js';
+import { GroupQueue } from './features/chat-runtime/group-queue.js';
 import type {
   AuthUser,
   NewMessage,

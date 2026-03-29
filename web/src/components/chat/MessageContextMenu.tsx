@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Copy, FileText, ImageDown, Trash2 } from 'lucide-react';
-import { useChatStore } from '../../stores/chat';
+import { useChatStore } from '../../stores/chat.ts';
 
 interface MessageContextMenuProps {
   content: string;

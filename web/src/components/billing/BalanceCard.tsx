@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Wallet, CheckCircle2, AlertTriangle } from 'lucide-react';
-import { useBillingStore } from '../../stores/billing';
-import { useCurrency } from './utils';
+import { useBillingStore } from '../../stores/billing.ts';
+import { useCurrency } from './utils.ts';
 
 export default function BalanceCard() {
   const {

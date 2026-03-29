@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { Folder, FolderPlus, ChevronRight, ArrowLeft, Loader2, FolderCheck } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { api } from '../../api/client';
+import { api } from '../../api/client.ts';
 
 interface DirectoryEntry {
   name: string;

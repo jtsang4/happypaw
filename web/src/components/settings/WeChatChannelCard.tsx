@@ -4,8 +4,8 @@ import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { ToggleSwitch } from '@/components/ui/toggle-switch';
-import { api } from '../../api/client';
-import { getErrorMessage } from './types';
+import { api } from '../../api/client.ts';
+import { getErrorMessage } from './types.ts';
 import { WeChatQRDialog } from './WeChatQRDialog';
 
 interface UserWeChatConfig {

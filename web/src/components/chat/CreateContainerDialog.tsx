@@ -20,9 +20,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DirectoryBrowser } from '../shared/DirectoryBrowser';
-import { useChatStore } from '../../stores/chat';
-import { useAuthStore } from '../../stores/auth';
-import { buildCreateFlowOptions } from './create-flow-options';
+import { useChatStore } from '../../stores/chat.ts';
+import { useAuthStore } from '../../stores/auth.ts';
+import { buildCreateFlowOptions } from './create-flow-options.ts';
 
 interface CreateContainerDialogProps {
   open: boolean;

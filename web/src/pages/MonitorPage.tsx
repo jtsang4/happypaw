@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { useMonitorStore } from '../stores/monitor';
-import { useAuthStore } from '../stores/auth';
+import { useMonitorStore } from '../stores/monitor.ts';
+import { useAuthStore } from '../stores/auth.ts';
 import { ContainerStatus } from '../components/monitor/ContainerStatus';
 import { QueueStatus } from '../components/monitor/QueueStatus';
 import { SystemInfo } from '../components/monitor/SystemInfo';
@@ -10,7 +10,7 @@ import { PageHeader } from '@/components/common/PageHeader';
 import { SkeletonStatCards } from '@/components/common/Skeletons';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { wsManager } from '../api/ws';
+import { wsManager } from '../api/ws.ts';
 
 export function MonitorPage() {
   const { status, loading, loadStatus, building, buildLogs, buildResult, buildDockerImage, clearBuildResult } = useMonitorStore();

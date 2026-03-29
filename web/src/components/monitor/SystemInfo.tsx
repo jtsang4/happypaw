@@ -1,6 +1,6 @@
 import { Activity } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
-import { SystemStatus } from '../../stores/monitor';
+import { SystemStatus } from '../../stores/monitor.ts';
 
 interface SystemInfoProps {
   status: SystemStatus;

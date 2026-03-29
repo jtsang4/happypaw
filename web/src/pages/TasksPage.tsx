@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useTasksStore } from '../stores/tasks';
-import { useChatStore } from '../stores/chat';
-import { useAuthStore } from '../stores/auth';
+import { useTasksStore } from '../stores/tasks.ts';
+import { useChatStore } from '../stores/chat.ts';
+import { useAuthStore } from '../stores/auth.ts';
 import { TaskCard } from '../components/tasks/TaskCard';
 import { CreateTaskForm } from '../components/tasks/CreateTaskForm';
 import { Plus, RefreshCw, Clock, X } from 'lucide-react';

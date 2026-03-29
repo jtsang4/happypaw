@@ -1,11 +1,11 @@
 import { create } from 'zustand';
-import { createAgentActions } from './actions/agent-actions';
-import { createGroupActions } from './actions/group-actions';
-import { createImActions } from './actions/im-actions';
-import { createMessageActions } from './actions/message-actions';
-import { createStreamActions } from './actions/stream-actions';
-import { loadPersistedActiveAgentTabs } from './persistence';
-import type { ChatState } from './types';
+import { createAgentActions } from './actions/agent-actions.ts';
+import { createGroupActions } from './actions/group-actions.ts';
+import { createImActions } from './actions/im-actions.ts';
+import { createMessageActions } from './actions/message-actions.ts';
+import { createStreamActions } from './actions/stream-actions.ts';
+import { loadPersistedActiveAgentTabs } from './persistence.ts';
+import type { ChatState } from './types.ts';
 
 export const useChatStore = create<ChatState>((set, get) => ({
   groups: {},

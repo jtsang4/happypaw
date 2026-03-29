@@ -1,5 +1,5 @@
 import { useCallback, useSyncExternalStore } from 'react';
-import { useAuthStore } from '../stores/auth';
+import { useAuthStore } from '../stores/auth.ts';
 
 export type DisplayMode = 'chat' | 'compact';
 

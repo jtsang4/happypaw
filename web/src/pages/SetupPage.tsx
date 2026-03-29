@@ -3,7 +3,7 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { ChevronRight, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { LogoLoading } from '../components/common/LogoLoading';
 
-import { useAuthStore } from '../stores/auth';
+import { useAuthStore } from '../stores/auth.ts';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';

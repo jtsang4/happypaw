@@ -1,10 +1,10 @@
 import { useMemo } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { useAuthStore } from '../../stores/auth';
-import { useBillingStore } from '../../stores/billing';
-import { useScrollDirection } from '../../hooks/useScrollDirection';
-import { lightTap } from '../../hooks/useHaptic';
-import { baseNavItems } from './nav-items';
+import { useAuthStore } from '../../stores/auth.ts';
+import { useBillingStore } from '../../stores/billing.ts';
+import { useScrollDirection } from '../../hooks/useScrollDirection.ts';
+import { lightTap } from '../../hooks/useHaptic.ts';
+import { baseNavItems } from './nav-items.ts';
 
 export function BottomTabBar() {
   const location = useLocation();

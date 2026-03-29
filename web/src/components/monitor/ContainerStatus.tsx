@@ -1,6 +1,6 @@
 import { Server } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
-import { SystemStatus } from '../../stores/monitor';
+import { SystemStatus } from '../../stores/monitor.ts';
 
 interface ContainerStatusProps {
   status: SystemStatus;

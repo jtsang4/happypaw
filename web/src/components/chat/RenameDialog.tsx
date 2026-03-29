@@ -10,7 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useChatStore } from '../../stores/chat';
+import { useChatStore } from '../../stores/chat.ts';
 
 interface RenameDialogProps {
   open: boolean;

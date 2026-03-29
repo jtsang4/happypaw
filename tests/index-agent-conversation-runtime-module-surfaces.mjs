@@ -7,24 +7,36 @@ import { pathToFileURL } from 'node:url';
 
 const repoRoot = '/Users/jtsang/Documents/workspace/github/jtsang4/happypaw';
 
-const { createIndexAgentConversationRuntime } = await import(
+const { createAgentConversationRuntime } = await import(
   pathToFileURL(
-    path.join(repoRoot, 'dist', 'index-agent-conversation-runtime.js'),
+    path.join(
+      repoRoot,
+      'dist',
+      'features',
+      'chat-runtime',
+      'agent-conversation-runtime.js',
+    ),
   ).href
 );
 
 const [indexSource, extractedSource] = await Promise.all([
   fs.readFile(path.join(repoRoot, 'src', 'index.ts'), 'utf8'),
   fs.readFile(
-    path.join(repoRoot, 'src', 'index-agent-conversation-runtime.ts'),
+    path.join(
+      repoRoot,
+      'src',
+      'features',
+      'chat-runtime',
+      'agent-conversation-runtime.ts',
+    ),
     'utf8',
   ),
 ]);
 
 assert.match(
   extractedSource,
-  /export function createIndexAgentConversationRuntime/,
-  'index-agent-conversation-runtime.ts exports the extracted conversation runtime factory',
+  /export function createAgentConversationRuntime/,
+  'agent-conversation-runtime.ts exports the extracted conversation runtime factory',
 );
 assert.doesNotMatch(
   indexSource,
@@ -42,7 +54,7 @@ assert.doesNotMatch(
   'src/index.ts no longer contains agent streaming-card handling inline',
 );
 
-const runtime = createIndexAgentConversationRuntime({
+const runtime = createAgentConversationRuntime({
   assistantName: 'HappyPaw',
   registeredGroups: {},
   lastAgentTimestamp: {},

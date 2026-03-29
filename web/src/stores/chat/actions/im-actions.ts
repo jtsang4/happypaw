@@ -1,6 +1,6 @@
-import { api } from '../../../api/client';
-import type { AvailableImGroup } from '../../../types';
-import type { ChatState, ChatStoreGet, ChatStoreSet } from '../types';
+import { api } from '../../../api/client.ts';
+import type { AvailableImGroup } from '../../../types.ts';
+import type { ChatState, ChatStoreGet, ChatStoreSet } from '../types.ts';
 
 type ImActions = Pick<
   ChatState,

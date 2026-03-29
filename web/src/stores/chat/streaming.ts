@@ -2,15 +2,15 @@ import {
   DEFAULT_STREAMING_STATE,
   MAX_EVENT_LOG,
   MAX_STREAMING_TEXT,
-} from './constants';
-import { saveStreamingToSession } from './persistence';
+} from './constants.ts';
+import { saveStreamingToSession } from './persistence.ts';
 import type {
   ChatStoreSet,
   PendingDelta,
   StreamEvent,
   StreamingState,
   StreamingTimelineEvent,
-} from './types';
+} from './types.ts';
 
 const pendingDeltas = new Map<string, PendingDelta>();
 

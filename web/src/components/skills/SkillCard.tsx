@@ -1,6 +1,6 @@
 import { Lock } from 'lucide-react';
-import type { Skill } from '../../stores/skills';
-import { useSkillsStore } from '../../stores/skills';
+import type { Skill } from '../../stores/skills.ts';
+import { useSkillsStore } from '../../stores/skills.ts';
 
 interface SkillCardProps {
   skill: Skill;

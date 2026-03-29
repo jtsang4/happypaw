@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { GroupInfo } from '../../stores/groups';
+import { GroupInfo } from '../../stores/groups.ts';
 
 interface GroupDetailProps {
   group: GroupInfo & { jid: string };

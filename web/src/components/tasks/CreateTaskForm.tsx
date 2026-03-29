@@ -11,9 +11,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { api } from '../../api/client';
-import { extractErrorMessage } from '../../utils/error';
-import { showToast } from '../../utils/toast';
+import { api } from '../../api/client.ts';
+import { extractErrorMessage } from '../../utils/error.ts';
+import { showToast } from '../../utils/toast.ts';
 
 interface Group {
   jid: string;

@@ -1,4 +1,4 @@
-import type { Permission } from '../../stores/auth';
+import type { Permission } from '../../stores/auth.ts';
 
 export function getErrorMessage(err: unknown, fallback: string): string {
   if (typeof err === 'object' && err !== null && 'message' in err) {

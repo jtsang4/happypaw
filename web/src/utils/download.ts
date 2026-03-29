@@ -10,7 +10,7 @@
  * consistently across all modern browsers and PWA modes.
  */
 
-import { withBasePath } from './url';
+import { withBasePath } from './url.ts';
 
 /**
  * Trigger a browser download from a Blob.

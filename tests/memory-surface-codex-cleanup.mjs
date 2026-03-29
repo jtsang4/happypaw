@@ -24,7 +24,7 @@ assert.doesNotMatch(
   'MemorySource schema should not expose Claude-branded kinds',
 );
 
-const memoryRouteSource = read('src/routes/memory.ts');
+const memoryRouteSource = read('src/features/memory/routes/memory.ts');
 assert.match(
   memoryRouteSource,
   /kind:\s*'primary'/u,

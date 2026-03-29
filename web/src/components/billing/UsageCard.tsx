@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BarChart3, AlertTriangle } from 'lucide-react';
-import { useBillingStore } from '../../stores/billing';
-import { useCurrency, formatTokens } from './utils';
+import { useBillingStore } from '../../stores/billing.ts';
+import { useCurrency, formatTokens } from './utils.ts';
 import { ProgressBar } from './ProgressBar';
 
 type WindowKey = 'daily' | 'weekly' | 'monthly';

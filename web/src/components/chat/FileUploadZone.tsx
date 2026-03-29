@@ -1,6 +1,6 @@
 import { useState, useRef, DragEvent } from 'react';
 import { Upload, FolderUp } from 'lucide-react';
-import { useFileStore } from '../../stores/files';
+import { useFileStore } from '../../stores/files.ts';
 
 interface FileUploadZoneProps {
   groupJid: string;

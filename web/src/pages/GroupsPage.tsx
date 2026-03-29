@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Users } from 'lucide-react';
-import { useGroupsStore } from '../stores/groups';
+import { useGroupsStore } from '../stores/groups.ts';
 import { GroupCard } from '../components/groups/GroupCard';
 import { PageHeader } from '@/components/common/PageHeader';
 import { SkeletonCardGrid } from '@/components/common/Skeletons';

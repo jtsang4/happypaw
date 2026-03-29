@@ -2,17 +2,17 @@ import { useEffect, useState } from 'react';
 import { Loader2, Bot } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { useAuthStore } from '../../stores/auth';
-import { api } from '../../api/client';
+import { useAuthStore } from '../../stores/auth.ts';
+import { api } from '../../api/client.ts';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { EmojiAvatar } from '@/components/common/EmojiAvatar';
 import { EmojiPicker } from '@/components/common/EmojiPicker';
 import { ColorPicker } from '@/components/common/ColorPicker';
-import { getErrorMessage } from './types';
+import { getErrorMessage } from './types.ts';
 import { SettingsCard as Section } from './SettingsCard';
-import type { AppearanceConfig } from '../../stores/auth';
+import type { AppearanceConfig } from '../../stores/auth.ts';
 
 export function AppearanceSection() {
   const { hasPermission } = useAuthStore();

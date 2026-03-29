@@ -4,11 +4,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { SearchInput } from '@/components/common/SearchInput';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
-import { useImBindings } from './hooks/useImBindings';
+import { useImBindings } from './hooks/useImBindings.ts';
 import { ImBindingRow } from './ImBindingRow';
 import { BindingTargetDialog } from './BindingTargetDialog';
-import type { AvailableImGroup } from '../../types';
-import type { BindingTarget } from './hooks/useImBindings';
+import type { AvailableImGroup } from '../../types.ts';
+import type { BindingTarget } from './hooks/useImBindings.ts';
 
 type ChannelFilter = 'all' | 'feishu' | 'telegram' | 'qq' | 'wechat';
 

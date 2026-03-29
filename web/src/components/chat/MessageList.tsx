@@ -1,12 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { Message, useChatStore } from '../../stores/chat';
-import { useAuthStore } from '../../stores/auth';
+import { Message, useChatStore } from '../../stores/chat.ts';
+import { useAuthStore } from '../../stores/auth.ts';
 import { MessageBubble } from './MessageBubble';
 import { StreamingDisplay } from './StreamingDisplay';
 import { EmojiAvatar } from '../common/EmojiAvatar';
 import { Loader2, ChevronUp, ChevronDown, AlertTriangle, Square } from 'lucide-react';
-import { useDisplayMode } from '../../hooks/useDisplayMode';
+import { useDisplayMode } from '../../hooks/useDisplayMode.ts';
 
 interface MessageListProps {
   messages: Message[];

@@ -7,13 +7,13 @@ import {
   TIMEZONE,
 } from './config.js';
 import { LEGACY_AGENT_SENDER } from './legacy-product.js';
-import { interruptibleSleep } from './message-notifier.js';
+import { interruptibleSleep } from './features/im/message-notifier.js';
 import {
   runContainerAgent,
   runHostAgent,
   writeGroupsSnapshot,
   writeTasksSnapshot,
-} from './container-runner.js';
+} from './features/execution/container-runner.js';
 import {
   createTask,
   deleteTask,
@@ -44,28 +44,28 @@ import {
   updateTask,
 } from './db.js';
 // feishu.js deprecated exports are no longer needed; imManager handles all connections
-import { imManager } from './im-manager.js';
-import { getChannelType } from './im-channel.js';
+import { imManager } from './features/im/im-manager.js';
+import { getChannelType } from './features/im/im-channel.js';
 import {
   hasActiveStreamingSession,
   abortAllStreamingSessions,
   getStreamingSession,
-} from './feishu-streaming-card.js';
+} from './features/im/feishu/streaming-card/index.js';
 import {
   formatContextMessages,
   formatWorkspaceList,
   formatSystemStatus,
   resolveLocationInfo,
   type WorkspaceInfo,
-} from './im-command-utils.js';
+} from './features/im/im-command-utils.js';
 import { getSystemSettings } from './runtime-config.js';
-import { GroupQueue } from './group-queue.js';
+import { GroupQueue } from './features/chat-runtime/group-queue.js';
 import {
   checkBillingAccessFresh,
   formatBillingAccessDeniedMessage,
   updateUsage,
   deductUsageCost,
-} from './billing.js';
+} from './features/billing/billing.js';
 import {
   MessageCursor,
   RegisteredGroup,
@@ -82,8 +82,11 @@ import {
   broadcastBillingUpdate,
   getActiveStreamingTexts,
 } from './web.js';
-import { installSkillForUser, deleteSkillForUser } from './routes/skills.js';
-import { clearPersistedRuntimeStateForRecovery } from './runtime-state-cleanup.js';
+import {
+  installSkillForUser,
+  deleteSkillForUser,
+} from './features/skills/routes/skills.js';
+import { clearPersistedRuntimeStateForRecovery } from './features/chat-runtime/runtime-state-cleanup.js';
 import {
   EMPTY_CURSOR,
   createCursorStateHelpers,
@@ -92,24 +95,24 @@ import {
   recoverConversationAgents as recoverConversationAgentsHelper,
   recoverPendingMessages as recoverPendingMessagesHelper,
   recoverStuckPendingGroups as recoverStuckPendingGroupsHelper,
-} from './index-recovery.js';
-import { createIndexBootstrap } from './index-bootstrap.js';
-import { createIndexStateBootstrap } from './index-bootstrap-state.js';
-import { createSlashCommandHandlers } from './index-slash-commands.js';
+} from './features/chat-runtime/recovery.js';
+import { createBootstrapRuntime } from './features/chat-runtime/bootstrap.js';
+import { createBootstrapStateRuntime } from './features/chat-runtime/bootstrap-state.js';
+import { createSlashCommandHandlers } from './features/chat-runtime/slash-commands.js';
 import {
   createImRoutingHelpers,
   resolveReplyRouteJid,
   type ReplyRouteUpdater,
-} from './index-im-routing.js';
+} from './features/chat-runtime/im-routing.js';
 import {
   collectMessageImages,
   createMainConversationRuntime,
   formatMessages,
-} from './index-main-conversation-runtime.js';
-import { createMessageLoop } from './index-message-loop.js';
-import { createIpcRuntime } from './index-ipc-runtime.js';
-import { createIndexAgentRuntimeAdapter } from './index-agent-runtime-adapter.js';
-import { createIndexAgentConversationRuntime } from './index-agent-conversation-runtime.js';
+} from './features/chat-runtime/main-conversation-runtime.js';
+import { createMessageLoop } from './features/chat-runtime/message-loop.js';
+import { createIpcRuntime } from './features/chat-runtime/ipc-runtime.js';
+import { createAgentRuntimeAdapter } from './features/chat-runtime/agent-runtime-adapter.js';
+import { createAgentConversationRuntime } from './features/chat-runtime/agent-conversation-runtime.js';
 
 const OOM_EXIT_RE = /code 137/;
 
@@ -169,11 +172,9 @@ const recoveryGroups = new Set<string>();
 
 // Track consecutive IM health check failures per JID for safe auto-unbind
 const imHealthCheckFailCounts = new Map<string, number>();
-let bootstrap: ReturnType<typeof createIndexBootstrap>;
+let bootstrap: ReturnType<typeof createBootstrapRuntime>;
 let ipcRuntime: ReturnType<typeof createIpcRuntime>;
-let agentConversationRuntime: ReturnType<
-  typeof createIndexAgentConversationRuntime
->;
+let agentConversationRuntime: ReturnType<typeof createAgentConversationRuntime>;
 
 const { setCursors, advanceCursors } = createCursorStateHelpers({
   getLastAgentTimestamp: () => lastAgentTimestamp,
@@ -206,7 +207,7 @@ const {
   registerGroup,
   saveState,
   syncGroupMetadata,
-} = createIndexStateBootstrap({
+} = createBootstrapStateRuntime({
   getGlobalMessageCursor: () => globalMessageCursor,
   setGlobalMessageCursor: (cursor) => {
     globalMessageCursor = cursor;
@@ -329,7 +330,7 @@ const {
   sendSystemMessage,
   writeUsageRecords,
   ensureTerminalContainerStarted,
-} = createIndexAgentRuntimeAdapter({
+} = createAgentRuntimeAdapter({
   assistantName: ASSISTANT_NAME,
   queue,
   registeredGroups,
@@ -418,7 +419,7 @@ const { processGroupMessages } = createMainConversationRuntime({
   getAgentReplyRouteJid,
 });
 
-agentConversationRuntime = createIndexAgentConversationRuntime({
+agentConversationRuntime = createAgentConversationRuntime({
   assistantName: ASSISTANT_NAME,
   registeredGroups,
   lastAgentTimestamp,
@@ -483,7 +484,7 @@ ipcRuntime = createIpcRuntime({
   deleteSkillForUser,
 });
 
-bootstrap = createIndexBootstrap({
+bootstrap = createBootstrapRuntime({
   activeRouteUpdaters,
   buildIsChatAuthorized,
   buildOnAgentMessage,

@@ -9,7 +9,7 @@ import {
   type Variables,
 } from '../web-context.js';
 import { updateSessionLastActive, deleteUserSession } from '../db.js';
-import { isSessionExpired } from '../auth.js';
+import { isSessionExpired } from '../features/auth/auth.js';
 import type { AuthUser, Permission } from '../types.js';
 import { hasPermission } from '../permissions.js';
 import {

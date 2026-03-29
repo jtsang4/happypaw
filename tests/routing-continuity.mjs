@@ -13,15 +13,23 @@ process.chdir(realTempRoot);
 const { initDatabase, closeDatabase, setRegisteredGroup, createAgent, updateAgentLastImJid } =
   await import(path.join(repoRoot, 'dist', 'db.js'));
 const { createIpcRuntime } = await import(
-  path.join(repoRoot, 'dist', 'index-ipc-runtime.js')
+  path.join(repoRoot, 'dist', 'features', 'chat-runtime', 'ipc-runtime.js')
 );
 const {
   getActiveImReplyRouteSnapshotPath,
   persistActiveImReplyRoute,
   resolveReplyRouteJid,
-} = await import(path.join(repoRoot, 'dist', 'index-im-routing.js'));
+} = await import(
+  path.join(repoRoot, 'dist', 'features', 'chat-runtime', 'im-routing.js')
+);
 const { getScopedImReplyRouteSnapshotPath } = await import(
-  path.join(repoRoot, 'dist', 'im-reply-route-snapshot.js')
+  path.join(
+    repoRoot,
+    'dist',
+    'features',
+    'chat-runtime',
+    'im-reply-route-snapshot.js',
+  )
 );
 
 initDatabase();

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { api } from '../../../api/client';
-import { getErrorMessage } from '../types';
-import { copyToClipboard } from '../../../utils/clipboard';
+import { api } from '../../../api/client.ts';
+import { getErrorMessage } from '../types.ts';
+import { copyToClipboard } from '../../../utils/clipboard.ts';
 
 interface PairingCodeResult {
   code: string;

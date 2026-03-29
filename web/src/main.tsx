@@ -2,7 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import './styles/globals.css';
-import { shouldUseHashRouter } from './utils/url';
+import { shouldUseHashRouter } from './utils/url.ts';
 
 if (typeof window !== 'undefined') {
   window.__HAPPYPAW_HASH_ROUTER__ = shouldUseHashRouter();

@@ -3,14 +3,14 @@ import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Label } from '@/components/ui/label';
-import { useAuthStore } from '../../stores/auth';
-import { useBillingStore, type BillingPlan } from '../../stores/billing';
-import { api } from '../../api/client';
+import { useAuthStore } from '../../stores/auth.ts';
+import { useBillingStore, type BillingPlan } from '../../stores/billing.ts';
+import { api } from '../../api/client.ts';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import type { CodexConfigPublic, SystemSettings } from './types';
-import { getErrorMessage } from './types';
+import type { CodexConfigPublic, SystemSettings } from './types.ts';
+import { getErrorMessage } from './types.ts';
 
 interface FieldConfig {
   key: keyof SystemSettings;

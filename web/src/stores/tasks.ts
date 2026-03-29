@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import { api } from '../api/client';
-import { extractErrorMessage } from '../utils/error';
+import { api } from '../api/client.ts';
+import { extractErrorMessage } from '../utils/error.ts';
 
 export interface ScheduledTask {
   id: string;

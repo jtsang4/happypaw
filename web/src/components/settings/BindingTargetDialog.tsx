@@ -8,7 +8,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { SearchInput } from '@/components/common/SearchInput';
-import type { BindingTarget } from './hooks/useImBindings';
+import type { BindingTarget } from './hooks/useImBindings.ts';
 
 interface BindingTargetDialogProps {
   open: boolean;

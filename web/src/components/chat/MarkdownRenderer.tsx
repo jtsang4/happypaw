@@ -10,8 +10,8 @@ import React, { useState, useMemo, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { Copy, Check } from 'lucide-react';
 import { MermaidDiagram } from './MermaidDiagram';
-import { toBase64Url } from '../../stores/files';
-import { withBasePath } from '../../utils/url';
+import { toBase64Url } from '../../stores/files.ts';
+import { withBasePath } from '../../utils/url.ts';
 import 'highlight.js/styles/github.css';
 import 'katex/dist/katex.min.css';
 

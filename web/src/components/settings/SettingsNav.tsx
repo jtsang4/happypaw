@@ -16,7 +16,7 @@ import {
   Link2,
 } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import type { SettingsTab } from './types';
+import type { SettingsTab } from './types.ts';
 
 interface NavItem {
   key: SettingsTab;

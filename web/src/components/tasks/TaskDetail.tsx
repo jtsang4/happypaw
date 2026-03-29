@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, Loader2, Pencil, RefreshCw, X } from 'lucide-react';
-import { ScheduledTask, useTasksStore } from '../../stores/tasks';
-import { showToast } from '../../utils/toast';
+import { ScheduledTask, useTasksStore } from '../../stores/tasks.ts';
+import { showToast } from '../../utils/toast.ts';
 
 const CHANNEL_LABELS: Record<string, string> = {
   feishu: '飞书',

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api } from '../../../api/client';
-import { useChatStore } from '../../../stores/chat';
-import type { AvailableImGroup, AgentInfo } from '../../../types';
+import { api } from '../../../api/client.ts';
+import { useChatStore } from '../../../stores/chat.ts';
+import type { AvailableImGroup, AgentInfo } from '../../../types.ts';
 
 export interface BindingTarget {
   type: 'main' | 'agent';

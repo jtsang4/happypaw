@@ -1,5 +1,5 @@
-import { api } from '../../../api/client';
-import { notifyIfHidden, shouldEmitBackgroundTaskNotice, showToast } from '../../../utils/toast';
+import { api } from '../../../api/client.ts';
+import { notifyIfHidden, shouldEmitBackgroundTaskNotice, showToast } from '../../../utils/toast.ts';
 import {
   isInterruptSystemMessage,
   isTerminalSystemMessage,
@@ -7,19 +7,19 @@ import {
   pickSdkTaskAliasTarget,
   resolveSdkTaskId,
   capThinkingCache,
-} from '../helpers';
+} from '../helpers.ts';
 import {
   clearStreamingFromSession,
   restoreStreamingFromSession,
   saveStreamingToSession,
-} from '../persistence';
+} from '../persistence.ts';
 import {
   clearSdkTaskStaleTimer,
   hasCompletedSdkTask,
   markSdkTaskCompleted,
   resetSdkTaskStaleTimer,
   scheduleSdkTaskCleanup,
-} from '../sdk-tasks';
+} from '../sdk-tasks.ts';
 import {
   applyStreamEvent,
   buildRestoredStreamingState,
@@ -27,9 +27,9 @@ import {
   flushPendingMainStreamDelta,
   queuePendingStreamDelta,
   resolveStreamingPrev,
-} from '../streaming';
-import { MAX_STREAMING_TEXT, SDK_TASK_AUTO_CLOSE_MS, SDK_TASK_TOOL_END_FALLBACK_CLOSE_MS } from '../constants';
-import type { ChatState, ChatStoreGet, ChatStoreSet, Message, StreamSnapshotData, StreamingState } from '../types';
+} from '../streaming.ts';
+import { MAX_STREAMING_TEXT, SDK_TASK_AUTO_CLOSE_MS, SDK_TASK_TOOL_END_FALLBACK_CLOSE_MS } from '../constants.ts';
+import type { ChatState, ChatStoreGet, ChatStoreSet, Message, StreamSnapshotData, StreamingState } from '../types.ts';
 
 type StreamActions = Pick<
   ChatState,

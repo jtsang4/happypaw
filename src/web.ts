@@ -4,7 +4,7 @@ import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { WebSocketServer, WebSocket } from 'ws';
 import crypto from 'crypto';
-import { TerminalManager } from './terminal-manager.js';
+import { TerminalManager } from './features/execution/terminal-manager.js';
 
 // Web context and shared utilities
 import {
@@ -37,27 +37,29 @@ import {
 import { authMiddleware } from './middleware/auth.js';
 
 // Route modules
-import authRoutes from './routes/auth.js';
-import groupRoutes from './routes/groups.js';
-import memoryRoutes from './routes/memory.js';
+import authRoutes from './features/auth/routes/auth.js';
+import groupRoutes from './features/groups/routes/groups.js';
+import memoryRoutes from './features/memory/routes/memory.js';
 import configRoutes, { injectConfigDeps } from './routes/config.js';
-import tasksRoutes from './routes/tasks.js';
-import adminRoutes from './routes/admin.js';
-import fileRoutes from './routes/files.js';
-import monitorRoutes, { injectMonitorDeps } from './routes/monitor.js';
-import skillsRoutes from './routes/skills.js';
-import browseRoutes from './routes/browse.js';
-import agentRoutes from './routes/agents.js';
-import mcpServersRoutes from './routes/mcp-servers.js';
-import workspaceConfigRoutes from './routes/workspace-config.js';
-import agentDefinitionsRoutes from './routes/agent-definitions.js';
-import { usage as usageRoutes } from './routes/usage.js';
-import billingRoutes from './routes/billing.js';
-import bugReportRoutes from './routes/bug-report.js';
+import tasksRoutes from './features/tasks/routes/tasks.js';
+import adminRoutes from './features/auth/routes/admin.js';
+import fileRoutes from './features/groups/routes/files.js';
+import monitorRoutes, {
+  injectMonitorDeps,
+} from './features/monitoring/routes/monitor.js';
+import skillsRoutes from './features/skills/routes/skills.js';
+import browseRoutes from './features/groups/routes/browse.js';
+import agentRoutes from './features/agents/routes/agents.js';
+import mcpServersRoutes from './features/mcp/routes/mcp-servers.js';
+import workspaceConfigRoutes from './features/groups/routes/workspace-config.js';
+import agentDefinitionsRoutes from './features/agents/routes/agent-definitions.js';
+import { usage as usageRoutes } from './features/monitoring/routes/usage.js';
+import billingRoutes from './features/billing/routes/billing.js';
+import bugReportRoutes from './features/monitoring/routes/bug-report.js';
 import {
   checkBillingAccess,
   formatBillingAccessDeniedMessage,
-} from './billing.js';
+} from './features/billing/billing.js';
 
 // Database and types (only for handleWebUserMessage and broadcast)
 import {
@@ -72,7 +74,7 @@ import {
   isGroupShared,
   getUserById,
 } from './db.js';
-import { isSessionExpired } from './auth.js';
+import { isSessionExpired } from './features/auth/auth.js';
 import type {
   NewMessage,
   WsMessageOut,
@@ -90,11 +92,11 @@ import {
   ASSISTANT_NAME,
 } from './config.js';
 import { logger } from './logger.js';
-import { executeSessionReset } from './commands.js';
+import { executeSessionReset } from './features/chat-runtime/commands.js';
 import {
   normalizeImageAttachments,
   toAgentImages,
-} from './message-attachments.js';
+} from './features/im/message-attachments.js';
 
 // --- App Setup ---
 

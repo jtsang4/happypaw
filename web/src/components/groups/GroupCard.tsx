@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronUp, Users } from 'lucide-react';
 import { Card } from '@/components/ui/card';
-import { GroupInfo } from '../../stores/groups';
+import { GroupInfo } from '../../stores/groups.ts';
 import { GroupDetail } from './GroupDetail';
 
 interface GroupCardProps {

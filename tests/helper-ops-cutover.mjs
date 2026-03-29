@@ -10,14 +10,14 @@ function read(relativePath) {
   return fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
 }
 
-const bugReportSource = read('src/routes/bug-report.ts');
+const bugReportSource = read('src/features/monitoring/routes/bug-report.ts');
 assert.match(
   bugReportSource,
   /requestCodexHelperJson/u,
   'bug report generation should use the Codex helper client',
 );
 
-const workspaceConfigSource = read('src/routes/workspace-config.ts');
+const workspaceConfigSource = read('src/features/groups/routes/workspace-config.ts');
 assert.match(
   workspaceConfigSource,
   /workspace-config-storage\.js/u,
@@ -29,7 +29,7 @@ assert.match(
   'workspace config routes should describe the HappyPaw workspace storage root',
 );
 
-const skillsSource = read('src/routes/skills.ts');
+const skillsSource = read('src/features/skills/routes/skills.ts');
 assert.match(
   skillsSource,
   /\.codex\/skills/u,
@@ -41,14 +41,14 @@ assert.doesNotMatch(
   'skill installation/search should not shell out to the legacy skills CLI',
 );
 
-const mcpServersSource = read('src/routes/mcp-servers.ts');
+const mcpServersSource = read('src/features/mcp/routes/mcp-servers.ts');
 assert.match(
   mcpServersSource,
   /\.codex', 'config\.toml'/u,
   'host MCP sync should read Codex host config.toml',
 );
 
-const agentDefinitionsSource = read('src/routes/agent-definitions.ts');
+const agentDefinitionsSource = read('src/features/agents/routes/agent-definitions.ts');
 assert.match(
   agentDefinitionsSource,
   /\.codex', 'agents'/u,
@@ -70,7 +70,7 @@ assert.doesNotMatch(
   'agent definition management should not keep project-local default semantics or a storage-mode toggle',
 );
 
-const containerRunnerSource = read('src/container-runner.ts');
+const containerRunnerSource = read('src/features/execution/container-runner.ts');
 assert.match(
   containerRunnerSource,
   /workspace-mcp\.json/u,

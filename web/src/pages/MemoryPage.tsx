@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, BookOpen, Loader2, RefreshCw, Save } from 'lucide-react';
 import { toast } from 'sonner';
-import { api } from '../api/client';
+import { api } from '../api/client.ts';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';

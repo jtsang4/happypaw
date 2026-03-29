@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { api } from '../api/client';
+import { api } from '../api/client.ts';
 
 export interface AgentDefinition {
   id: string;

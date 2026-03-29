@@ -10,7 +10,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { useBillingStore, type BillingPlan } from '../../stores/billing';
+import { useBillingStore, type BillingPlan } from '../../stores/billing.ts';
 
 interface PlanFormDialogProps {
   open: boolean;

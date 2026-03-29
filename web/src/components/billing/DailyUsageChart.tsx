@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BarChart3 } from 'lucide-react';
-import { useBillingStore } from '../../stores/billing';
-import { useCurrency, formatTokens } from './utils';
+import { useBillingStore } from '../../stores/billing.ts';
+import { useCurrency, formatTokens } from './utils.ts';
 
 const CHART_DAYS = 14;
 

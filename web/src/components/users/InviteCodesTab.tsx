@@ -11,9 +11,9 @@ import {
 } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import type { UserPublic } from '../../stores/auth';
-import { useUsersStore, type PermissionTemplateKey } from '../../stores/users';
-import { getErrorMessage, ROLE_LABELS, type TabNotification } from './utils';
+import type { UserPublic } from '../../stores/auth.ts';
+import { useUsersStore, type PermissionTemplateKey } from '../../stores/users.ts';
+import { getErrorMessage, ROLE_LABELS, type TabNotification } from './utils.ts';
 
 interface InviteCodesTabProps extends TabNotification {
   currentUser: UserPublic | null;

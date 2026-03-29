@@ -1,6 +1,6 @@
 import { Loader2, Copy, Check, Link, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import type { PairedChat } from './hooks/usePairedChats';
+import type { PairedChat } from './hooks/usePairedChats.ts';
 
 interface PairingSectionProps {
   channelName: string;

@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronUp, Pause, Play, Trash2, Zap } from 'lucide-react';
-import { ScheduledTask } from '../../stores/tasks';
+import { ScheduledTask } from '../../stores/tasks.ts';
 import { TaskDetail } from './TaskDetail';
-import { showToast } from '../../utils/toast';
+import { showToast } from '../../utils/toast.ts';
 
 interface TaskCardProps {
   task: ScheduledTask;

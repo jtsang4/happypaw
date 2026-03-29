@@ -1,4 +1,4 @@
-import type { ApiError } from '../api/client';
+import type { ApiError } from '../api/client.ts';
 
 /** Extract a human-readable message from an unknown catch value. */
 export function extractErrorMessage(err: unknown): string {

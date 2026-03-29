@@ -1,6 +1,6 @@
 import { Download } from 'lucide-react';
-import type { McpServer } from '../../stores/mcp-servers';
-import { useMcpServersStore } from '../../stores/mcp-servers';
+import type { McpServer } from '../../stores/mcp-servers.ts';
+import { useMcpServersStore } from '../../stores/mcp-servers.ts';
 
 interface McpServerCardProps {
   server: McpServer;

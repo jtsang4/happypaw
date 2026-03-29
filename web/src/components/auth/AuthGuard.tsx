@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
-import { type Permission, useAuthStore } from '../../stores/auth';
+import { type Permission, useAuthStore } from '../../stores/auth.ts';
 import { LogoLoading } from '../common/LogoLoading';
 
 interface AuthGuardProps {

@@ -9,8 +9,8 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { api } from '../../api/client';
-import { getErrorMessage } from './types';
+import { api } from '../../api/client.ts';
+import { getErrorMessage } from './types.ts';
 
 type QRStatus = 'loading' | 'wait' | 'scaned' | 'confirmed' | 'expired' | 'error';
 

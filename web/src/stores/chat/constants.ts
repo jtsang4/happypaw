@@ -1,4 +1,4 @@
-import type { StreamingState } from './types';
+import type { StreamingState } from './types.ts';
 
 export const MAX_THINKING_CACHE_SIZE = 500;
 export const MAX_STREAMING_TEXT = 8000;

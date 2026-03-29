@@ -1,4 +1,4 @@
-import { replaceInApp, stripBasePath, withBasePath } from '../utils/url';
+import { replaceInApp, stripBasePath, withBasePath } from '../utils/url.ts';
 
 const REQUEST_TIMEOUT_MS = 8000;
 

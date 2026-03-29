@@ -6,7 +6,7 @@ import {
   ChevronLeft,
   ChevronsLeft,
 } from 'lucide-react';
-import { useBillingStore } from '../../stores/billing';
+import { useBillingStore } from '../../stores/billing.ts';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 

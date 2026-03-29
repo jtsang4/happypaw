@@ -3,9 +3,9 @@ import { RefreshCw } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { useUsersStore } from '../../stores/users';
-import { getErrorMessage } from './utils';
-import { withBasePath } from '../../utils/url';
+import { useUsersStore } from '../../stores/users.ts';
+import { getErrorMessage } from './utils.ts';
+import { withBasePath } from '../../utils/url.ts';
 
 interface AuditLogTabProps {
   setError: (value: string | null) => void;

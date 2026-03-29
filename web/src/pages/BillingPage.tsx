@@ -9,8 +9,8 @@ import {
   Layers,
 } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
-import { useAuthStore } from '../stores/auth';
-import { useBillingStore, type BillingPlan } from '../stores/billing';
+import { useAuthStore } from '../stores/auth.ts';
+import { useBillingStore, type BillingPlan } from '../stores/billing.ts';
 
 // User components
 import SubscriptionCard from '../components/billing/SubscriptionCard';

@@ -1,6 +1,6 @@
-import { api } from '../../../api/client';
-import { retainThinkingCacheForMessages } from '../helpers';
-import type { ChatState, ChatStoreGet, ChatStoreSet, CreateFlowOptions, GroupInfo } from '../types';
+import { api } from '../../../api/client.ts';
+import { retainThinkingCacheForMessages } from '../helpers.ts';
+import type { ChatState, ChatStoreGet, ChatStoreSet, CreateFlowOptions, GroupInfo } from '../types.ts';
 
 type GroupActions = Pick<
   ChatState,

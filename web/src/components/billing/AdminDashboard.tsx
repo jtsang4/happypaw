@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Users, CreditCard, TrendingUp, DollarSign } from 'lucide-react';
-import { useBillingStore } from '../../stores/billing';
-import { useCurrency } from './utils';
+import { useBillingStore } from '../../stores/billing.ts';
+import { useCurrency } from './utils.ts';
 
 function KpiCard({
   icon: Icon,

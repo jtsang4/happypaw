@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { LogOut, Bug } from 'lucide-react';
-import { useAuthStore } from '../../stores/auth';
-import { useBillingStore } from '../../stores/billing';
+import { useAuthStore } from '../../stores/auth.ts';
+import { useBillingStore } from '../../stores/billing.ts';
 import { EmojiAvatar } from '../common/EmojiAvatar';
 import { BugReportDialog } from '../common/BugReportDialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { baseNavItems } from './nav-items';
+import { baseNavItems } from './nav-items.ts';
 
 export function NavRail() {
   const user = useAuthStore((s) => s.user);

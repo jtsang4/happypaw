@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useChatStore } from '../../stores/chat';
-import { useAuthStore } from '../../stores/auth';
+import { useChatStore } from '../../stores/chat.ts';
+import { useAuthStore } from '../../stores/auth.ts';
 import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
 import { FilePanel } from './FilePanel';
@@ -32,11 +32,11 @@ import {
   Variable,
   X,
 } from 'lucide-react';
-import { useDisplayMode } from '../../hooks/useDisplayMode';
-import { useTheme } from '../../hooks/useTheme';
+import { useDisplayMode } from '../../hooks/useDisplayMode.ts';
+import { useTheme } from '../../hooks/useTheme.ts';
 import { cn } from '@/lib/utils';
-import { wsManager } from '../../api/ws';
-import { api } from '../../api/client';
+import { wsManager } from '../../api/ws.ts';
+import { api } from '../../api/client.ts';
 import { TerminalPanel } from './TerminalPanel';
 import { GroupMembersPanel } from './GroupMembersPanel';
 import { WorkspaceSkillsPanel } from './WorkspaceSkillsPanel';
@@ -49,7 +49,7 @@ import {
 } from '@/components/ui/tooltip';
 import { AgentTabBar } from './AgentTabBar';
 import { ImBindingDialog } from './ImBindingDialog';
-import { showToast } from '../../utils/toast';
+import { showToast } from '../../utils/toast.ts';
 
 /** Sentinel value for binding the main conversation (vs. a specific agent) */
 const MAIN_BINDING = '__main__' as const;
@@ -68,7 +68,7 @@ const TERMINAL_DEFAULT_HEIGHT = 300;
 const TERMINAL_MAX_RATIO = 0.7;
 
 // Stable empty references to avoid infinite re-render loops in Zustand selectors
-const EMPTY_AGENTS: import('../../types').AgentInfo[] = [];
+const EMPTY_AGENTS: import('../../types.ts').AgentInfo[] = [];
 
 type SidebarTab = 'files' | 'env' | 'skills' | 'mcp' | 'members';
 

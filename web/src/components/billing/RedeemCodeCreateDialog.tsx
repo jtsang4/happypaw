@@ -10,8 +10,8 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { useBillingStore, type RedeemCode } from '../../stores/billing';
-import { useCurrency } from './utils';
+import { useBillingStore, type RedeemCode } from '../../stores/billing.ts';
+import { useCurrency } from './utils.ts';
 
 interface RedeemCodeCreateDialogProps {
   open: boolean;

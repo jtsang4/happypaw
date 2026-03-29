@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
-import { successTap } from '../../hooks/useHaptic';
+import { successTap } from '../../hooks/useHaptic.ts';
 import {
   ArrowUp,
   Brush,
@@ -12,9 +12,9 @@ import {
   TerminalSquare,
   Loader2,
 } from 'lucide-react';
-import { useFileStore } from '../../stores/files';
-import { useChatStore } from '../../stores/chat';
-import { useDisplayMode } from '../../hooks/useDisplayMode';
+import { useFileStore } from '../../stores/files.ts';
+import { useChatStore } from '../../stores/chat.ts';
+import { useDisplayMode } from '../../hooks/useDisplayMode.ts';
 
 interface PendingFile {
   /** Display name: relative path for folder uploads, file name otherwise */

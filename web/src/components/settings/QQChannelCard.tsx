@@ -6,10 +6,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { api } from '../../api/client';
-import { getErrorMessage } from './types';
-import { usePairingCode } from './hooks/usePairingCode';
-import { usePairedChats } from './hooks/usePairedChats';
+import { api } from '../../api/client.ts';
+import { getErrorMessage } from './types.ts';
+import { usePairingCode } from './hooks/usePairingCode.ts';
+import { usePairedChats } from './hooks/usePairedChats.ts';
 import { PairingSection } from './PairingSection';
 
 interface UserQQConfig {

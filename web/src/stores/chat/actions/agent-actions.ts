@@ -1,17 +1,17 @@
-import { api } from '../../../api/client';
-import { wsManager } from '../../../api/ws';
-import { showToast } from '../../../utils/toast';
+import { api } from '../../../api/client.ts';
+import { wsManager } from '../../../api/ws.ts';
+import { showToast } from '../../../utils/toast.ts';
 import {
   clearDbTaskAgentCleanupTimer,
   clearSdkTaskCleanupTimer,
   clearSdkTaskStaleTimer,
   markSdkTaskCompleted,
   scheduleDbTaskAgentCleanup,
-} from '../sdk-tasks';
-import { removeSdkTaskAliases, mergeMessagesChronologically } from '../helpers';
-import { persistActiveAgentTabSelection } from '../persistence';
-import type { AgentInfo } from '../../../types';
-import type { ChatState, ChatStoreGet, ChatStoreSet } from '../types';
+} from '../sdk-tasks.ts';
+import { removeSdkTaskAliases, mergeMessagesChronologically } from '../helpers.ts';
+import { persistActiveAgentTabSelection } from '../persistence.ts';
+import type { AgentInfo } from '../../../types.ts';
+import type { ChatState, ChatStoreGet, ChatStoreSet } from '../types.ts';
 
 type AgentActions = Pick<
   ChatState,
@@ -277,7 +277,7 @@ export function createAgentActions(set: ChatStoreSet, get: ChatStoreGet): AgentA
             ? { before: String(before), limit: '50', agentId }
             : { limit: '50', agentId },
         );
-        const data = await api.get<{ messages: import('../types').Message[]; hasMore: boolean }>(
+        const data = await api.get<{ messages: import('../types.ts').Message[]; hasMore: boolean }>(
           `/api/groups/${encodeURIComponent(jid)}/messages?${params}`,
         );
         const sorted = [...data.messages].reverse();
@@ -323,7 +323,7 @@ export function createAgentActions(set: ChatStoreSet, get: ChatStoreGet): AgentA
         const params = new URLSearchParams({ limit: '50', agentId });
         if (lastTs) params.set('after', lastTs);
 
-        const data = await api.get<{ messages: import('../types').Message[] }>(
+        const data = await api.get<{ messages: import('../types.ts').Message[] }>(
           `/api/groups/${encodeURIComponent(jid)}/messages?${params}`,
         );
 

@@ -2,11 +2,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { RefreshCw, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { useAuthStore } from '../../stores/auth';
+import { useAuthStore } from '../../stores/auth.ts';
 import { Button } from '@/components/ui/button';
-import { api } from '../../api/client';
-import type { SessionInfo } from './types';
-import { getErrorMessage } from './types';
+import { api } from '../../api/client.ts';
+import type { SessionInfo } from './types.ts';
+import { getErrorMessage } from './types.ts';
 
 export function SecuritySection() {
   const { logout } = useAuthStore();

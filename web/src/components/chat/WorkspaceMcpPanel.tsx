@@ -3,7 +3,7 @@ import { Loader2, Plus, Server, ToggleLeft, ToggleRight, Trash2, RefreshCw } fro
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { EmptyState } from '@/components/common/EmptyState';
-import { useWorkspaceConfigStore, type WorkspaceMcpServer } from '../../stores/workspace-config';
+import { useWorkspaceConfigStore, type WorkspaceMcpServer } from '../../stores/workspace-config.ts';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 
 interface WorkspaceMcpPanelProps {

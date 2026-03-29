@@ -1,13 +1,13 @@
-import { api } from '../../../api/client';
-import { useAuthStore } from '../../auth';
-import { useFileStore } from '../../files';
+import { api } from '../../../api/client.ts';
+import { useAuthStore } from '../../auth.ts';
+import { useFileStore } from '../../files.ts';
 import {
   capThinkingCache,
   isTerminalSystemMessage,
   mergeMessagesChronologically,
   retainThinkingCacheForMessages,
-} from '../helpers';
-import type { ChatState, ChatStoreGet, ChatStoreSet, Message } from '../types';
+} from '../helpers.ts';
+import type { ChatState, ChatStoreGet, ChatStoreSet, Message } from '../types.ts';
 
 type MessageActions = Pick<
   ChatState,

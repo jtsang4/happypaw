@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Users, Search, Package, CheckSquare, Square, AlertTriangle } from 'lucide-react';
-import { useBillingStore } from '../../stores/billing';
-import { useCurrency } from './utils';
+import { useBillingStore } from '../../stores/billing.ts';
+import { useCurrency } from './utils.ts';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 

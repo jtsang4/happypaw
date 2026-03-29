@@ -2,9 +2,9 @@ import {
   DB_TASK_AGENT_AUTO_CLEAN_MS,
   SDK_TASK_AUTO_CLOSE_MS,
   SDK_TASK_STALE_TIMEOUT_MS,
-} from './constants';
-import { removeSdkTaskAliases } from './helpers';
-import type { ChatStoreGet, ChatStoreSet } from './types';
+} from './constants.ts';
+import { removeSdkTaskAliases } from './helpers.ts';
+import type { ChatStoreGet, ChatStoreSet } from './types.ts';
 
 const sdkTaskCleanupTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const sdkTaskStaleTimers = new Map<string, ReturnType<typeof setTimeout>>();

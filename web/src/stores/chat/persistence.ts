@@ -2,8 +2,8 @@ import {
   ACTIVE_AGENT_TABS_STORAGE_KEY,
   DEFAULT_STREAMING_STATE,
   STREAMING_STORAGE_KEY,
-} from './constants';
-import type { StreamingState } from './types';
+} from './constants.ts';
+import type { StreamingState } from './types.ts';
 
 const streamingSaveTimers = new Map<string, ReturnType<typeof setTimeout>>();
 

@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
-import { api } from '../../../api/client';
-import { getErrorMessage } from '../types';
+import { api } from '../../../api/client.ts';
+import { getErrorMessage } from '../types.ts';
 
 export interface PairedChat {
   jid: string;

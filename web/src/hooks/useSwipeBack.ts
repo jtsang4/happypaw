@@ -1,5 +1,5 @@
 import { useRef, useCallback, useEffect } from 'react';
-import { useMediaQuery } from './useMediaQuery';
+import { useMediaQuery } from './useMediaQuery.ts';
 
 interface SwipeBackOptions {
   edgeWidth?: number;

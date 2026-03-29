@@ -1,6 +1,6 @@
 import { Loader2, MessageSquare, Users, ArrowRightLeft, Unlink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import type { AvailableImGroup } from '../../types';
+import type { AvailableImGroup } from '../../types.ts';
 import { ChannelBadge } from './channel-meta';
 
 interface ImBindingRowProps {

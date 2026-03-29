@@ -1,4 +1,4 @@
-export { useChatStore } from './chat/store';
+export { useChatStore } from './chat/store.ts';
 export type {
   AgentInfo,
   AvailableImGroup,
@@ -12,4 +12,4 @@ export type {
   StreamSnapshotData,
   StreamingState,
   StreamingTimelineEvent,
-} from './chat/types';
+} from './chat/types.ts';

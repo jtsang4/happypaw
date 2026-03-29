@@ -1,4 +1,4 @@
-import { generateUserId, hashPassword } from './auth.js';
+import { generateUserId, hashPassword } from './features/auth/auth.js';
 import {
   initDatabase,
   getUserByUsername,

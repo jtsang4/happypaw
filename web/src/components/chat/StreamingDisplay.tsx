@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, OctagonX } from 'lucide-react';
-import { useChatStore } from '../../stores/chat';
-import { useAuthStore } from '../../stores/auth';
-import type { AgentInfo } from '../../types';
+import { useChatStore } from '../../stores/chat.ts';
+import { useAuthStore } from '../../stores/auth.ts';
+import type { AgentInfo } from '../../types.ts';
 import { EmojiAvatar } from '../common/EmojiAvatar';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { TodoProgressPanel } from './TodoProgressPanel';
 import { ToolActivityCard } from './ToolActivityCard';
-import { useDisplayMode } from '../../hooks/useDisplayMode';
+import { useDisplayMode } from '../../hooks/useDisplayMode.ts';
 
 /** Render AskUserQuestion options as a visual card. */
 function AskUserQuestionCard({ toolInput }: { toolInput: Record<string, unknown> }) {
@@ -203,7 +203,7 @@ function StreamingContent({
   thinkingRef,
   handleThinkingScroll,
 }: {
-  streaming: import('../../stores/chat').StreamingState;
+  streaming: import('../../stores/chat.ts').StreamingState;
   localElapsed: Record<string, number>;
   groupJid: string;
   thinkingExpanded: boolean;

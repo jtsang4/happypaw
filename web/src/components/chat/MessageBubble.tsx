@@ -2,14 +2,14 @@ import { useState, memo, lazy, Suspense } from 'react';
 import { Copy, Check, ChevronDown, ChevronUp, Ellipsis, ImageDown } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Message } from '../../stores/chat';
-import { useAuthStore } from '../../stores/auth';
+import { Message } from '../../stores/chat.ts';
+import { useAuthStore } from '../../stores/auth.ts';
 import { EmojiAvatar } from '../common/EmojiAvatar';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { MessageContextMenu } from './MessageContextMenu';
 import { ImageLightbox } from './ImageLightbox';
-import { mediumTap } from '../../hooks/useHaptic';
-import { useDisplayMode } from '../../hooks/useDisplayMode';
+import { mediumTap } from '../../hooks/useHaptic.ts';
+import { useDisplayMode } from '../../hooks/useDisplayMode.ts';
 
 const ShareImageDialog = lazy(() => import('./ShareImageDialog').then(m => ({ default: m.ShareImageDialog })));
 

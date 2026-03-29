@@ -1,4 +1,4 @@
-import { useBillingStore } from '../../stores/billing';
+import { useBillingStore } from '../../stores/billing.ts';
 
 /**
  * Format a USD amount with optional currency conversion.

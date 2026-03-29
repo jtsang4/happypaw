@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { Plus, X, Link, MessageSquare, Pencil, Trash2 } from 'lucide-react';
-import type { AgentInfo } from '../../types';
+import type { AgentInfo } from '../../types.ts';
 
 interface AgentTabBarProps {
   agents: AgentInfo[];

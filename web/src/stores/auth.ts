@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import { api, apiFetch } from '../api/client';
-import type { SetupStatus } from '../components/settings/types';
+import { api, apiFetch } from '../api/client.ts';
+import type { SetupStatus } from '../components/settings/types.ts';
 
 export type Permission =
   | 'manage_system_config'

@@ -1,5 +1,5 @@
-import { MAX_THINKING_CACHE_SIZE } from './constants';
-import type { ChatState, Message } from './types';
+import { MAX_THINKING_CACHE_SIZE } from './constants.ts';
+import type { ChatState, Message } from './types.ts';
 
 export function mergeMessagesChronologically(
   existing: Message[],

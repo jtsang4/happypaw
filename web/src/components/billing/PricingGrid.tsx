@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Sparkles, Check, Zap, Clock, Layers } from 'lucide-react';
-import { useBillingStore, type BillingPlan } from '../../stores/billing';
-import { useCurrency, formatTokens } from './utils';
+import { useBillingStore, type BillingPlan } from '../../stores/billing.ts';
+import { useCurrency, formatTokens } from './utils.ts';
 
 function PlanCard({ plan, isCurrent, fmt }: { plan: BillingPlan; isCurrent: boolean; fmt: (n: number) => string }) {
   const isHighlighted = plan.highlight;

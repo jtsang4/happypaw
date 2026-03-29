@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Package, Plus, Pencil, Trash2, Star, Zap } from 'lucide-react';
-import { useBillingStore, type BillingPlan } from '../../stores/billing';
-import { useCurrency, formatTokens } from './utils';
+import { useBillingStore, type BillingPlan } from '../../stores/billing.ts';
+import { useCurrency, formatTokens } from './utils.ts';
 import { Button } from '@/components/ui/button';
 
 interface AdminPlansListProps {

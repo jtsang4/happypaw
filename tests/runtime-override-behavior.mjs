@@ -12,7 +12,14 @@ const repoRoot = path.resolve(__dirname, '..');
 
 async function main() {
   const schemasPath = path.join(repoRoot, 'src', 'schemas.ts');
-  const groupsRoutePath = path.join(repoRoot, 'src', 'routes', 'groups.ts');
+  const groupsRoutePath = path.join(
+    repoRoot,
+    'src',
+    'features',
+    'groups',
+    'routes',
+    'groups.ts',
+  );
   const groupHelpersPath = path.join(repoRoot, 'src', 'db', 'group-helpers.ts');
   const taskSessionsPath = path.join(
     repoRoot,
@@ -20,11 +27,19 @@ async function main() {
     'db',
     'tasks-sessions.ts',
   );
-  const containerRunnerPath = path.join(repoRoot, 'src', 'container-runner.ts');
+  const containerRunnerPath = path.join(
+    repoRoot,
+    'src',
+    'features',
+    'execution',
+    'container-runner.ts',
+  );
   const runtimeAdapterPath = path.join(
     repoRoot,
     'src',
-    'index-agent-runtime-adapter.ts',
+    'features',
+    'chat-runtime',
+    'agent-runtime-adapter.ts',
   );
   const createDialogPath = path.join(
     repoRoot,

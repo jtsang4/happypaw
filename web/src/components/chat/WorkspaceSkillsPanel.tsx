@@ -3,7 +3,7 @@ import { Loader2, Plus, Puzzle, ToggleLeft, ToggleRight, Trash2, RefreshCw } fro
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { EmptyState } from '@/components/common/EmptyState';
-import { useWorkspaceConfigStore, type WorkspaceSkill } from '../../stores/workspace-config';
+import { useWorkspaceConfigStore, type WorkspaceSkill } from '../../stores/workspace-config.ts';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 
 interface WorkspaceSkillsPanelProps {

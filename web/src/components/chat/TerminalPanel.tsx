@@ -4,7 +4,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { EyeOff, Trash2 } from 'lucide-react';
 import '@xterm/xterm/css/xterm.css';
-import { wsManager } from '../../api/ws';
+import { wsManager } from '../../api/ws.ts';
 
 type ConnectionState = 'idle' | 'connecting' | 'connected' | 'disconnected';
 

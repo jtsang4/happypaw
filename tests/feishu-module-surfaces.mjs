@@ -7,10 +7,22 @@ import { pathToFileURL } from 'node:url';
 const repoRoot = '/Users/jtsang/Documents/workspace/github/jtsang4/happypaw';
 
 const feishu = await import(
-  pathToFileURL(path.join(repoRoot, 'dist', 'feishu.js')).href
+  pathToFileURL(
+    path.join(repoRoot, 'dist', 'features', 'im', 'feishu', 'index.js'),
+  ).href
 );
 const streaming = await import(
-  pathToFileURL(path.join(repoRoot, 'dist', 'feishu-streaming-card.js')).href
+  pathToFileURL(
+    path.join(
+      repoRoot,
+      'dist',
+      'features',
+      'im',
+      'feishu',
+      'streaming-card',
+      'index.js',
+    ),
+  ).href
 );
 
 const expectedFeishuExports = [

@@ -9,7 +9,7 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import {
   useAgentDefinitionsStore,
   type AgentDefinitionDetail,
-} from '../stores/agent-definitions';
+} from '../stores/agent-definitions.ts';
 
 export function AgentDefinitionsPage() {
   const {

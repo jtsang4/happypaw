@@ -10,10 +10,10 @@ import { useNavigate } from 'react-router-dom';
 
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { api } from '../api/client';
-import type { CodexConfigPublic } from '../components/settings/types';
-import { getErrorMessage } from '../components/settings/types';
-import { useAuthStore } from '../stores/auth';
+import { api } from '../api/client.ts';
+import type { CodexConfigPublic } from '../components/settings/types.ts';
+import { getErrorMessage } from '../components/settings/types.ts';
+import { useAuthStore } from '../stores/auth.ts';
 
 export function SetupProvidersPage() {
   const navigate = useNavigate();

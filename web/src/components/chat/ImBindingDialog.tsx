@@ -9,9 +9,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { SearchInput } from '@/components/common/SearchInput';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
-import { useChatStore } from '../../stores/chat';
-import { showToast } from '../../utils/toast';
-import type { AgentInfo, AvailableImGroup } from '../../types';
+import { useChatStore } from '../../stores/chat.ts';
+import { showToast } from '../../utils/toast.ts';
+import type { AgentInfo, AvailableImGroup } from '../../types.ts';
 import { ChannelBadge } from '../settings/channel-meta';
 
 interface ImBindingDialogProps {

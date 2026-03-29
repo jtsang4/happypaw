@@ -20,13 +20,13 @@ import {
   Eye,
   FileEdit,
 } from 'lucide-react';
-import { useFileStore, FileEntry, toBase64Url } from '../../stores/files';
-import { useChatStore } from '../../stores/chat';
-import { useAuthStore } from '../../stores/auth';
-import { api } from '../../api/client';
-import { withBasePath } from '../../utils/url';
-import { downloadFromUrl } from '../../utils/download';
-import { showToast } from '../../utils/toast';
+import { useFileStore, FileEntry, toBase64Url } from '../../stores/files.ts';
+import { useChatStore } from '../../stores/chat.ts';
+import { useAuthStore } from '../../stores/auth.ts';
+import { api } from '../../api/client.ts';
+import { withBasePath } from '../../utils/url.ts';
+import { downloadFromUrl } from '../../utils/download.ts';
+import { showToast } from '../../utils/toast.ts';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Button } from '@/components/ui/button';

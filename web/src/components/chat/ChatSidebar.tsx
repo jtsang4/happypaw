@@ -1,9 +1,9 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, PanelLeftClose } from 'lucide-react';
-import { useChatStore } from '../../stores/chat';
-import { useAuthStore } from '../../stores/auth';
-import { useGroupsStore } from '../../stores/groups';
+import { useChatStore } from '../../stores/chat.ts';
+import { useAuthStore } from '../../stores/auth.ts';
+import { useGroupsStore } from '../../stores/groups.ts';
 import { Button } from '@/components/ui/button';
 import { SearchInput } from '@/components/common';
 import { ConfirmDialog } from '@/components/common';
@@ -12,7 +12,7 @@ import { CreateContainerDialog } from './CreateContainerDialog';
 import { RenameDialog } from './RenameDialog';
 import { SkeletonCardList } from '@/components/common/Skeletons';
 import { cn } from '@/lib/utils';
-import type { GroupInfo } from '../../types';
+import type { GroupInfo } from '../../types.ts';
 
 type GroupEntry = GroupInfo & { jid: string };
 type DateSection = { label: string; items: GroupEntry[] };

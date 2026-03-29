@@ -6,9 +6,9 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { useAuthStore } from '../stores/auth';
-import { api } from '../api/client';
-import { getErrorMessage } from '../components/settings/types';
+import { useAuthStore } from '../stores/auth.ts';
+import { api } from '../api/client.ts';
+import { getErrorMessage } from '../components/settings/types.ts';
 import { WeChatQRDialog } from '../components/settings/WeChatQRDialog';
 
 export function SetupChannelsPage() {

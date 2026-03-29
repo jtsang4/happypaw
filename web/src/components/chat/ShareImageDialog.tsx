@@ -2,10 +2,10 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Download, RefreshCw, Copy, Check } from 'lucide-react';
 import { toPng } from 'html-to-image';
-import { Message } from '../../stores/chat';
-import { useAuthStore } from '../../stores/auth';
-import { downloadFromDataUrl } from '../../utils/download';
-import { showToast } from '../../utils/toast';
+import { Message } from '../../stores/chat.ts';
+import { useAuthStore } from '../../stores/auth.ts';
+import { downloadFromDataUrl } from '../../utils/download.ts';
+import { showToast } from '../../utils/toast.ts';
 import {
   ShareCardRenderer,
   SHARE_CARD_DEFAULT_WIDTH,

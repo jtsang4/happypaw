@@ -1,7 +1,7 @@
 import path from 'path';
 
 import { ASSISTANT_NAME, DATA_DIR } from '../config.js';
-import { HAPPYPAW_CODEX_EXECUTABLE_ENV } from '../codex-binary.js';
+import { HAPPYPAW_CODEX_EXECUTABLE_ENV } from '../features/execution/codex-binary.js';
 import {
   LEGACY_PRODUCT_NAME,
   toLegacyProductEnvToken,

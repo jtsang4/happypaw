@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { PanelLeftOpen } from 'lucide-react';
-import { useChatStore } from '../stores/chat';
-import { useAuthStore } from '../stores/auth';
+import { useChatStore } from '../stores/chat.ts';
+import { useAuthStore } from '../stores/auth.ts';
 import { ChatSidebar } from '../components/chat/ChatSidebar';
 import { ChatView } from '../components/chat/ChatView';
-import { useSwipeBack } from '../hooks/useSwipeBack';
+import { useSwipeBack } from '../hooks/useSwipeBack.ts';
 
 export function ChatPage() {
   const { groupFolder } = useParams<{ groupFolder?: string }>();

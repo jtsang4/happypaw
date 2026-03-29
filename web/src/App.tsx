@@ -12,7 +12,7 @@ import { AgentDefinitionsPage } from './pages/AgentDefinitionsPage';
 import { UsersPage } from './pages/UsersPage';
 import { AuthGuard } from './components/auth/AuthGuard';
 import { AppLayout } from './components/layout/AppLayout';
-import { APP_BASE, shouldUseHashRouter } from './utils/url';
+import { APP_BASE, shouldUseHashRouter } from './utils/url.ts';
 import { Toaster } from '@/components/ui/sonner';
 
 const ChatPage = lazy(() => import('./pages/ChatPage').then(m => ({ default: m.ChatPage })));

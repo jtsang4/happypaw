@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { api, apiFetch } from '../api/client';
+import { api, apiFetch } from '../api/client.ts';
 
 export interface FileEntry {
   name: string;

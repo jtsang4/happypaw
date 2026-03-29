@@ -21,9 +21,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Card } from '@/components/ui/card';
-import type { Permission, UserPublic } from '../../stores/auth';
-import { useUsersStore, type UserQuery } from '../../stores/users';
-import { getErrorMessage, samePermissions, PERMISSION_LABELS, type TabNotification } from './utils';
+import type { Permission, UserPublic } from '../../stores/auth.ts';
+import { useUsersStore, type UserQuery } from '../../stores/users.ts';
+import { getErrorMessage, samePermissions, PERMISSION_LABELS, type TabNotification } from './utils.ts';
 
 interface UserListTabProps extends TabNotification {
   currentUser: UserPublic | null;

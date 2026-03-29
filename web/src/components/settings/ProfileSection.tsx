@@ -2,15 +2,15 @@ import { useEffect, useRef, useState } from 'react';
 import { Loader2, Upload, Trash2, User, Bot, Lock, Palette, Sun, Moon, Monitor } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { useAuthStore } from '../../stores/auth';
-import { useTheme, type Theme, type ColorScheme, type FontStyle } from '../../hooks/useTheme';
+import { useAuthStore } from '../../stores/auth.ts';
+import { useTheme, type Theme, type ColorScheme, type FontStyle } from '../../hooks/useTheme.ts';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { EmojiAvatar } from '@/components/common/EmojiAvatar';
 import { EmojiPicker } from '@/components/common/EmojiPicker';
 import { ColorPicker } from '@/components/common/ColorPicker';
-import { getErrorMessage } from './types';
+import { getErrorMessage } from './types.ts';
 import { SettingsCard as Section } from './SettingsCard';
 
 /* ── Theme / Appearance selectors ─────────────────────────── */

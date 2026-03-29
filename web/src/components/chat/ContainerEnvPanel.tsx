@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, Plus, RefreshCw, Save, Trash2, X } from 'lucide-react';
-import { useContainerEnvStore } from '../../stores/container-env';
+import { useContainerEnvStore } from '../../stores/container-env.ts';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 

@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Crown, LogOut, Trash2, UserPlus } from 'lucide-react';
-import { useGroupsStore } from '../../stores/groups';
-import { useChatStore } from '../../stores/chat';
-import { useAuthStore } from '../../stores/auth';
-import { api } from '../../api/client';
+import { useGroupsStore } from '../../stores/groups.ts';
+import { useChatStore } from '../../stores/chat.ts';
+import { useAuthStore } from '../../stores/auth.ts';
+import { api } from '../../api/client.ts';
 
 interface GroupMembersPanelProps {
   groupJid: string;
