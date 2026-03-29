@@ -13,8 +13,6 @@ import type { ContainerOutput } from './container-runner.js';
 // Sentinel markers for robust output parsing (must match agent-runner)
 export const OUTPUT_START_MARKER = '---HAPPYPAW_OUTPUT_START---';
 export const OUTPUT_END_MARKER = '---HAPPYPAW_OUTPUT_END---';
-export const LEGACY_OUTPUT_START_MARKER = '---HAPPYCLAW_OUTPUT_START---';
-export const LEGACY_OUTPUT_END_MARKER = '---HAPPYCLAW_OUTPUT_END---';
 
 // ─── Stdout Stream Parser ────────────────────────────────────────────
 
@@ -85,10 +83,8 @@ export function attachStdoutHandler(
           { group: opts.groupName },
           'Parse buffer overflow, truncating',
         );
-        const lastMarkerIdx = Math.max(
-          state.parseBuffer.lastIndexOf(OUTPUT_START_MARKER),
-          state.parseBuffer.lastIndexOf(LEGACY_OUTPUT_START_MARKER),
-        );
+        const lastMarkerIdx =
+          state.parseBuffer.lastIndexOf(OUTPUT_START_MARKER);
         state.parseBuffer =
           lastMarkerIdx >= 0
             ? state.parseBuffer.slice(lastMarkerIdx)
@@ -98,11 +94,6 @@ export function attachStdoutHandler(
         let startMarker = OUTPUT_START_MARKER;
         let endMarker = OUTPUT_END_MARKER;
         let startIdx = state.parseBuffer.indexOf(startMarker);
-        if (startIdx === -1) {
-          startMarker = LEGACY_OUTPUT_START_MARKER;
-          endMarker = LEGACY_OUTPUT_END_MARKER;
-          startIdx = state.parseBuffer.indexOf(startMarker);
-        }
         if (startIdx === -1) break;
         const endIdx = state.parseBuffer.indexOf(endMarker, startIdx);
         if (endIdx === -1) break; // Incomplete pair, wait for more data
@@ -546,12 +537,6 @@ function parseLegacyOutput(ctx: CloseHandlerContext): void {
     let endMarker = OUTPUT_END_MARKER;
     let startIdx = stdout.indexOf(startMarker);
     let endIdx = stdout.indexOf(endMarker);
-    if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
-      startMarker = LEGACY_OUTPUT_START_MARKER;
-      endMarker = LEGACY_OUTPUT_END_MARKER;
-      startIdx = stdout.indexOf(startMarker);
-      endIdx = stdout.indexOf(endMarker);
-    }
 
     let jsonLine: string;
     if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {

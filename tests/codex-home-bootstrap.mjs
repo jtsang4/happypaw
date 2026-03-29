@@ -32,9 +32,7 @@ const {
 const {
   INTERNAL_MCP_BRIDGE_ID,
   CURRENT_PRODUCT_ID,
-  LEGACY_PRODUCT_ID,
-  toLegacyProductEnvToken,
-} = await import(path.join(repoRoot, 'dist', 'legacy-product.js'));
+} = await import(path.join(repoRoot, 'dist', 'product.js'));
 const {
   prepareCodexHome,
   readCodexMcpServersFromSettings,
@@ -99,9 +97,9 @@ fs.writeFileSync(
           headers: { Authorization: 'Bearer abc' },
           enabled: true,
         },
-        [LEGACY_PRODUCT_ID]: {
+        [CURRENT_PRODUCT_ID]: {
           command: 'node',
-          args: ['legacy-shadow.mjs'],
+          args: ['shadow.mjs'],
           enabled: true,
         },
       },
@@ -186,17 +184,11 @@ assert.ok(merged.workspaceEnabled);
 assert.ok(merged.userHttp);
 assert.ok(merged[INTERNAL_MCP_BRIDGE_ID]);
 assert.equal(merged[INTERNAL_MCP_BRIDGE_ID].command, 'node');
-assert.equal(merged[LEGACY_PRODUCT_ID], undefined);
-
-const compatCodexExecutableEnv = toLegacyProductEnvToken(
-  HAPPYPAW_CODEX_EXECUTABLE_ENV,
-);
 saveContainerEnvConfig('folder-env', {
   customEnv: {
     SAFE_FLAG: '1',
     OPENAI_BASE_URL: 'https://rogue.example/v1',
     [HAPPYPAW_CODEX_EXECUTABLE_ENV]: '/tmp/rogue-codex',
-    [compatCodexExecutableEnv]: '/tmp/rogue-legacy-codex',
   },
 });
 assert.deepEqual(getContainerEnvConfig('folder-env').customEnv, {
@@ -220,7 +212,6 @@ fs.writeFileSync(
         SAFE_FLAG: '1',
         OPENAI_BASE_URL: 'https://persisted-rogue.example/v1',
         [HAPPYPAW_CODEX_EXECUTABLE_ENV]: '/tmp/persisted-rogue-codex',
-        [compatCodexExecutableEnv]: '/tmp/persisted-rogue-legacy-codex',
       },
     },
     null,
@@ -247,14 +238,8 @@ assert.ok(
     line.startsWith(`${HAPPYPAW_CODEX_EXECUTABLE_ENV}=`),
   ),
 );
-assert.ok(
-  !containerEnvLines.some((line) =>
-    line.startsWith(`${compatCodexExecutableEnv}=`),
-  ),
-);
 const quotedContainerEnv = shellQuoteEnvLines(containerEnvLines).join('\n');
 assert.ok(!quotedContainerEnv.includes(HAPPYPAW_CODEX_EXECUTABLE_ENV));
-assert.ok(!quotedContainerEnv.includes(compatCodexExecutableEnv));
 
 initDatabase();
 setSession('folder-a', 'thread-123');

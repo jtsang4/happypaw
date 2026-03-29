@@ -58,8 +58,6 @@ import {
 import {
   SESSION_COOKIE_NAME_SECURE,
   SESSION_COOKIE_NAME_PLAIN,
-  LEGACY_SESSION_COOKIE_NAME_SECURE,
-  LEGACY_SESSION_COOKIE_NAME_PLAIN,
   TRUST_PROXY,
 } from '../../../config.js';
 import { getSystemSettings } from '../../../runtime-config.js';
@@ -104,9 +102,7 @@ function appendSetCookieHeaders(headers: Headers, values: string[]): void {
 
 const COOKIE_SECURE_FLAGS = new Map<string, boolean>([
   [SESSION_COOKIE_NAME_PLAIN, false],
-  [LEGACY_SESSION_COOKIE_NAME_PLAIN, false],
   [SESSION_COOKIE_NAME_SECURE, true],
-  [LEGACY_SESSION_COOKIE_NAME_SECURE, true],
 ]);
 
 export function setSessionCookieHeaders(c: any, token: string): Headers {

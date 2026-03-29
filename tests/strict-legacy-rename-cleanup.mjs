@@ -2,17 +2,14 @@
 
 import { spawnSync } from 'node:child_process';
 
-const compatPascal = ['Happy', 'Claw'].join('');
-const compatLower = compatPascal.toLowerCase();
-const allowedDoc = ['docs/', 'happy', 'claw', '-codex-app-server-migration.md'].join('');
-const pattern = [compatPascal, compatLower].join('|');
+const forbiddenPattern = 'legacy-product|HAPPYCLAW_|mcp__happyclaw__|happyclaw-agent';
 
 const result = spawnSync(
   'rg',
   [
     '-n',
     '--hidden',
-    pattern,
+    forbiddenPattern,
     '.',
     '--glob',
     '!.factory/**',
@@ -21,11 +18,15 @@ const result = spawnSync(
     '--glob',
     '!.git/**',
     '--glob',
-    `!${allowedDoc}`,
+    '!dist/**',
+    '--glob',
+    '!generated/**',
     '--glob',
     '!README.md',
     '--glob',
     '!web/src/components/settings/AboutSection.tsx',
+    '--glob',
+    '!tests/strict-legacy-rename-cleanup.mjs',
   ],
   {
     cwd: process.cwd(),
@@ -38,12 +39,12 @@ if (result.stdout) process.stdout.write(result.stdout);
 if (result.stderr) process.stderr.write(result.stderr);
 
 if (result.status === 1) {
-  console.log('✅ No forbidden legacy product strings were found outside the allowed paths.');
+  console.log('✅ No forbidden legacy compatibility markers were found.');
   process.exit(0);
 }
 
 if (result.status === 0) {
-  console.error('❌ Forbidden legacy product strings remain outside the allowed paths.');
+  console.error('❌ Forbidden legacy compatibility markers remain in source or tests.');
   process.exit(1);
 }
 

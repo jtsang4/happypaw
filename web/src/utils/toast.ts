@@ -4,7 +4,6 @@ const MAX_TOASTS = 5;
 let container: HTMLDivElement | null = null;
 const BACKGROUND_TASK_NOTICE_TTL_MS = 15_000;
 const OWNER_KEY = 'happypaw:bg-task-notice-owner';
-const LEGACY_OWNER_KEY = OWNER_KEY.replaceAll('paw', 'claw');
 const OWNER_STALE_MS = 120_000;
 const TAB_ID = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 let ownerTrackingBound = false;
@@ -96,7 +95,6 @@ function claimOwnershipIfVisible(): boolean {
   if (typeof document.hasFocus === 'function' && !document.hasFocus()) return false;
   try {
     window.localStorage.setItem(OWNER_KEY, JSON.stringify({ tabId: TAB_ID, at: Date.now() }));
-    window.localStorage.removeItem(LEGACY_OWNER_KEY);
   } catch {
     // Fall back to single-tab behavior if storage becomes unavailable mid-session.
   }
@@ -118,9 +116,7 @@ function isNoticeOwner(): boolean {
 
   let raw: string | null = null;
   try {
-    raw =
-      window.localStorage.getItem(OWNER_KEY)
-      ?? window.localStorage.getItem(LEGACY_OWNER_KEY);
+    raw = window.localStorage.getItem(OWNER_KEY);
   } catch {
     return true;
   }

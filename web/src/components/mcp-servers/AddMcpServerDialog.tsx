@@ -22,7 +22,7 @@ interface AddMcpServerDialogProps {
 }
 
 const ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/;
-const RESERVED_IDS = ['happypaw', 'happypaw'.replaceAll('paw', 'claw')];
+const RESERVED_IDS = ['happypaw'];
 
 type ServerType = 'stdio' | 'http' | 'sse';
 

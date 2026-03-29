@@ -15,18 +15,13 @@ import { hasPermission } from '../permissions.js';
 import {
   SESSION_COOKIE_NAME_SECURE,
   SESSION_COOKIE_NAME_PLAIN,
-  LEGACY_SESSION_COOKIE_NAME_SECURE,
-  LEGACY_SESSION_COOKIE_NAME_PLAIN,
 } from '../config.js';
 
 export const authMiddleware = async (c: any, next: any) => {
   const cookies = parseCookie(c.req.header('cookie'));
   // Accept either cookie name — the browser will send whichever was set
   const token =
-    cookies[SESSION_COOKIE_NAME_SECURE] ||
-    cookies[SESSION_COOKIE_NAME_PLAIN] ||
-    cookies[LEGACY_SESSION_COOKIE_NAME_SECURE] ||
-    cookies[LEGACY_SESSION_COOKIE_NAME_PLAIN];
+    cookies[SESSION_COOKIE_NAME_SECURE] || cookies[SESSION_COOKIE_NAME_PLAIN];
   if (!token) {
     return c.json({ error: 'Unauthorized' }, 401);
   }

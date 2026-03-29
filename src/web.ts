@@ -87,8 +87,6 @@ import {
   WEB_PORT,
   SESSION_COOKIE_NAME_SECURE,
   SESSION_COOKIE_NAME_PLAIN,
-  LEGACY_SESSION_COOKIE_NAME_SECURE,
-  LEGACY_SESSION_COOKIE_NAME_PLAIN,
   ASSISTANT_NAME,
 } from './config.js';
 import { logger } from './logger.js';
@@ -539,10 +537,7 @@ function setupWebSocket(server: any): WebSocketServer {
     // Verify session cookie
     const cookies = parseCookie(request.headers.cookie);
     const token =
-      cookies[SESSION_COOKIE_NAME_SECURE] ||
-      cookies[SESSION_COOKIE_NAME_PLAIN] ||
-      cookies[LEGACY_SESSION_COOKIE_NAME_SECURE] ||
-      cookies[LEGACY_SESSION_COOKIE_NAME_PLAIN];
+      cookies[SESSION_COOKIE_NAME_SECURE] || cookies[SESSION_COOKIE_NAME_PLAIN];
     if (!token) {
       socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
       socket.destroy();

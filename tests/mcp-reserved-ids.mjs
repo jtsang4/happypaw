@@ -8,31 +8,40 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
 
-const userRoutePath = path.join(repoRoot, 'src', 'routes', 'mcp-servers.ts');
+const userRoutePath = path.join(
+  repoRoot,
+  'src',
+  'features',
+  'mcp',
+  'routes',
+  'mcp-servers.ts',
+);
 const workspaceRoutePath = path.join(
   repoRoot,
   'src',
+  'features',
+  'groups',
   'routes',
   'workspace-config.ts',
 );
-const compatProductPath = path.join(repoRoot, 'src', 'legacy-product.ts');
+const productPath = path.join(repoRoot, 'src', 'product.ts');
 
-const [userRouteSource, workspaceRouteSource, compatProductSource] =
+const [userRouteSource, workspaceRouteSource, productSource] =
   await Promise.all([
     readFile(userRoutePath, 'utf8'),
     readFile(workspaceRoutePath, 'utf8'),
-    readFile(compatProductPath, 'utf8'),
+    readFile(productPath, 'utf8'),
   ]);
 
 assert.match(
-  compatProductSource,
+  productSource,
   /export const INTERNAL_MCP_BRIDGE_ID = CURRENT_PRODUCT_ID;/,
-  'legacy product module defines the reserved internal MCP bridge id',
+  'product module defines the reserved internal MCP bridge id',
 );
 assert.match(
-  compatProductSource,
+  productSource,
   /export function isReservedMcpServerId\(value: string\)/,
-  'legacy product module exposes a shared reserved-id guard',
+  'product module exposes a shared reserved-id guard',
 );
 assert.match(
   userRouteSource,

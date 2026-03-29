@@ -17,10 +17,7 @@ import {
   prepareCodexHome,
   type PrepareCodexHomeOptions,
 } from './codex-config.js';
-import {
-  CURRENT_PRODUCT_ID,
-  INTERNAL_MCP_BRIDGE_ID,
-} from '../../legacy-product.js';
+import { CURRENT_PRODUCT_ID, INTERNAL_MCP_BRIDGE_ID } from '../../product.js';
 import { persistActiveImReplyRouteForIpcDir } from '../chat-runtime/im-reply-route-snapshot.js';
 import { logger } from '../../logger.js';
 import {
@@ -1019,21 +1016,18 @@ export async function runHostAgent(
     }
   }
 
-  // 路径映射（新旧变量名双写，兼容已有运行时/脚本）
+  // 路径映射
   hostEnv['HAPPYPAW_WORKSPACE_GROUP'] = groupDir;
-  hostEnv['HAPPYCLAW_WORKSPACE_GROUP'] = groupDir;
   // Per-user global memory
   const ownerId = group.created_by;
   if (ownerId) {
     const userGlobalDir = path.join(GROUPS_DIR, 'user-global', ownerId);
     fs.mkdirSync(userGlobalDir, { recursive: true });
     hostEnv['HAPPYPAW_WORKSPACE_GLOBAL'] = userGlobalDir;
-    hostEnv['HAPPYCLAW_WORKSPACE_GLOBAL'] = userGlobalDir;
   } else {
     const sharedGlobalDir = path.join(GROUPS_DIR, 'global');
     fs.mkdirSync(sharedGlobalDir, { recursive: true });
     hostEnv['HAPPYPAW_WORKSPACE_GLOBAL'] = sharedGlobalDir;
-    hostEnv['HAPPYCLAW_WORKSPACE_GLOBAL'] = sharedGlobalDir;
   }
   const memoryFolder = group.is_home
     ? group.folder
@@ -1043,13 +1037,7 @@ export async function runHostAgent(
     'memory',
     memoryFolder,
   );
-  hostEnv['HAPPYCLAW_WORKSPACE_MEMORY'] = path.join(
-    DATA_DIR,
-    'memory',
-    memoryFolder,
-  );
   hostEnv['HAPPYPAW_WORKSPACE_IPC'] = groupIpcDir;
-  hostEnv['HAPPYCLAW_WORKSPACE_IPC'] = groupIpcDir;
   hostEnv['CODEX_HOME'] = groupCodexHomeDir;
 
   const pinnedCodex = ensurePinnedCodexHostBinary({

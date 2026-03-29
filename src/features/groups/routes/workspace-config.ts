@@ -13,10 +13,7 @@ import { authMiddleware } from '../../../middleware/auth.js';
 import { GROUPS_DIR } from '../../../config.js';
 import { canAccessGroup } from '../../../web-context.js';
 import { getRegisteredGroup } from '../../../db.js';
-import {
-  CURRENT_PRODUCT_ID,
-  isReservedMcpServerId,
-} from '../../../legacy-product.js';
+import { CURRENT_PRODUCT_ID, isReservedMcpServerId } from '../../../product.js';
 import { installSkillPackageToDirectory } from '../../skills/skill-installer.js';
 import {
   parseFrontmatter,

@@ -2,10 +2,6 @@ import path from 'path';
 
 import { ASSISTANT_NAME, DATA_DIR } from '../config.js';
 import { HAPPYPAW_CODEX_EXECUTABLE_ENV } from '../features/execution/codex-binary.js';
-import {
-  LEGACY_PRODUCT_NAME,
-  toLegacyProductEnvToken,
-} from '../legacy-product.js';
 import type { RuntimeType } from '../types.js';
 
 const MAX_FIELD_LENGTH = 2000;
@@ -36,10 +32,6 @@ export const RESERVED_INFRASTRUCTURE_ENV_VARS = new Set([
   'HAPPYPAW_WORKSPACE_IPC',
   'HAPPYPAW_WORKSPACE_MEMORY',
   HAPPYPAW_CODEX_EXECUTABLE_ENV,
-  toLegacyProductEnvToken('HAPPYPAW_WORKSPACE_GROUP'),
-  toLegacyProductEnvToken('HAPPYPAW_WORKSPACE_GLOBAL'),
-  toLegacyProductEnvToken('HAPPYPAW_WORKSPACE_IPC'),
-  toLegacyProductEnvToken(HAPPYPAW_CODEX_EXECUTABLE_ENV),
 ]);
 export const DANGEROUS_ENV_VARS = new Set([
   'OPENAI_BASE_URL',
@@ -278,5 +270,3 @@ export const DEFAULT_APPEARANCE_CONFIG = {
   aiAvatarEmoji: '\u{1F431}',
   aiAvatarColor: '#0d9488',
 };
-
-export { LEGACY_PRODUCT_NAME };

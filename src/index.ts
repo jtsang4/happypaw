@@ -6,7 +6,6 @@ import {
   POLL_INTERVAL,
   TIMEZONE,
 } from './config.js';
-import { LEGACY_AGENT_SENDER } from './legacy-product.js';
 import { interruptibleSleep } from './features/im/message-notifier.js';
 import {
   runContainerAgent,

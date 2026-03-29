@@ -9,11 +9,7 @@ import type { AuthUser } from '../../../types.js';
 import { authMiddleware } from '../../../middleware/auth.js';
 import { DATA_DIR } from '../../../config.js';
 import { checkMcpServerLimit } from '../../billing/billing.js';
-import {
-  CURRENT_PRODUCT_ID,
-  LEGACY_PRODUCT_ID,
-  isReservedMcpServerId,
-} from '../../../legacy-product.js';
+import { CURRENT_PRODUCT_ID, isReservedMcpServerId } from '../../../product.js';
 import { readCodexMcpServersFromTomlConfig } from '../../execution/codex-config.js';
 
 // --- Types ---
@@ -137,7 +133,7 @@ mcpServersRoutes.post('/', authMiddleware, async (c) => {
   if (!validateServerId(id)) {
     return c.json(
       {
-        error: `Invalid server ID: must match /^[\\w\\-]+$/ and cannot be "${CURRENT_PRODUCT_ID}" or "${LEGACY_PRODUCT_ID}"`,
+        error: `Invalid server ID: must match /^[\\w\\-]+$/ and cannot be "${CURRENT_PRODUCT_ID}"`,
       },
       400,
     );

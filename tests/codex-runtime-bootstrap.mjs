@@ -130,7 +130,6 @@ function makeFakeCodexScript(scriptPath, requestLogPath, options = {}) {
   const failResumeThreadId = options.failResumeThreadId ?? null;
   const internalBridgeStatusName =
     options.internalBridgeStatusName ?? 'happypaw';
-  const compatMcpServerName = ['happy', 'claw'].join('');
   const requiredBridgeTools = JSON.stringify([
     'cancel_task',
     'get_context',
@@ -179,7 +178,6 @@ function makeFakeCodexScript(scriptPath, requestLogPath, options = {}) {
 const fs = require('node:fs');
 const requestLogPath = ${JSON.stringify(requestLogPath)};
 const failResumeThreadId = ${JSON.stringify(failResumeThreadId)};
-const compatMcpServerName = ${JSON.stringify(compatMcpServerName)};
 const requiredBridgeTools = ${requiredBridgeTools};
 const mcpStatuses = ${mcpStatuses};
 const configWarnings = ${configWarnings};
@@ -391,9 +389,9 @@ process.stdin.on('data', (chunk) => {
             item: {
               type: 'mcpToolCall',
               id: 'item_mcp',
-              server: compatMcpServerName,
+              server: 'happypaw',
               tool: 'send_message',
-              arguments: { text: 'compatibility ping' }
+              arguments: { text: 'bridge ping' }
             }
           }
         });
@@ -406,9 +404,9 @@ process.stdin.on('data', (chunk) => {
             item: {
               type: 'mcpToolCall',
               id: 'item_mcp',
-              server: compatMcpServerName,
+              server: 'happypaw',
               tool: 'send_message',
-              arguments: { text: 'compatibility ping' }
+              arguments: { text: 'bridge ping' }
             }
           }
         });
@@ -650,7 +648,7 @@ async function runScenario(name, sessionId, options = {}) {
 }
 
 const fresh = await runScenario('fresh', undefined);
-const compatMcpToolName = ['mcp', ['happy', 'claw'].join(''), 'send_message'].join(
+const compatMcpToolName = ['mcp', 'happypaw', 'send_message'].join(
   '__',
 );
 assert.deepEqual(fresh.requestOrder.slice(0, 4), [
@@ -822,7 +820,7 @@ assert.ok(
       entry.streamEvent?.toolName === compatMcpToolName &&
       entry.streamEvent?.toolUseId === 'item_mcp',
   ),
-  'legacy MCP server names still map to the compatibility tool-use name',
+  'reserved MCP server names map to the normalized tool-use name',
 );
 assert.ok(
   fresh.outputs.some(

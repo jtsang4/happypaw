@@ -1,6 +1,6 @@
 import path from 'path';
 
-import { CURRENT_PRODUCT_ID } from '../../legacy-product.js';
+import { CURRENT_PRODUCT_ID } from '../../product.js';
 
 const WORKSPACE_CONFIG_DIRNAME = `.${CURRENT_PRODUCT_ID}`;
 const WORKSPACE_MCP_FILE = 'workspace-mcp.json';

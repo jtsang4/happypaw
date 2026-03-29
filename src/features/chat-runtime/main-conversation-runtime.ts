@@ -26,7 +26,6 @@ import {
 } from '../im/feishu/streaming-card/index.js';
 import { getChannelType, extractChatId } from '../im/im-channel.js';
 import { imManager } from '../im/im-manager.js';
-import { LEGACY_AGENT_SENDER } from '../../legacy-product.js';
 import { logger } from '../../logger.js';
 import { normalizeImageAttachments } from '../im/message-attachments.js';
 import {
@@ -331,12 +330,7 @@ export function createMainConversationRuntime(
     if (chatJid === `web:${MAIN_GROUP_FOLDER}` && effectiveGroup.is_home) {
       for (let i = missedMessages.length - 1; i >= 0; i--) {
         const sender = missedMessages[i]?.sender;
-        if (
-          !sender ||
-          sender === 'happypaw-agent' ||
-          sender === LEGACY_AGENT_SENDER ||
-          sender === '__system__'
-        ) {
+        if (!sender || sender === 'happypaw-agent' || sender === '__system__') {
           continue;
         }
         const senderUser = getUserById(sender);

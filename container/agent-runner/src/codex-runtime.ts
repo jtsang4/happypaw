@@ -8,7 +8,7 @@ import {
   type CodexJsonRpcRequest,
 } from './codex-client.js';
 import { getChannelFromJid } from './channel-prefixes.js';
-import { INTERNAL_MCP_BRIDGE_ID } from './legacy-product.js';
+import { INTERNAL_MCP_BRIDGE_ID } from './product.js';
 import { summarizeToolInput } from './utils.js';
 
 const OUTPUT_MARKER_TURN_ID_PREFIX = 'codex-turn-';
@@ -16,8 +16,6 @@ const IMAGE_MAX_DIMENSION = 8000;
 const GLOBAL_AGENTS_MD_MAX_CHARS = 8000;
 const INTERRUPT_SETTLE_TIMEOUT_MS = 5_000;
 const STAGED_IMAGE_DIR_NAME = '.happypaw-input-images';
-const LEGACY_MCP_SERVER_NAME = ['happy', 'claw'].join('');
-const LEGACY_MCP_TOOL_PREFIX = ['mcp', LEGACY_MCP_SERVER_NAME].join('__');
 const INTERNAL_MCP_BRIDGE_STATUS_NAME =
   process.env.HAPPYPAW_MCP_SERVER_ID?.trim() || INTERNAL_MCP_BRIDGE_ID;
 const REQUIRED_MCP_BRIDGE_BASE_TOOLS = [
@@ -608,9 +606,6 @@ function buildRuntimePromptContext(
 function mapCodexToolName(server: string, tool: string): string {
   if (server === 'happypaw') {
     return `mcp__happypaw__${tool}`;
-  }
-  if (server === LEGACY_MCP_SERVER_NAME) {
-    return `${LEGACY_MCP_TOOL_PREFIX}__${tool}`;
   }
   return `${server}:${tool}`;
 }

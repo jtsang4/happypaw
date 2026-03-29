@@ -3,11 +3,7 @@ import fs from 'fs';
 import crypto from 'crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import {
-  CURRENT_PRODUCT_ID,
-  CURRENT_PRODUCT_NAME,
-  toLegacyProductToken,
-} from './legacy-product.js';
+import { CURRENT_PRODUCT_ID, CURRENT_PRODUCT_NAME } from './product.js';
 
 export const ASSISTANT_NAME =
   process.env.ASSISTANT_NAME || CURRENT_PRODUCT_NAME;
@@ -44,10 +40,6 @@ export const WEB_PORT = parseInt(process.env.WEB_PORT || '3000', 10);
 // Determined per-request via isSecureRequest(), not at startup
 export const SESSION_COOKIE_NAME_SECURE = '__Host-happypaw_session';
 export const SESSION_COOKIE_NAME_PLAIN = 'happypaw_session';
-export const LEGACY_SESSION_COOKIE_NAME_PLAIN = toLegacyProductToken(
-  SESSION_COOKIE_NAME_PLAIN,
-);
-export const LEGACY_SESSION_COOKIE_NAME_SECURE = `__Host-${LEGACY_SESSION_COOKIE_NAME_PLAIN}`;
 const SESSION_SECRET_FILE = path.join(DATA_DIR, 'config', 'session-secret.key');
 
 function getOrCreateSessionSecret(): string {

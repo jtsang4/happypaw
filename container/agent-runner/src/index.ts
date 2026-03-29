@@ -20,21 +20,13 @@ import type { ContainerInput, ContainerOutput } from './types.js';
 export type { StreamEventType, StreamEvent } from './types.js';
 
 const WORKSPACE_GROUP =
-  process.env.HAPPYPAW_WORKSPACE_GROUP ||
-  process.env.HAPPYCLAW_WORKSPACE_GROUP ||
-  '/workspace/group';
+  process.env.HAPPYPAW_WORKSPACE_GROUP || '/workspace/group';
 const WORKSPACE_GLOBAL =
-  process.env.HAPPYPAW_WORKSPACE_GLOBAL ||
-  process.env.HAPPYCLAW_WORKSPACE_GLOBAL ||
-  '/workspace/global';
+  process.env.HAPPYPAW_WORKSPACE_GLOBAL || '/workspace/global';
 const WORKSPACE_MEMORY =
-  process.env.HAPPYPAW_WORKSPACE_MEMORY ||
-  process.env.HAPPYCLAW_WORKSPACE_MEMORY ||
-  '/workspace/memory';
+  process.env.HAPPYPAW_WORKSPACE_MEMORY || '/workspace/memory';
 const WORKSPACE_IPC =
-  process.env.HAPPYPAW_WORKSPACE_IPC ||
-  process.env.HAPPYCLAW_WORKSPACE_IPC ||
-  '/workspace/ipc';
+  process.env.HAPPYPAW_WORKSPACE_IPC || '/workspace/ipc';
 
 const IPC_INPUT_DIR = path.join(WORKSPACE_IPC, 'input');
 const IPC_INPUT_CLOSE_SENTINEL = path.join(IPC_INPUT_DIR, '_close');

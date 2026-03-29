@@ -44,7 +44,6 @@ import {
   type ReplyRouteUpdater,
 } from './im-routing.js';
 import { logger } from '../../logger.js';
-import { toLegacyProductToken } from '../../legacy-product.js';
 import {
   getSystemSettings,
   getTelegramProviderConfig,
@@ -258,7 +257,7 @@ export function createBootstrapRuntime(deps: IndexBootstrapDeps): {
 
     try {
       const orphanSet = new Set<string>();
-      for (const prefix of ['happypaw-', toLegacyProductToken('happypaw-')]) {
+      for (const prefix of ['happypaw-']) {
         const { stdout } = await execFileAsync(
           'docker',
           ['ps', '--filter', `name=${prefix}`, '--format', '{{.Names}}'],

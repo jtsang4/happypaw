@@ -7,10 +7,6 @@ export type FontStyle = 'default' | 'serif';
 const THEME_KEY = 'happypaw-theme';
 const SCHEME_KEY = 'happypaw-color-scheme';
 const FONT_KEY = 'happypaw-font-style';
-const legacyKey = (value: string) => value.replaceAll('paw', 'claw');
-const LEGACY_THEME_KEY = legacyKey(THEME_KEY);
-const LEGACY_SCHEME_KEY = legacyKey(SCHEME_KEY);
-const LEGACY_FONT_KEY = legacyKey(FONT_KEY);
 const listeners = new Set<() => void>();
 
 function notify() { listeners.forEach((cb) => cb()); }
@@ -22,27 +18,21 @@ function getSystemTheme(): 'light' | 'dark' {
 
 function readTheme(): Theme {
   if (typeof window === 'undefined') return 'system';
-  const stored =
-    window.localStorage.getItem(THEME_KEY)
-    ?? window.localStorage.getItem(LEGACY_THEME_KEY);
+  const stored = window.localStorage.getItem(THEME_KEY);
   if (stored === 'light' || stored === 'dark' || stored === 'system') return stored;
   return 'system';
 }
 
 function readColorScheme(): ColorScheme {
   if (typeof window === 'undefined') return 'default';
-  const stored =
-    window.localStorage.getItem(SCHEME_KEY)
-    ?? window.localStorage.getItem(LEGACY_SCHEME_KEY);
+  const stored = window.localStorage.getItem(SCHEME_KEY);
   if (stored === 'default' || stored === 'orange' || stored === 'neutral') return stored;
   return 'default';
 }
 
 function readFontStyle(): FontStyle {
   if (typeof window === 'undefined') return 'default';
-  const stored =
-    window.localStorage.getItem(FONT_KEY)
-    ?? window.localStorage.getItem(LEGACY_FONT_KEY);
+  const stored = window.localStorage.getItem(FONT_KEY);
   if (stored === 'default' || stored === 'serif') return stored;
   return 'default';
 }
@@ -109,7 +99,6 @@ export function useTheme() {
   const setTheme = useCallback((t: Theme) => {
     if (t === 'system') window.localStorage.removeItem(THEME_KEY);
     else window.localStorage.setItem(THEME_KEY, t);
-    window.localStorage.removeItem(LEGACY_THEME_KEY);
     applyTheme(t);
     notify();
   }, []);
@@ -117,7 +106,6 @@ export function useTheme() {
   const setColorScheme = useCallback((s: ColorScheme) => {
     if (s === 'default') window.localStorage.removeItem(SCHEME_KEY);
     else window.localStorage.setItem(SCHEME_KEY, s);
-    window.localStorage.removeItem(LEGACY_SCHEME_KEY);
     applyColorScheme(s);
     notify();
   }, []);
@@ -125,7 +113,6 @@ export function useTheme() {
   const setFontStyle = useCallback((f: FontStyle) => {
     if (f === 'default') window.localStorage.removeItem(FONT_KEY);
     else window.localStorage.setItem(FONT_KEY, f);
-    window.localStorage.removeItem(LEGACY_FONT_KEY);
     applyFontStyle(f);
     notify();
   }, []);
