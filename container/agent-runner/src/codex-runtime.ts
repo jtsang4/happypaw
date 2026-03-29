@@ -7,6 +7,7 @@ import {
   type CodexJsonRpcNotification,
   type CodexJsonRpcRequest,
 } from './codex-client.js';
+import type { v2 } from './generated/codex-app-server-protocol/index.js';
 import { getChannelFromJid } from './shared/im/channel-prefixes.js';
 import { INTERNAL_MCP_BRIDGE_ID } from './product.js';
 import { summarizeToolInput } from './utils.js';
@@ -66,6 +67,14 @@ type RequestUserInputPrompt = {
   isOther: boolean;
   isSecret: boolean;
 };
+
+type RequestUserInputQuestion = v2.ToolRequestUserInputQuestion;
+type RequestUserInputResponse = v2.ToolRequestUserInputResponse;
+type ThreadStartResult = v2.ThreadStartResponse;
+type ThreadResumeResult = v2.ThreadResumeResponse;
+type TurnStartResult = v2.TurnStartResponse;
+type McpServerStatusListResult = v2.ListMcpServerStatusResponse;
+type CodexUserInput = v2.UserInput;
 
 type ReasoningItemState = {
   surfacedSummaryIndexes: Set<number>;
@@ -250,26 +259,32 @@ function buildUserInput(
   log: (message: string) => void,
   stagedImagePaths?: string[],
 ): {
-  input: Array<Record<string, unknown>>;
+  input: CodexUserInput[];
   rejected: string[];
 } {
   const filteredImages = images
     ? filterOversizedImages(images, log)
     : { valid: [], rejected: [] };
 
-  const imageInputs = stagedImagePaths
-    ? stagedImagePaths.map((imagePath) => ({
-        type: 'localImage',
-        path: imagePath,
-      }))
-    : filteredImages.valid.map((img) => ({
-        type: 'image',
-        url: `data:${resolveImageMimeType(
-          img,
-          detectImageMimeTypeFromBase64Strict,
-          log,
-        )};base64,${img.data}`,
-      }));
+  const imageInputs: CodexUserInput[] = stagedImagePaths
+    ? stagedImagePaths.map(
+        (imagePath) =>
+          ({
+            type: 'localImage',
+            path: imagePath,
+          }) satisfies CodexUserInput,
+      )
+    : filteredImages.valid.map(
+        (img) =>
+          ({
+            type: 'image',
+            url: `data:${resolveImageMimeType(
+              img,
+              detectImageMimeTypeFromBase64Strict,
+              log,
+            )};base64,${img.data}`,
+          }) satisfies CodexUserInput,
+      );
 
   return {
     input: [
@@ -277,7 +292,7 @@ function buildUserInput(
         type: 'text',
         text: prompt,
         text_elements: [],
-      },
+      } satisfies CodexUserInput,
       ...imageInputs,
     ],
     rejected: filteredImages.rejected,
@@ -366,25 +381,17 @@ function summarizeRequestUserInputPrompt(prompt: RequestUserInputPrompt): string
 function buildRequestUserInputPrompts(
   requestId: string | number,
   itemId: string,
-  questions: unknown,
+  questions: RequestUserInputQuestion[] | undefined,
 ): RequestUserInputPrompt[] {
-  if (!Array.isArray(questions)) return [];
+  if (!questions) return [];
   const prompts: RequestUserInputPrompt[] = [];
   for (const [index, question] of questions.entries()) {
-    if (!question || typeof question !== 'object') continue;
-    const record = question as Record<string, unknown>;
     const options: Array<{ label: string; description?: string }> = [];
-    if (Array.isArray(record.options)) {
-      for (const option of record.options) {
-        if (!option || typeof option !== 'object') continue;
-        const optionRecord = option as Record<string, unknown>;
-        if (typeof optionRecord.label !== 'string') continue;
+    if (Array.isArray(question.options)) {
+      for (const option of question.options) {
         options.push({
-          label: optionRecord.label,
-          description:
-            typeof optionRecord.description === 'string'
-              ? optionRecord.description
-              : undefined,
+          label: option.label,
+          description: option.description || undefined,
         });
       }
     }
@@ -392,14 +399,14 @@ function buildRequestUserInputPrompts(
       requestId: String(requestId),
       itemId,
       questionId:
-        typeof record.id === 'string' && record.id.trim()
-          ? record.id
+        typeof question.id === 'string' && question.id.trim()
+          ? question.id
           : `question-${itemId}-${index + 1}`,
-      header: typeof record.header === 'string' ? record.header : '',
-      question: typeof record.question === 'string' ? record.question : '',
+      header: question.header,
+      question: question.question,
       options,
-      isOther: Boolean(record.isOther),
-      isSecret: Boolean(record.isSecret),
+      isOther: question.isOther,
+      isSecret: question.isSecret,
     });
   }
   return prompts;
@@ -439,7 +446,7 @@ function assertSupportedRequestUserInputPrompts(
 function buildRequestUserInputAnswer(
   prompts: RequestUserInputPrompt[],
   message: { text: string; images?: Array<{ data: string; mimeType?: string }> },
-): { answers: Record<string, { answers: string[] }> } {
+): RequestUserInputResponse {
   assertSupportedRequestUserInputPrompts(prompts);
 
   if (message.images && message.images.length > 0) {
@@ -451,7 +458,7 @@ function buildRequestUserInputAnswer(
     throw new Error('请输入回答内容后再继续。');
   }
 
-  const answers: Record<string, { answers: string[] }> = {};
+  const answers: RequestUserInputResponse['answers'] = {};
   for (const prompt of prompts) {
     answers[prompt.questionId] = { answers: [answerText] };
   }
@@ -744,25 +751,17 @@ async function listCodexMcpServerStatuses(
   let cursor: string | null | undefined = undefined;
 
   for (let page = 0; page < MCP_SERVER_STATUS_PAGE_MAX; page += 1) {
-    const response = (await client.request('mcpServerStatus/list', {
+    const response: McpServerStatusListResult = await client.request('mcpServerStatus/list', {
       ...(cursor ? { cursor } : {}),
       limit: MCP_SERVER_STATUS_PAGE_LIMIT,
-    })) as {
-      data?: unknown[];
-      nextCursor?: string | null;
-    };
+    });
 
-    if (Array.isArray(response.data)) {
-      for (const entry of response.data) {
-        const normalized = normalizeMcpServerStatus(entry);
-        if (normalized) statuses.push(normalized);
-      }
+    for (const entry of response.data) {
+      const normalized = normalizeMcpServerStatus(entry);
+      if (normalized) statuses.push(normalized);
     }
 
-    cursor =
-      typeof response.nextCursor === 'string' && response.nextCursor.trim()
-        ? response.nextCursor
-        : null;
+    cursor = response.nextCursor?.trim() ? response.nextCursor : null;
     if (!cursor) break;
   }
 
@@ -1515,17 +1514,12 @@ export async function runCodexRuntime(options: {
         throw new Error(`Unsupported Codex request: ${request.method}`);
       }
 
-      const params =
-        request.params && typeof request.params === 'object'
-          ? (request.params as Record<string, unknown>)
-          : {};
-      const requestTurnId =
-        typeof params.turnId === 'string' ? params.turnId : undefined;
+      const params = request.params;
+      const requestTurnId = params.turnId;
       if (turnId && requestTurnId && requestTurnId !== turnId) {
         throw new Error('request_user_input turnId did not match active turn');
       }
-      const itemId =
-        typeof params.itemId === 'string' ? params.itemId : `request-${request.id}`;
+      const itemId = params.itemId || `request-${request.id}`;
       const prompts = buildRequestUserInputPrompts(
         request.id,
         itemId,
@@ -1652,24 +1646,24 @@ export async function runCodexRuntime(options: {
 
     try {
       if (threadId) {
-        const resumeResult = (await client.request('thread/resume', {
+        const resumeResult: ThreadResumeResult = await client.request('thread/resume', {
           threadId,
           cwd: deps.WORKSPACE_GROUP,
           approvalPolicy: 'never',
           persistExtendedHistory: false,
           baseInstructions: systemPromptAppend,
-        })) as { thread?: { id?: string } };
-        threadId = resumeResult.thread?.id || threadId;
+        });
+        threadId = resumeResult.thread.id || threadId;
       } else {
-        const startResult = (await client.request('thread/start', {
+        const startResult: ThreadStartResult = await client.request('thread/start', {
           cwd: deps.WORKSPACE_GROUP,
           approvalPolicy: 'never',
           sandbox: 'workspace-write',
           baseInstructions: systemPromptAppend,
           experimentalRawEvents: false,
           persistExtendedHistory: false,
-        })) as { thread?: { id?: string } };
-        threadId = startResult.thread?.id;
+        });
+        threadId = startResult.thread.id;
       }
       currentSessionId = threadId;
     } catch (error) {
@@ -1677,26 +1671,27 @@ export async function runCodexRuntime(options: {
         deps.log(
           `thread/resume failed, falling back to fresh thread: ${String(error)}`,
         );
-        const startResult = (await client.request('thread/start', {
+        const startResult: ThreadStartResult = await client.request('thread/start', {
           cwd: deps.WORKSPACE_GROUP,
           approvalPolicy: 'never',
           sandbox: 'workspace-write',
           baseInstructions: systemPromptAppend,
           experimentalRawEvents: false,
           persistExtendedHistory: false,
-        })) as { thread?: { id?: string } };
-        threadId = startResult.thread?.id;
+        });
+        threadId = startResult.thread.id;
         currentSessionId = threadId;
       } else {
         throw error;
       }
     }
 
-    const turnResult = (await client.request('turn/start', {
-      threadId,
+    const activeThreadId = threadId;
+    const turnResult: TurnStartResult = await client.request('turn/start', {
+      threadId: activeThreadId,
       input: userInput,
-    })) as { turn?: { id?: string } };
-    turnId = turnResult.turn?.id;
+    });
+    turnId = turnResult.turn.id;
     turnStartedAt = Date.now();
     turnTerminal = false;
     planTodoOrder.length = 0;

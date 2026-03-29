@@ -43,3 +43,7 @@ for target in \
 ; do
   sync_file "$SRC_CP" "$target"
 done
+
+# --- Generated Codex App Server protocol types (agent-runner only) ---
+# Source of truth: generated/codex-app-server-protocol/ts
+node "$ROOT/scripts/sync-codex-protocol-agent-runner.mjs"

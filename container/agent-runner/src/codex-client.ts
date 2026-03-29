@@ -1,5 +1,15 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 
+import type {
+  ClientNotification,
+  ClientRequest,
+  InitializeResponse,
+  RequestId,
+  ServerNotification,
+  ServerRequest,
+  v2,
+} from './generated/codex-app-server-protocol/index.js';
+
 const HAPPYPAW_CODEX_EXECUTABLE_ENV = 'HAPPYPAW_CODEX_EXECUTABLE';
 
 export interface CodexJsonRpcError {
@@ -8,22 +18,43 @@ export interface CodexJsonRpcError {
   data?: unknown;
 }
 
-export interface CodexJsonRpcNotification {
-  method: string;
-  params?: unknown;
-}
+export type CodexJsonRpcNotification = ServerNotification;
+export type CodexJsonRpcRequest = ServerRequest;
 
-export interface CodexJsonRpcRequest {
-  id: string | number;
-  method: string;
-  params?: unknown;
-}
+type ClientRequestMethod = ClientRequest['method'];
 
-interface PendingRequest {
-  method: string;
+type SupportedClientRequestResponseMap = {
+  initialize: InitializeResponse;
+  'mcpServerStatus/list': v2.ListMcpServerStatusResponse;
+  'thread/resume': v2.ThreadResumeResponse;
+  'thread/start': v2.ThreadStartResponse;
+  'turn/interrupt': v2.TurnInterruptResponse;
+  'turn/start': v2.TurnStartResponse;
+  'turn/steer': v2.TurnSteerResponse;
+};
+
+type SupportedClientRequestMethod = keyof SupportedClientRequestResponseMap;
+
+type RequestParamsFor<M extends ClientRequestMethod> =
+  Extract<ClientRequest, { method: M }>['params'];
+
+type PendingRequest = {
+  method: SupportedClientRequestMethod;
   reject: (error: Error) => void;
   resolve: (value: unknown) => void;
-}
+};
+
+type JsonRpcResponseEnvelope =
+  | {
+      id: RequestId;
+      result: unknown;
+      error?: undefined;
+    }
+  | {
+      id: RequestId;
+      result?: undefined;
+      error: CodexJsonRpcError;
+    };
 
 type ExitHandler = (reason: Error) => void;
 
@@ -46,12 +77,12 @@ function resolveManagedCodexExecutablePath(env: NodeJS.ProcessEnv | undefined): 
 export class CodexAppServerClient {
   private readonly proc: ChildProcessWithoutNullStreams;
 
-  private readonly pending = new Map<number, PendingRequest>();
+  private readonly pending = new Map<RequestId, PendingRequest>();
 
   private onNotification: (notification: CodexJsonRpcNotification) => void;
 
   private onRequest:
-    | ((request: CodexJsonRpcRequest) => Promise<unknown> | unknown)
+    | ((request: ServerRequest) => Promise<unknown> | unknown)
     | null;
 
   private readonly log: (message: string) => void;
@@ -69,8 +100,8 @@ export class CodexAppServerClient {
   constructor(options: {
     env?: NodeJS.ProcessEnv;
     log: (message: string) => void;
-    onNotification: (notification: CodexJsonRpcNotification) => void;
-    onRequest?: (request: CodexJsonRpcRequest) => Promise<unknown> | unknown;
+    onNotification: (notification: ServerNotification) => void;
+    onRequest?: (request: ServerRequest) => Promise<unknown> | unknown;
   }) {
     this.log = options.log;
     this.onNotification = options.onNotification;
@@ -111,7 +142,7 @@ export class CodexAppServerClient {
     });
   }
 
-  async initialize(): Promise<unknown> {
+  async initialize(): Promise<InitializeResponse> {
     const result = await this.request('initialize', {
       clientInfo: {
         name: 'happypaw_agent_runner',
@@ -128,37 +159,36 @@ export class CodexAppServerClient {
   }
 
   setNotificationHandler(
-    handler: (notification: CodexJsonRpcNotification) => void,
+    handler: (notification: ServerNotification) => void,
   ): void {
     this.onNotification = handler;
   }
 
   setRequestHandler(
-    handler: (request: CodexJsonRpcRequest) => Promise<unknown> | unknown,
+    handler: (request: ServerRequest) => Promise<unknown> | unknown,
   ): void {
     this.onRequest = handler;
   }
 
-  notify(method: string, params?: unknown): void {
-    this.writeMessage(
-      params === undefined ? { method } : { method, params },
-    );
+  notify(method: ClientNotification['method']): void {
+    this.writeMessage({ method });
   }
 
-  request<T>(method: string, params?: unknown): Promise<T> {
+  request<M extends SupportedClientRequestMethod>(
+    method: M,
+    params: RequestParamsFor<M>,
+  ): Promise<SupportedClientRequestResponseMap[M]> {
     if (this.closed) {
       return Promise.reject(new Error('codex app-server is not running'));
     }
     const id = this.nextId++;
-    return new Promise<T>((resolve, reject) => {
+    return new Promise<SupportedClientRequestResponseMap[M]>((resolve, reject) => {
       this.pending.set(id, {
         method,
         resolve: resolve as (value: unknown) => void,
         reject,
       });
-      this.writeMessage(
-        params === undefined ? { id, method } : { id, method, params },
-      );
+      this.writeMessage({ id, method, params });
     });
   }
 
@@ -235,37 +265,31 @@ export class CodexAppServerClient {
       typeof message.method === 'string' &&
       (typeof message.id === 'number' || typeof message.id === 'string')
     ) {
-      this.handleServerRequest({
-        id: message.id,
-        method: message.method,
-        params: message.params,
-      });
+      this.handleServerRequest(message as ServerRequest);
       return;
     }
 
-    if (typeof message.id === 'number') {
+    if (typeof message.id === 'number' || typeof message.id === 'string') {
       const pending = this.pending.get(message.id);
       if (!pending) return;
       this.pending.delete(message.id);
-      if (message.error && typeof message.error === 'object') {
+      const response = message as JsonRpcResponseEnvelope;
+      if (response.error && typeof response.error === 'object') {
         pending.reject(
-          createRpcError(pending.method, message.error as CodexJsonRpcError),
+          createRpcError(pending.method, response.error),
         );
         return;
       }
-      pending.resolve(message.result);
+      pending.resolve(response.result);
       return;
     }
 
     if (typeof message.method === 'string') {
-      this.onNotification({
-        method: message.method,
-        params: message.params,
-      });
+      this.onNotification(message as ServerNotification);
     }
   }
 
-  private handleServerRequest(request: CodexJsonRpcRequest): void {
+  private handleServerRequest(request: ServerRequest): void {
     if (!this.onRequest) {
       this.writeMessage({
         id: request.id,
