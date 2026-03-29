@@ -41,7 +41,6 @@ bun.lockb
 # Local tooling metadata
 .mcp.json
 /.omc/
-.factory/
 .trae/
 .coco/
 .agent/
