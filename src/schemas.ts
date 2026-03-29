@@ -150,10 +150,6 @@ export const MemoryFileSchema = z
     }
   });
 
-export const MemoryGlobalSchema = z.object({
-  content: z.string(),
-});
-
 export const GroupPatchSchema = z.object({
   name: z.string().min(1).max(MAX_GROUP_NAME_LEN).optional(),
   is_pinned: z.boolean().optional(),

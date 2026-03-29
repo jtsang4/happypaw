@@ -705,7 +705,6 @@ export function createAgentConversationRuntime(
         groupFolder: effectiveGroup.folder,
         chatJid,
         replyRouteJid,
-        isMain: isAdminHome,
         isHome,
         isAdminHome,
         agentId,

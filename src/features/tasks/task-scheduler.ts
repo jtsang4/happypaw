@@ -286,7 +286,6 @@ async function runTask(
         sessionId,
         groupFolder: task.group_folder,
         chatJid: groupJid,
-        isMain: isAdminHome,
         isHome,
         isAdminHome,
         isScheduledTask: true,

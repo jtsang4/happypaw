@@ -827,16 +827,9 @@ groupRoutes.delete('/:jid', authMiddleware, async (c) => {
       }
     }
   }
-  // Search by actual JID; also check legacy folder-based format for backward compat
+  // Search by actual JID only.
   const mainBoundByJid = getGroupsByTargetMainJid(jid);
-  const folderMainJid = `web:${existing.folder}`;
-  const mainBoundByFolder =
-    folderMainJid !== jid ? getGroupsByTargetMainJid(folderMainJid) : [];
-  const mainBoundJids = new Set(mainBoundByJid.map((l) => l.jid));
-  const mainBound = [
-    ...mainBoundByJid,
-    ...mainBoundByFolder.filter((l) => !mainBoundJids.has(l.jid)),
-  ];
+  const mainBound = mainBoundByJid;
   if (boundAgents.length > 0 || mainBound.length > 0) {
     const mainImGroups = mainBound.map((l) => ({
       jid: l.jid,

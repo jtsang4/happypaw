@@ -93,11 +93,10 @@ function generateTurnId(): string {
 function normalizeHomeFlags(
   input: ContainerInput,
 ): { isHome: boolean; isAdminHome: boolean } {
-  if (input.isHome !== undefined) {
-    return { isHome: !!input.isHome, isAdminHome: !!input.isAdminHome };
-  }
-  const legacy = !!input.isMain;
-  return { isHome: legacy, isAdminHome: legacy };
+  return {
+    isHome: !!input.isHome,
+    isAdminHome: !!input.isAdminHome,
+  };
 }
 
 function truncateWithHeadTail(content: string, maxChars: number): string {

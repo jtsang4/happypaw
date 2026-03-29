@@ -72,6 +72,16 @@ assert.match(
 );
 assert.doesNotMatch(
   memoryRouteSource,
+  /memoryRoutes\.(get|put)\('\/global'/u,
+  'Memory routes should no longer expose the deprecated /global API surface',
+);
+assert.doesNotMatch(
+  read('src/schemas.ts'),
+  /MemoryGlobalSchema/u,
+  'Deprecated global-memory schema should be removed once /global is dropped',
+);
+assert.doesNotMatch(
+  memoryRouteSource,
   /label:\s*`会话自动记忆/u,
   'Session memory labels should no longer use the generic session-memory wording',
 );
@@ -181,9 +191,11 @@ const [
   configModule,
 ] = await Promise.all([
   import('hono'),
-  import(path.join(repoRoot, 'dist', 'routes', 'memory.js')),
+  import(
+    path.join(repoRoot, 'dist', 'features', 'memory', 'routes', 'memory.js'),
+  ),
   import(path.join(repoRoot, 'dist', 'middleware', 'auth.js')),
-  import(path.join(repoRoot, 'dist', 'routes', 'auth.js')),
+  import(path.join(repoRoot, 'dist', 'features', 'auth', 'routes', 'auth.js')),
   import(path.join(repoRoot, 'dist', 'db', 'core.js')),
   import(path.join(repoRoot, 'dist', 'db', 'shared.js')),
   import(path.join(repoRoot, 'dist', 'db', 'groups.js')),

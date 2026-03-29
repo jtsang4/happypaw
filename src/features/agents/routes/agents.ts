@@ -19,7 +19,6 @@ import {
   deleteSession,
   getGroupsByTargetAgent,
   setRegisteredGroup,
-  getJidsByFolder,
   updateAgentLastImJid,
   updateAgentInfo,
   updateChatName,
@@ -358,18 +357,7 @@ router.get('/:jid/im-groups', authMiddleware, async (c) => {
         if (ownerGroup) boundWorkspaceName = ownerGroup.name;
       }
     } else if (g.target_main_jid) {
-      let boundGroup = getRegisteredGroup(g.target_main_jid);
-      // Legacy fallback: old bindings stored web:${folder} instead of actual JID
-      if (!boundGroup && g.target_main_jid.startsWith('web:')) {
-        const folder = g.target_main_jid.slice(4);
-        const jids = getJidsByFolder(folder);
-        for (const fj of jids) {
-          if (fj.startsWith('web:')) {
-            boundGroup = getRegisteredGroup(fj);
-            if (boundGroup) break;
-          }
-        }
-      }
+      const boundGroup = getRegisteredGroup(g.target_main_jid);
       if (boundGroup) boundTargetName = boundGroup.name;
     }
 
@@ -580,7 +568,6 @@ router.put('/:jid/im-binding', authMiddleware, async (c) => {
     return c.json({ error: 'Forbidden' }, 403);
   }
   const targetMainJid = jid; // Use actual registered JID (not folder-based)
-  const folderMainJid = `web:${group.folder}`;
   const force = body.force === true;
   // Only update reply_policy if explicitly provided; otherwise preserve existing value
   const replyPolicy =
@@ -591,9 +578,7 @@ router.put('/:jid/im-binding', authMiddleware, async (c) => {
         : undefined;
   const hasConflict =
     !!imGroup.target_agent_id ||
-    (imGroup.target_main_jid &&
-      imGroup.target_main_jid !== targetMainJid &&
-      imGroup.target_main_jid !== folderMainJid);
+    (imGroup.target_main_jid && imGroup.target_main_jid !== targetMainJid);
   if (hasConflict && !force) {
     return c.json({ error: 'IM group is already bound elsewhere' }, 409);
   }
@@ -660,11 +645,7 @@ router.delete('/:jid/im-binding/:imJid', authMiddleware, async (c) => {
     return c.json({ error: 'Forbidden' }, 403);
   }
   const targetMainJid = jid; // Use actual registered JID (not folder-based)
-  const folderMainJid = `web:${group.folder}`;
-  if (
-    imGroup.target_main_jid !== targetMainJid &&
-    imGroup.target_main_jid !== folderMainJid
-  ) {
+  if (imGroup.target_main_jid !== targetMainJid) {
     return c.json({ error: 'IM group is not bound to this workspace' }, 400);
   }
 

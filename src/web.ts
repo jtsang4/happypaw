@@ -1253,19 +1253,6 @@ function computeGroupAllowedUserIds(chatJid: string): Set<string> | null {
   // Add owner
   let ownerId: string | null = group.created_by ?? null;
 
-  // Legacy fallback: IM group without created_by, resolve by sibling home group.
-  if (!ownerId && !chatJid.startsWith('web:')) {
-    const siblingJids = getJidsByFolder(group.folder);
-    for (const siblingJid of siblingJids) {
-      if (!siblingJid.startsWith('web:')) continue;
-      const siblingGroup = getRegisteredGroup(siblingJid);
-      if (siblingGroup?.is_home && siblingGroup.created_by) {
-        ownerId = siblingGroup.created_by;
-        break;
-      }
-    }
-  }
-
   if (!ownerId) {
     if (group.is_home) return null;
     if (group.folder === 'main') return null;

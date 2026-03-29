@@ -436,65 +436,25 @@ skillsRoutes.get('/search/detail', authMiddleware, async (c) => {
   const source = c.req.query('source')?.trim();
   const skillId = c.req.query('skillId')?.trim();
 
-  // Support legacy url-based lookup for backwards compat
-  const url = c.req.query('url')?.trim();
-
-  if (source && skillId) {
-    // New path: fetch SKILL.md from GitHub using source/skillId
-    const result = await fetchSkillMdFromGitHub(source, skillId);
-    if (!result) {
-      return c.json({ detail: null });
-    }
-
-    return c.json({
-      detail: {
-        description: result.description,
-        skillName: result.skillName,
-        readme: result.content,
-        installs: '',
-        age: '',
-        features: [],
-      },
-    });
+  if (!source || !skillId) {
+    return c.json({ detail: null });
   }
 
-  // Legacy: extract source/skillId from skills.sh URL
-  if (url) {
-    try {
-      const parsed = new URL(url);
-      if (parsed.hostname === 'skills.sh') {
-        // URL pattern: https://skills.sh/s/{owner}/{repo}/{skillId}
-        const segments = parsed.pathname
-          .replace(/^\/s\//, '')
-          .split('/')
-          .filter(Boolean);
-        if (segments.length >= 3) {
-          const srcFromUrl = `${segments[0]}/${segments[1]}`;
-          const skillIdFromUrl = segments[2];
-          const result = await fetchSkillMdFromGitHub(
-            srcFromUrl,
-            skillIdFromUrl,
-          );
-          if (result) {
-            return c.json({
-              detail: {
-                description: result.description,
-                skillName: result.skillName,
-                readme: result.content,
-                installs: '',
-                age: '',
-                features: [],
-              },
-            });
-          }
-        }
-      }
-    } catch {
-      // fall through
-    }
+  const result = await fetchSkillMdFromGitHub(source, skillId);
+  if (!result) {
+    return c.json({ detail: null });
   }
 
-  return c.json({ detail: null });
+  return c.json({
+    detail: {
+      description: result.description,
+      skillName: result.skillName,
+      readme: result.content,
+      installs: '',
+      age: '',
+      features: [],
+    },
+  });
 });
 
 // Get sync status (last sync time + auto-sync config)

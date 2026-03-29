@@ -7,7 +7,6 @@ import type { Variables } from '../../../web-context.js';
 import { authMiddleware } from '../../../middleware/auth.js';
 import {
   MemoryFileSchema,
-  MemoryGlobalSchema,
   type MemorySource,
   type MemoryFilePayload,
   type MemorySearchHit,
@@ -24,7 +23,6 @@ const memoryRoutes = new Hono<{ Variables: Variables }>();
 const USER_GLOBAL_DIR = path.join(GROUPS_DIR, 'user-global');
 const MEMORY_DATA_DIR = path.join(DATA_DIR, 'memory');
 const SESSIONS_DIR = path.join(DATA_DIR, 'sessions');
-const MAX_GLOBAL_MEMORY_LENGTH = 200_000;
 const MAX_MEMORY_FILE_LENGTH = 500_000;
 const MEMORY_LIST_LIMIT = 500;
 const MEMORY_SEARCH_LIMIT = 120;
@@ -784,48 +782,6 @@ memoryRoutes.put('/file', authMiddleware, async (c) => {
   } catch (err) {
     const message =
       err instanceof Error ? err.message : 'Failed to write memory file';
-    return c.json({ error: message }, 400);
-  }
-});
-
-// Legacy /global API — now operates on the current user's user-global memory.
-memoryRoutes.get('/global', authMiddleware, (c) => {
-  try {
-    const user = c.get('user') as AuthUser;
-    const userGlobalPath = `data/groups/user-global/${user.id}/${PRIMARY_MEMORY_FILE}`;
-    return c.json(readMemoryFile(userGlobalPath, user));
-  } catch (err) {
-    logger.error({ err }, 'Failed to read user global memory');
-    return c.json({ error: 'Failed to read global memory' }, 500);
-  }
-});
-
-memoryRoutes.put('/global', authMiddleware, async (c) => {
-  const body = await c.req.json().catch(() => ({}));
-  const validation = MemoryGlobalSchema.safeParse(body);
-  if (!validation.success) {
-    return c.json(
-      { error: 'Invalid request body', details: validation.error.format() },
-      400,
-    );
-  }
-  if (
-    Buffer.byteLength(validation.data.content, 'utf-8') >
-    MAX_GLOBAL_MEMORY_LENGTH
-  ) {
-    return c.json({ error: 'Global memory is too large' }, 400);
-  }
-
-  try {
-    const user = c.get('user') as AuthUser;
-    const userGlobalPath = `data/groups/user-global/${user.id}/${PRIMARY_MEMORY_FILE}`;
-    return c.json(
-      writeMemoryFile(userGlobalPath, validation.data.content, user),
-    );
-  } catch (err) {
-    const message =
-      err instanceof Error ? err.message : 'Failed to write global memory';
-    logger.error({ err }, 'Failed to write user global memory');
     return c.json({ error: message }, 400);
   }
 });

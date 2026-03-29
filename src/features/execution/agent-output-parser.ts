@@ -200,7 +200,12 @@ export interface CloseHandlerContext {
   /** containerName or processId */
   identifier: string;
   logsDir: string;
-  input: { prompt: string; sessionId?: string; isMain: boolean };
+  input: {
+    prompt: string;
+    sessionId?: string;
+    isHome?: boolean;
+    isAdminHome?: boolean;
+  };
   stdoutState: StdoutParserState;
   stderrState: StderrState;
   onOutput?: (output: ContainerOutput) => Promise<void>;
@@ -282,7 +287,8 @@ export function writeRunLog(
     `=== ${ctx.label} Run Log ===`,
     `Timestamp: ${new Date().toISOString()}`,
     `Group: ${ctx.groupName}`,
-    `IsMain: ${ctx.input.isMain}`,
+    `IsHome: ${ctx.input.isHome ? 'true' : 'false'}`,
+    `IsAdminHome: ${ctx.input.isAdminHome ? 'true' : 'false'}`,
     `Duration: ${duration}ms`,
     `Exit Code: ${code}`,
     `Stdout Truncated: ${ctx.stdoutState.stdoutTruncated}`,
@@ -488,7 +494,7 @@ export function handleNonZeroExit(
 }
 
 /**
- * Handle the success (code === 0) path — streaming mode or legacy parsing.
+ * Handle the success (code === 0) path.
  */
 export function handleSuccessClose(
   ctx: CloseHandlerContext,
@@ -523,30 +529,32 @@ export function handleSuccessClose(
     return;
   }
 
-  // Legacy mode: parse the last output marker pair from accumulated stdout
-  parseLegacyOutput(ctx);
-}
-
-/**
- * Parse legacy (non-streaming) output from accumulated stdout.
- */
-function parseLegacyOutput(ctx: CloseHandlerContext): void {
   const { stdout } = ctx.stdoutState;
+  const startIdx = stdout.lastIndexOf(OUTPUT_START_MARKER);
+  const endIdx = stdout.lastIndexOf(OUTPUT_END_MARKER);
+
+  if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
+    logger.error(
+      {
+        group: ctx.groupName,
+        stdout,
+        stderr: ctx.stderrState.stderr,
+      },
+      `Missing output markers for ${ctx.filePrefix} output`,
+    );
+
+    ctx.resolvePromise({
+      status: 'error',
+      result: null,
+      error: `Failed to parse ${ctx.filePrefix} output: missing output markers`,
+    });
+    return;
+  }
+
   try {
-    let startMarker = OUTPUT_START_MARKER;
-    let endMarker = OUTPUT_END_MARKER;
-    let startIdx = stdout.indexOf(startMarker);
-    let endIdx = stdout.indexOf(endMarker);
-
-    let jsonLine: string;
-    if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-      jsonLine = stdout.slice(startIdx + startMarker.length, endIdx).trim();
-    } else {
-      // Fallback: last non-empty line (backwards compatibility)
-      const lines = stdout.trim().split('\n');
-      jsonLine = lines[lines.length - 1];
-    }
-
+    const jsonLine = stdout
+      .slice(startIdx + OUTPUT_START_MARKER.length, endIdx)
+      .trim();
     const output: ContainerOutput = JSON.parse(jsonLine);
 
     logger.info(

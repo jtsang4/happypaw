@@ -16,8 +16,6 @@ export interface ContainerInput {
   groupFolder: string;
   chatJid: string;
   replyRouteJid?: string;
-  /** @deprecated Use isHome + isAdminHome instead. Kept for backward compatibility with older host processes. */
-  isMain?: boolean;
   /** Whether this is the user's home container (admin or member). */
   isHome?: boolean;
   /** Whether this is the admin's home container (full privileges). */

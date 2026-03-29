@@ -601,7 +601,6 @@ async function runScenario(name, sessionId, options = {}) {
         runtime: 'codex_app_server',
         groupFolder: 'demo',
         chatJid: 'web:demo',
-        isMain: false,
         isHome: false,
         isAdminHome: false,
         turnId: 'turn-from-host',

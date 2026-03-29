@@ -55,7 +55,8 @@ function makeInput(folder) {
     prompt: '请先发送一条中途进度消息，再继续输出最终答复。',
     groupFolder: folder,
     chatJid: `web:${folder}`,
-    isMain: false,
+    isHome: false,
+    isAdminHome: false,
   };
 }
 

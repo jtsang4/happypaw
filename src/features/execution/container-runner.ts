@@ -58,8 +58,6 @@ export interface ContainerInput {
   groupFolder: string;
   chatJid: string;
   replyRouteJid?: string;
-  /** @deprecated Use isHome + isAdminHome instead */
-  isMain: boolean;
   turnId?: string;
   isHome?: boolean;
   isAdminHome?: boolean;
@@ -292,28 +290,20 @@ function buildVolumeMounts(
     taskRunId,
   });
   const workspaceHostDir = path.join(GROUPS_DIR, group.folder);
-  const workspaceGlobalDir = ownerId
-    ? path.join(GROUPS_DIR, 'user-global', ownerId)
-    : path.join(GROUPS_DIR, 'global');
+  const workspaceGlobalDir = path.join(
+    GROUPS_DIR,
+    'user-global',
+    ownerId || 'unknown-user',
+  );
 
   // Per-user global memory directory:
   // Each user gets their own user-global/{userId}/ mounted as /workspace/global
-  if (ownerId) {
-    mkdirForContainer(workspaceGlobalDir);
-    mounts.push({
-      hostPath: workspaceGlobalDir,
-      containerPath: '/workspace/global',
-      readonly: !group.is_home,
-    });
-  } else {
-    // Legacy fallback for rows without created_by.
-    mkdirForContainer(workspaceGlobalDir);
-    mounts.push({
-      hostPath: workspaceGlobalDir,
-      containerPath: '/workspace/global',
-      readonly: !isAdminHome,
-    });
-  }
+  mkdirForContainer(workspaceGlobalDir);
+  mounts.push({
+    hostPath: workspaceGlobalDir,
+    containerPath: '/workspace/global',
+    readonly: !group.is_home,
+  });
 
   if (isAdminHome) {
     // Admin home gets the entire project root mounted
@@ -571,7 +561,8 @@ export async function runContainerAgent(
       containerName,
       codexExecutablePath: PINNED_CONTAINER_CODEX_EXECUTABLE,
       mountCount: mounts.length,
-      isMain: input.isMain,
+      isHome: input.isHome,
+      isAdminHome: input.isAdminHome,
     },
     'Spawning container agent with managed pinned Codex executable',
   );
@@ -926,7 +917,7 @@ export async function runHostAgent(
   const groupCodexHomeDir = runtimeScopePaths.codexHomeDir;
   fs.mkdirSync(groupCodexHomeDir, { recursive: true });
 
-  // 3. 生成隔离的 Codex home；仅在工作区显式配置了 legacy settings.json 时读取其 MCP 定义
+  // 3. 生成隔离的 Codex home；仅在工作区显式配置了 workspace-mcp.json 时读取其 MCP 定义
   const workspaceSettingsPath = getExistingWorkspaceSettingsPath(groupDir);
   ensureCodexSessionHome(
     group,
@@ -937,9 +928,11 @@ export async function runHostAgent(
     {
       chatJid: input.chatJid,
       replyRouteJid: input.replyRouteJid,
-      workspaceGlobal: group.created_by
-        ? path.join(GROUPS_DIR, 'user-global', group.created_by)
-        : path.join(GROUPS_DIR, 'global'),
+      workspaceGlobal: path.join(
+        GROUPS_DIR,
+        'user-global',
+        group.created_by || 'unknown-user',
+      ),
       workspaceMemory: path.join(DATA_DIR, 'memory', group.folder),
       workspaceIpc: groupIpcDir,
       isHome: !!group.is_home,
@@ -1019,16 +1012,10 @@ export async function runHostAgent(
   // 路径映射
   hostEnv['HAPPYPAW_WORKSPACE_GROUP'] = groupDir;
   // Per-user global memory
-  const ownerId = group.created_by;
-  if (ownerId) {
-    const userGlobalDir = path.join(GROUPS_DIR, 'user-global', ownerId);
-    fs.mkdirSync(userGlobalDir, { recursive: true });
-    hostEnv['HAPPYPAW_WORKSPACE_GLOBAL'] = userGlobalDir;
-  } else {
-    const sharedGlobalDir = path.join(GROUPS_DIR, 'global');
-    fs.mkdirSync(sharedGlobalDir, { recursive: true });
-    hostEnv['HAPPYPAW_WORKSPACE_GLOBAL'] = sharedGlobalDir;
-  }
+  const ownerId = group.created_by || 'unknown-user';
+  const userGlobalDir = path.join(GROUPS_DIR, 'user-global', ownerId);
+  fs.mkdirSync(userGlobalDir, { recursive: true });
+  hostEnv['HAPPYPAW_WORKSPACE_GLOBAL'] = userGlobalDir;
   const memoryFolder = group.is_home
     ? group.folder
     : ownerHomeFolder || group.folder;
@@ -1127,7 +1114,8 @@ export async function runHostAgent(
     {
       group: group.name,
       workingDir: groupDir,
-      isMain: input.isMain,
+      isHome: input.isHome,
+      isAdminHome: input.isAdminHome,
     },
     'Spawning host agent',
   );

@@ -27,12 +27,6 @@ const streaming = await import(
 
 const expectedFeishuExports = [
   'createFeishuConnection',
-  'connectFeishu',
-  'sendFeishuMessage',
-  'setFeishuTyping',
-  'syncFeishuGroups',
-  'isFeishuConnected',
-  'stopFeishu',
 ];
 for (const name of expectedFeishuExports) {
   assert.equal(typeof feishu[name], 'function', `exports ${name}`);

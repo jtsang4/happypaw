@@ -134,83 +134,6 @@ export function createBootstrapStateRuntime(
     }
   };
 
-  const migrateGlobalMemoryToPerUser = (): void => {
-    const flagFile = path.join(DATA_DIR, 'config', '.memory-migration-v1-done');
-    if (fs.existsSync(flagFile)) return;
-
-    const oldGlobalMd = path.join(GROUPS_DIR, 'global', 'AGENTS.md');
-    const userGlobalBase = path.join(GROUPS_DIR, 'user-global');
-
-    let migrationSucceeded = true;
-    let copiedLegacyGlobal = !fs.existsSync(oldGlobalMd);
-
-    try {
-      const result = listUsers({
-        role: 'admin',
-        status: 'active',
-        page: 1,
-        pageSize: 1,
-      });
-      const firstAdmin = result.users[0];
-
-      if (firstAdmin && fs.existsSync(oldGlobalMd)) {
-        const adminDir = path.join(userGlobalBase, firstAdmin.id);
-        fs.mkdirSync(adminDir, { recursive: true });
-        const target = path.join(adminDir, 'AGENTS.md');
-        if (!fs.existsSync(target)) {
-          fs.copyFileSync(oldGlobalMd, target);
-          logger.info(
-            { userId: firstAdmin.id, src: oldGlobalMd, dst: target },
-            'Migrated global AGENTS.md to admin user-global',
-          );
-        }
-        copiedLegacyGlobal = true;
-      } else if (!firstAdmin && fs.existsSync(oldGlobalMd)) {
-        migrationSucceeded = false;
-        logger.warn(
-          'No active admin found for legacy global memory migration; will retry on next startup',
-        );
-      }
-
-      let page = 1;
-      const allUsers: Array<{ id: string }> = [];
-      while (true) {
-        const r = listUsers({ status: 'active', page, pageSize: 200 });
-        allUsers.push(...r.users);
-        if (allUsers.length >= r.total) break;
-        page++;
-      }
-      for (const u of allUsers) {
-        fs.mkdirSync(path.join(userGlobalBase, u.id), { recursive: true });
-      }
-    } catch (err) {
-      migrationSucceeded = false;
-      logger.warn({ err }, 'Global memory migration encountered an error');
-    }
-
-    if (!migrationSucceeded) {
-      logger.warn(
-        'Global memory migration incomplete; will retry on next startup',
-      );
-      return;
-    }
-
-    if (!copiedLegacyGlobal) {
-      logger.warn(
-        'Legacy global memory has not been copied; will retry on next startup',
-      );
-      return;
-    }
-
-    try {
-      fs.mkdirSync(path.dirname(flagFile), { recursive: true });
-      fs.writeFileSync(flagFile, new Date().toISOString());
-      logger.info('Global memory migration to per-user completed');
-    } catch (err) {
-      logger.warn({ err }, 'Failed to persist global memory migration flag');
-    }
-  };
-
   const loadState = (): void => {
     const persistedTimestamp = getRouterState('last_timestamp') || '';
     const lastTimestampId = getRouterState('last_timestamp_id') || '';
@@ -356,8 +279,6 @@ export function createBootstrapStateRuntime(
         }
       }
     }
-
-    migrateGlobalMemoryToPerUser();
 
     const templatePath = path.resolve(
       process.cwd(),
@@ -512,33 +433,6 @@ export function createBootstrapStateRuntime(
         fs.rmdirSync(oldStoreDir);
       } catch {
         // ignore
-      }
-    }
-
-    const oldGroupsDir = path.join(projectRoot, 'groups');
-    if (fs.existsSync(oldGroupsDir)) {
-      fs.mkdirSync(path.dirname(GROUPS_DIR), { recursive: true });
-      if (!fs.existsSync(GROUPS_DIR)) {
-        movePathWithFallback(oldGroupsDir, GROUPS_DIR);
-        logger.info(
-          { src: oldGroupsDir, dst: GROUPS_DIR },
-          'Migrated groups directory',
-        );
-      } else {
-        const entries = fs.readdirSync(oldGroupsDir, { withFileTypes: true });
-        for (const entry of entries) {
-          const src = path.join(oldGroupsDir, entry.name);
-          const dst = path.join(GROUPS_DIR, entry.name);
-          if (!fs.existsSync(dst)) {
-            movePathWithFallback(src, dst);
-            logger.info({ src, dst }, 'Migrated legacy group entry');
-          }
-        }
-        try {
-          fs.rmdirSync(oldGroupsDir);
-        } catch {
-          // ignore
-        }
       }
     }
   };

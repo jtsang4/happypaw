@@ -56,7 +56,7 @@ const [
 ] = await Promise.all([
   import('hono'),
   import(path.join(repoRoot, 'dist', 'routes', 'monitor.js')),
-  import(path.join(repoRoot, 'dist', 'routes', 'auth.js')),
+  import(path.join(repoRoot, 'dist', 'features', 'auth', 'routes', 'auth.js')),
   import(path.join(repoRoot, 'dist', 'db', 'core.js')),
   import(path.join(repoRoot, 'dist', 'db', 'shared.js')),
   import(path.join(repoRoot, 'dist', 'db', 'users-auth.js')),

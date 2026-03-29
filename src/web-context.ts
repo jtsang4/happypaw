@@ -9,12 +9,7 @@ import type {
   MessageCursor,
   UserSessionWithUser,
 } from './types.js';
-import {
-  getJidsByFolder,
-  getRegisteredGroup,
-  getGroupMemberRole,
-  getSessionWithUser,
-} from './db.js';
+import { getGroupMemberRole, getSessionWithUser } from './db.js';
 
 export interface WsClientInfo {
   sessionId: string;
@@ -195,22 +190,11 @@ export function canAccessGroup(
   group: RegisteredGroup & { jid: string },
 ): boolean {
   if (group.is_home) return group.created_by === user.id;
-  // IM groups: check ownership if created_by is set.
-  // For legacy rows without created_by, resolve owner from sibling home group.
+  // IM groups require canonical ownership metadata.
   if (!group.jid.startsWith('web:')) {
     if (group.created_by === user.id) return true;
     // Check membership for IM groups sharing a non-home folder
     if (getGroupMemberRole(group.folder, user.id) !== null) return true;
-    if (group.created_by) return false;
-    const siblingJids = getJidsByFolder(group.folder);
-    for (const jid of siblingJids) {
-      if (jid === group.jid) continue;
-      const sibling = getRegisteredGroup(jid);
-      if (sibling?.is_home && sibling.created_by) {
-        return sibling.created_by === user.id;
-      }
-    }
-    // Ownership cannot be resolved for this IM group → deny by default.
     return false;
   }
   // folder === 'main': only accessible by the admin who owns it (via created_by or group_members)

@@ -25,9 +25,9 @@ export interface SearchResult {
   package: string;
   url: string;
   description?: string;
-  installs?: number;
-  skillId?: string;
-  source?: string;
+  installs: number;
+  skillId: string;
+  source: string;
 }
 
 export interface SearchResultDetail {
@@ -215,20 +215,7 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
 
     set({ searchDetailLoading: { ...get().searchDetailLoading, [key]: true } });
     try {
-      // Use source/skillId params if available (new API), fallback to url
-      const params = result.source && result.skillId
-        ? `source=${encodeURIComponent(result.source)}&skillId=${encodeURIComponent(result.skillId)}`
-        : result.url
-          ? `url=${encodeURIComponent(result.url)}`
-          : '';
-
-      if (!params) {
-        set({
-          searchDetails: { ...get().searchDetails, [key]: null },
-          searchDetailLoading: { ...get().searchDetailLoading, [key]: false },
-        });
-        return;
-      }
+      const params = `source=${encodeURIComponent(result.source)}&skillId=${encodeURIComponent(result.skillId)}`;
 
       const data = await api.get<{ detail: SearchResultDetail | null }>(
         `/api/skills/search/detail?${params}`,

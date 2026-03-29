@@ -49,4 +49,4 @@ touch "$SCRIPT_DIR/../.docker-build-sentinel"
 
 echo ""
 echo "Test with:"
-echo "  echo '{\"prompt\":\"What is 2+2?\",\"groupFolder\":\"test\",\"chatJid\":\"test@g.us\",\"isMain\":false}' | docker run -i ${IMAGE_NAME}:${TAG}"
+echo "  echo '{\"prompt\":\"What is 2+2?\",\"groupFolder\":\"test\",\"chatJid\":\"test@g.us\",\"isHome\":false,\"isAdminHome\":false}' | docker run -i ${IMAGE_NAME}:${TAG}"
