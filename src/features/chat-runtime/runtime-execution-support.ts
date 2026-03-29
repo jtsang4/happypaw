@@ -9,6 +9,7 @@ import type {
   RuntimeSessionRecord,
 } from '../../shared/types.js';
 import type { GroupQueue } from './group-queue.js';
+import type { RuntimeSessionScope } from '../../db.js';
 
 interface RuntimeExecutionSupportDeps {
   assistantName: string;
@@ -41,8 +42,12 @@ interface RuntimeExecutionSupportDeps {
   setSession: (
     groupFolder: string,
     sessionId: string,
-    agentId?: string,
+    scope?: string | RuntimeSessionScope | null,
   ) => void;
+  getRuntimeSession: (
+    groupFolder: string,
+    scope?: string | RuntimeSessionScope | null,
+  ) => RuntimeSessionRecord | undefined;
   runHostAgent: any;
   runContainerAgent: any;
   writeTasksSnapshot: any;
@@ -136,6 +141,7 @@ export function createRuntimeExecutionSupport(
     getSystemSettings: deps.getSystemSettings,
     insertUsageRecord: deps.insertUsageRecord,
     setSession: deps.setSession,
+    getRuntimeSession: deps.getRuntimeSession,
     runHostAgent: deps.runHostAgent,
     runContainerAgent: deps.runContainerAgent,
     writeTasksSnapshot: deps.writeTasksSnapshot,

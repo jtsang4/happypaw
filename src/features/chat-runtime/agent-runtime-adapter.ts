@@ -9,6 +9,7 @@ import type {
 import { MAIN_GROUP_FOLDER } from '../../app/config.js';
 import type { GroupQueue } from './group-queue.js';
 import { logger as defaultLogger } from '../../app/logger.js';
+import type { RuntimeSessionScope } from '../../db.js';
 import type {
   RegisteredGroup,
   RuntimeSessionRecord,
@@ -62,6 +63,7 @@ export type RunAgentFn = (
   onOutput?: (output: ContainerOutput) => Promise<void>,
   images?: Array<{ data: string; mimeType?: string }>,
   replyRouteJid?: string,
+  sessionScope?: RuntimeSessionScope,
 ) => Promise<{ status: 'success' | 'error' | 'closed'; error?: string }>;
 
 interface AgentRuntimeAdapterDeps {
@@ -131,8 +133,12 @@ interface AgentRuntimeAdapterDeps {
   setSession: (
     groupFolder: string,
     sessionId: string,
-    agentId?: string,
+    scope?: string | RuntimeSessionScope | null,
   ) => void;
+  getRuntimeSession?: (
+    groupFolder: string,
+    scope?: string | RuntimeSessionScope | null,
+  ) => RuntimeSessionRecord | undefined;
   runHostAgent: (
     group: RegisteredGroup,
     input: ContainerInput,
@@ -190,6 +196,9 @@ export function createAgentRuntimeAdapter(deps: AgentRuntimeAdapterDeps): {
   ensureTerminalContainerStarted: (chatJid: string) => boolean;
 } {
   const log = deps.logger ?? defaultLogger;
+
+  const isDefaultSessionScope = (scope?: RuntimeSessionScope): boolean =>
+    !scope || (!scope.agentId && !scope.conversationId);
 
   function writeUsageRecords(opts: {
     userId: string;
@@ -480,11 +489,14 @@ export function createAgentRuntimeAdapter(deps: AgentRuntimeAdapterDeps): {
     onOutput,
     images,
     replyRouteJid,
+    sessionScope,
   ) => {
     const isHome = !!group.is_home;
     const isAdminHome = isHome && group.folder === MAIN_GROUP_FOLDER;
     const runtime = getEffectiveRuntime(group);
-    const sessionRecord = deps.sessions[group.folder];
+    const sessionRecord = isDefaultSessionScope(sessionScope)
+      ? deps.sessions[group.folder]
+      : deps.getRuntimeSession?.(group.folder, sessionScope);
     const sessionId = sessionRecord?.sessionId;
 
     const tasks = deps.getAllTasks();
@@ -524,8 +536,10 @@ export function createAgentRuntimeAdapter(deps: AgentRuntimeAdapterDeps): {
             const nextSession: RuntimeSessionRecord = {
               sessionId: output.newSessionId,
             };
-            deps.sessions[group.folder] = nextSession;
-            deps.setSession(group.folder, output.newSessionId, undefined);
+            if (isDefaultSessionScope(sessionScope)) {
+              deps.sessions[group.folder] = nextSession;
+            }
+            deps.setSession(group.folder, output.newSessionId, sessionScope);
           }
           await onOutput(output);
         }
@@ -590,8 +604,10 @@ export function createAgentRuntimeAdapter(deps: AgentRuntimeAdapterDeps): {
         const nextSession: RuntimeSessionRecord = {
           sessionId: output.newSessionId,
         };
-        deps.sessions[group.folder] = nextSession;
-        deps.setSession(group.folder, output.newSessionId, undefined);
+        if (isDefaultSessionScope(sessionScope)) {
+          deps.sessions[group.folder] = nextSession;
+        }
+        deps.setSession(group.folder, output.newSessionId, sessionScope);
       }
 
       if (output.status === 'closed') {

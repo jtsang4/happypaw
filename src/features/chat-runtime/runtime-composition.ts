@@ -270,6 +270,7 @@ const {
   getSystemSettings,
   insertUsageRecord,
   setSession,
+  getRuntimeSession,
   runHostAgent,
   runContainerAgent,
   writeTasksSnapshot,
