@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 
-import { logger } from '../../../../logger.js';
+import { logger } from '../../../../app/logger.js';
 
 // CDN Base URL
 const DEFAULT_CDN_BASE = 'https://novac2c.cdn.weixin.qq.com/c2c';

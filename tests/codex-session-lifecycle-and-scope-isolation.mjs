@@ -17,10 +17,10 @@ const dataDir = path.join(realTempRoot, 'data');
 fs.mkdirSync(dataDir, { recursive: true });
 
 const { resolveRuntimeScopePaths } = await import(
-  path.join(repoRoot, 'dist', 'container-runner.js')
+  path.join(repoRoot, 'dist', 'features', 'execution', 'container-runner.js')
 );
 const { ensureAgentDirectories } = await import(
-  path.join(repoRoot, 'dist', 'utils.js')
+  path.join(repoRoot, 'dist', 'features', 'agents', 'agent-directories.js')
 );
 const { initDatabase, closeDatabase, setSession, getRuntimeSession, deleteSession } =
   await import(path.join(repoRoot, 'dist', 'db.js'));

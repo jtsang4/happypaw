@@ -28,13 +28,13 @@ import {
   correctMonthlyUsage,
 } from '../../db.js';
 import { getSystemSettings } from '../../runtime-config.js';
-import { logger } from '../../logger.js';
+import { logger } from '../../app/logger.js';
 import type {
   BillingAccessResult,
   BillingPlan,
   QuotaCheckResult,
   UserSubscription,
-} from '../../types.js';
+} from '../../shared/types.js';
 
 // --- Billing enabled check ---
 // Delegates to getSystemSettings() which already has mtime-based file caching.

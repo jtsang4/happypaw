@@ -9,12 +9,12 @@ import {
   storeMessageDirect,
   ensureChatExists,
 } from '../../db.js';
-import { logger } from '../../logger.js';
+import { logger } from '../../app/logger.js';
 import type {
   NewMessage,
   MessageCursor,
   RuntimeSessionRecord,
-} from '../../types.js';
+} from '../../shared/types.js';
 import { clearSessionRuntimeFiles } from './runtime-state-cleanup.js';
 
 // ─── Types ──────────────────────────────────────────────────────

@@ -22,7 +22,7 @@ import {
   canAccessGroup,
   getCachedSessionWithUser,
   invalidateSessionCache,
-} from './web-context.js';
+} from './app/web/context.js';
 
 // Schemas
 import {
@@ -31,7 +31,25 @@ import {
   TerminalInputSchema,
   TerminalResizeSchema,
   TerminalStopSchema,
-} from './schemas.js';
+} from './app/web/schemas.js';
+import { createMessageIngress } from './app/web/message-ingress.js';
+import {
+  broadcastAgentStatus,
+  broadcastBillingUpdate,
+  broadcastDockerBuildComplete,
+  broadcastDockerBuildLog,
+  broadcastNewMessage,
+  broadcastRunnerState,
+  broadcastStatusUpdate,
+  broadcastStreamEvent,
+  broadcastToWebClients,
+  broadcastTyping,
+  clearStreamingSnapshot,
+  getAccessibleBroadcastJid,
+  getActiveStreamingTexts,
+  getStreamingSnapshotsForUser,
+  invalidateAllowedUserCache,
+} from './app/web/broadcast.js';
 
 // Middleware
 import { authMiddleware } from './middleware/auth.js';
@@ -40,7 +58,9 @@ import { authMiddleware } from './middleware/auth.js';
 import authRoutes from './features/auth/routes/auth.js';
 import groupRoutes from './features/groups/routes/groups.js';
 import memoryRoutes from './features/memory/routes/memory.js';
-import configRoutes, { injectConfigDeps } from './routes/config.js';
+import configRoutes, {
+  injectConfigDeps,
+} from './features/configuration/index.js';
 import tasksRoutes from './features/tasks/routes/tasks.js';
 import adminRoutes from './features/auth/routes/admin.js';
 import fileRoutes from './features/groups/routes/files.js';
@@ -57,44 +77,26 @@ import { usage as usageRoutes } from './features/monitoring/routes/usage.js';
 import billingRoutes from './features/billing/routes/billing.js';
 import bugReportRoutes from './features/monitoring/routes/bug-report.js';
 import {
-  checkBillingAccess,
-  formatBillingAccessDeniedMessage,
-} from './features/billing/billing.js';
-
-// Database and types (only for handleWebUserMessage and broadcast)
-import {
-  ensureChatExists,
   getRegisteredGroup,
-  getJidsByFolder,
+  ensureChatExists,
   storeMessageDirect,
   deleteUserSession,
   updateSessionLastActive,
-  getGroupMembers,
-  getAgent,
-  isGroupShared,
-  getUserById,
 } from './db.js';
 import { isSessionExpired } from './features/auth/auth.js';
 import type {
-  NewMessage,
   WsMessageOut,
   WsMessageIn,
   AuthUser,
-  StreamEvent,
   UserRole,
-} from './types.js';
+} from './shared/types.js';
 import {
   WEB_PORT,
   SESSION_COOKIE_NAME_SECURE,
   SESSION_COOKIE_NAME_PLAIN,
-  ASSISTANT_NAME,
-} from './config.js';
-import { logger } from './logger.js';
+} from './app/config.js';
+import { logger } from './app/logger.js';
 import { executeSessionReset } from './features/chat-runtime/commands.js';
-import {
-  normalizeImageAttachments,
-  toAgentImages,
-} from './features/im/messaging/attachments.js';
 
 // --- App Setup ---
 
@@ -225,255 +227,11 @@ app.post('/api/messages', authMiddleware, async (c) => {
   });
 });
 
-// --- handleWebUserMessage ---
-
-async function handleWebUserMessage(
-  chatJid: string,
-  content: string,
-  attachments?: Array<{ type: 'image'; data: string; mimeType?: string }>,
-  userId = 'web-user',
-  displayName = 'Web',
-): Promise<
-  | {
-      ok: true;
-      messageId: string;
-      timestamp: string;
-    }
-  | {
-      ok: false;
-      status: 404 | 500;
-      error: string;
-    }
-> {
-  if (!deps) return { ok: false, status: 500, error: 'Server not initialized' };
-
-  let group = deps.getRegisteredGroups()[chatJid];
-  if (!group) {
-    // Group may exist in DB but not in memory cache (created via setup/registration after loadState)
-    const dbGroup = getRegisteredGroup(chatJid);
-    if (!dbGroup) return { ok: false, status: 404, error: 'Group not found' };
-    group = dbGroup;
-  }
-
-  ensureChatExists(chatJid);
-
-  const messageId = crypto.randomUUID();
-  const timestamp = new Date().toISOString();
-  const normalizedAttachments = normalizeImageAttachments(attachments, {
-    onMimeMismatch: ({ declaredMime, detectedMime }) => {
-      logger.warn(
-        { chatJid, messageId, declaredMime, detectedMime },
-        'Web attachment MIME mismatch detected, using detected MIME',
-      );
-    },
+const { handleWebUserMessage, handleAgentConversationMessage } =
+  createMessageIngress({
+    getWebDeps: () => deps,
+    broadcastNewMessage,
   });
-  const attachmentsStr =
-    normalizedAttachments.length > 0
-      ? JSON.stringify(normalizedAttachments)
-      : undefined;
-  storeMessageDirect(
-    messageId,
-    chatJid,
-    userId,
-    displayName,
-    content,
-    timestamp,
-    false,
-    { attachments: attachmentsStr },
-  );
-
-  broadcastNewMessage(chatJid, {
-    id: messageId,
-    chat_jid: chatJid,
-    sender: userId,
-    sender_name: displayName,
-    content,
-    timestamp,
-    is_from_me: false,
-    attachments: attachmentsStr,
-  });
-
-  if (group.created_by) {
-    const owner = getUserById(group.created_by);
-    if (owner && owner.role !== 'admin') {
-      const accessResult = checkBillingAccess(group.created_by, owner.role);
-      if (!accessResult.allowed) {
-        const sysMsg = formatBillingAccessDeniedMessage(accessResult);
-        const sysMsgId = `sys_quota_${Date.now()}`;
-        const sysTimestamp = new Date().toISOString();
-        storeMessageDirect(
-          sysMsgId,
-          chatJid,
-          '__billing__',
-          ASSISTANT_NAME,
-          sysMsg,
-          sysTimestamp,
-          true,
-        );
-        broadcastNewMessage(chatJid, {
-          id: sysMsgId,
-          chat_jid: chatJid,
-          sender: '__billing__',
-          sender_name: ASSISTANT_NAME,
-          content: sysMsg,
-          timestamp: sysTimestamp,
-          is_from_me: true,
-        });
-        deps.setLastAgentTimestamp(chatJid, { timestamp, id: messageId });
-        deps.advanceGlobalCursor({ timestamp, id: messageId });
-        return { ok: true, messageId, timestamp };
-      }
-    }
-  }
-
-  const shared = !group.is_home && isGroupShared(group.folder);
-  const formatted = deps.formatMessages(
-    [
-      {
-        id: messageId,
-        chat_jid: chatJid,
-        sender: userId,
-        sender_name: displayName,
-        content,
-        timestamp,
-      },
-    ],
-    shared,
-  );
-
-  // IPC-inject the message into the running agent process.  For home groups,
-  // the reply route is dynamically updated via activeRouteUpdaters so we no
-  // longer need to kill and restart the process (#99).
-  let pipedToActive = false;
-  const images = toAgentImages(normalizedAttachments);
-  const updateRoute = deps.updateReplyRoute;
-  const sendResult = deps.queue.sendMessage(chatJid, formatted, images, () => {
-    // IPC write succeeded — update reply route for home groups.
-    // Web messages have no IM source, so clear the IM route.
-    updateRoute?.(group.folder, null);
-  });
-  if (sendResult === 'sent') {
-    pipedToActive = true;
-  } else {
-    deps.queue.enqueueMessageCheck(chatJid);
-  }
-
-  // Only advance per-group cursor when we piped directly into a running container.
-  //
-  // When piped to active, we also mark the group as having pending IPC-injected
-  // messages. If the agent crashes without processing them, the close handler
-  // resets pendingMessages so drainGroup re-reads from DB.
-  if (pipedToActive) {
-    deps.setLastAgentTimestamp(chatJid, { timestamp, id: messageId });
-    deps.queue.markIpcInjectedMessage(chatJid);
-  }
-  deps.advanceGlobalCursor({ timestamp, id: messageId });
-  return { ok: true, messageId, timestamp };
-}
-
-// --- Agent Conversation Message Handler ---
-
-async function handleAgentConversationMessage(
-  chatJid: string,
-  agentId: string,
-  content: string,
-  userId: string,
-  displayName: string,
-  attachments?: Array<{ type: 'image'; data: string; mimeType?: string }>,
-): Promise<void> {
-  if (!deps) return;
-
-  const agent = getAgent(agentId);
-  if (!agent || agent.kind !== 'conversation' || agent.chat_jid !== chatJid) {
-    logger.warn(
-      { chatJid, agentId },
-      'Agent conversation message rejected: agent not found or not a conversation',
-    );
-    return;
-  }
-
-  const virtualChatJid = `${chatJid}#agent:${agentId}`;
-
-  // Store message with virtual chat_jid
-  const messageId = crypto.randomUUID();
-  const timestamp = new Date().toISOString();
-  const normalizedAttachments = normalizeImageAttachments(attachments, {
-    onMimeMismatch: ({ declaredMime, detectedMime }) => {
-      logger.warn(
-        { chatJid, messageId, agentId, declaredMime, detectedMime },
-        'Agent conversation attachment MIME mismatch detected, using detected MIME',
-      );
-    },
-  });
-  const attachmentsStr =
-    normalizedAttachments.length > 0
-      ? JSON.stringify(normalizedAttachments)
-      : undefined;
-
-  ensureChatExists(virtualChatJid);
-  storeMessageDirect(
-    messageId,
-    virtualChatJid,
-    userId,
-    displayName,
-    content,
-    timestamp,
-    false,
-    { attachments: attachmentsStr },
-  );
-
-  // Broadcast new_message with agentId so frontend routes to agent tab
-  broadcastNewMessage(
-    virtualChatJid,
-    {
-      id: messageId,
-      chat_jid: virtualChatJid,
-      sender: userId,
-      sender_name: displayName,
-      content,
-      timestamp,
-      is_from_me: false,
-      attachments: attachmentsStr,
-    },
-    agentId,
-  );
-
-  // Format for agent
-  const shared = false; // agent conversations are not shared
-  const formatted = deps.formatMessages(
-    [
-      {
-        id: messageId,
-        chat_jid: virtualChatJid,
-        sender: userId,
-        sender_name: displayName,
-        content,
-        timestamp,
-      },
-    ],
-    shared,
-  );
-
-  // Try to pipe into running agent process
-  const agentImages = toAgentImages(normalizedAttachments);
-  const agentSendResult = deps.queue.sendMessage(
-    virtualChatJid,
-    formatted,
-    agentImages,
-  );
-  if (agentSendResult === 'no_active') {
-    // No running process — force close any stale state and start fresh.
-    // Mirrors the reliable IM path in buildOnAgentMessage() (#240).
-    deps.queue.closeStdin(virtualChatJid);
-    if (deps.processAgentConversation) {
-      const taskId = `agent-conv:${agentId}:${Date.now()}`;
-      deps.queue.enqueueTask(virtualChatJid, taskId, async () => {
-        await deps!.processAgentConversation!(chatJid, agentId);
-      });
-    }
-  }
-  // 'sent' needs no further action
-}
 
 // --- Static Files ---
 
@@ -583,41 +341,16 @@ function setupWebSocket(server: any): WebSocketServer {
     });
 
     // Push streaming snapshots for active groups this user can access
-    if (connSession && streamingSnapshots.size > 0) {
-      const userId = connSession.user_id;
-      for (const [jid, snap] of streamingSnapshots) {
-        // Skip stale snapshots (> 30 min)
-        // Extended from 5 min to 30 min to support long-running sub-agents.
-        // See GitHub issue #241.
-        if (Date.now() - snap.updatedAt > 30 * 60 * 1000) {
-          streamingSnapshots.delete(jid);
-          continue;
-        }
-        // Skip empty snapshots
-        if (
-          !snap.partialText &&
-          snap.activeTools.length === 0 &&
-          snap.recentEvents.length === 0
-        ) {
-          continue;
-        }
-        // Strip #agent: suffix for ACL lookup (virtual JIDs not in registered_groups)
-        const baseJid = jid.includes('#agent:') ? jid.split('#agent:')[0] : jid;
-        const allowed = getGroupAllowedUserIds(baseJid);
-        if (allowed === null || !allowed.has(userId)) continue;
+    if (connSession) {
+      for (const snapshot of getStreamingSnapshotsForUser(
+        connSession.user_id,
+      )) {
         try {
           ws.send(
             JSON.stringify({
               type: 'stream_snapshot',
-              chatJid: jid,
-              snapshot: {
-                partialText: snap.partialText,
-                activeTools: snap.activeTools,
-                recentEvents: snap.recentEvents,
-                todos: snap.todos,
-                systemStatus: snap.systemStatus,
-                turnId: snap.turnId,
-              },
+              chatJid: snapshot.chatJid,
+              snapshot: snapshot.snapshot,
             } satisfies WsMessageOut),
           );
         } catch {
@@ -635,9 +368,8 @@ function setupWebSocket(server: any): WebSocketServer {
       const queueStatus = deps.queue.getStatus();
       for (const g of queueStatus.groups) {
         if (!g.active) continue;
-        const jid = normalizeHomeJid(g.jid);
-        const allowed = getGroupAllowedUserIds(g.jid);
-        if (allowed === null || !allowed.has(userId)) continue;
+        const jid = getAccessibleBroadcastJid(g.jid, userId);
+        if (!jid) continue;
         try {
           ws.send(
             JSON.stringify({
@@ -1125,527 +857,16 @@ function setupWebSocket(server: any): WebSocketServer {
 
   return wss;
 }
-
-// --- Broadcast Functions ---
-
-/**
- * Broadcast to all connected WebSocket clients.
- * If adminOnly is true, only send to clients whose session belongs to an admin user.
- * If ownerUserId is provided, only send to that user and admins (for group isolation).
- */
-/**
- * Broadcast a WebSocket message with access control filtering.
- *
- * @param msg - The message to broadcast
- * @param adminOnly - If true, only admin users receive the message
- * @param allowedUserIds - Group access filtering:
- *   - undefined: no user-level filtering (e.g. system-wide admin broadcasts)
- *   - null: ownership unresolvable → default-deny, only admin can see
- *   - Set<string>: only these users + admin can see
- */
-function safeBroadcast(
-  msg: WsMessageOut,
-  adminOnly = false,
-  allowedUserIds?: Set<string> | null,
-): void {
-  const data = JSON.stringify(msg);
-  for (const [client, clientInfo] of wsClients) {
-    if (client.readyState !== WebSocket.OPEN) {
-      wsClients.delete(client);
-      continue;
-    }
-
-    if (!clientInfo.sessionId) {
-      wsClients.delete(client);
-      try {
-        client.close(1008, 'Unauthorized');
-      } catch {
-        /* ignore */
-      }
-      continue;
-    }
-
-    const session = getCachedSessionWithUser(clientInfo.sessionId);
-    const expired = !!session && isSessionExpired(session.expires_at);
-    const invalid = !session || expired || session.status !== 'active';
-    if (invalid) {
-      if (expired) {
-        deleteUserSession(clientInfo.sessionId);
-      }
-      invalidateSessionCache(clientInfo.sessionId);
-      wsClients.delete(client);
-      try {
-        client.close(1008, 'Unauthorized');
-      } catch {
-        /* ignore */
-      }
-      continue;
-    }
-
-    if (adminOnly && session.role !== 'admin') {
-      continue;
-    }
-
-    // Group isolation: only allowed users (owner + shared members) can see this group's events
-    // allowedUserIds === null means ownership unresolvable → default-deny (admin-only)
-    if (allowedUserIds !== undefined) {
-      if (allowedUserIds === null || !allowedUserIds.has(session.user_id)) {
-        continue;
-      }
-    }
-
-    try {
-      client.send(data);
-    } catch {
-      wsClients.delete(client);
-    }
-  }
-}
-
-/**
- * Get the set of user IDs allowed to receive broadcasts for a group.
- * Includes the owner and all shared members. Admin is NOT automatically included
- * — they must be the owner or a shared member to receive broadcasts.
- *
- * Returns:
- * - Set<string>: allowed user IDs (owner + shared members)
- * - null: ownership unresolvable → default-deny (admin-only)
- */
-const allowedUserIdsCache = new Map<
-  string,
-  { ids: Set<string> | null; expiry: number }
->();
-const ALLOWED_CACHE_TTL = 10_000; // 10 seconds
-
-function getGroupAllowedUserIds(chatJid: string): Set<string> | null {
-  const now = Date.now();
-  const cached = allowedUserIdsCache.get(chatJid);
-  if (cached && cached.expiry > now) return cached.ids;
-
-  const result = computeGroupAllowedUserIds(chatJid);
-  allowedUserIdsCache.set(chatJid, {
-    ids: result,
-    expiry: now + ALLOWED_CACHE_TTL,
-  });
-  return result;
-}
-
-/** Invalidate the allowed-user cache for a group and all sibling JIDs sharing the same folder. */
-export function invalidateAllowedUserCache(chatJid: string): void {
-  allowedUserIdsCache.delete(chatJid);
-  // Also clear cache for sibling JIDs sharing the same folder,
-  // since membership is per-folder, not per-JID.
-  const group = getRegisteredGroup(chatJid);
-  if (group) {
-    const siblingJids = getJidsByFolder(group.folder);
-    for (const jid of siblingJids) {
-      allowedUserIdsCache.delete(jid);
-    }
-  }
-}
-
-function computeGroupAllowedUserIds(chatJid: string): Set<string> | null {
-  const group = getRegisteredGroup(chatJid);
-  if (!group) return null; // Unknown group → deny by default
-
-  const allowed = new Set<string>();
-
-  // Add owner
-  let ownerId: string | null = group.created_by ?? null;
-
-  if (!ownerId) {
-    if (group.is_home) return null;
-    if (group.folder === 'main') return null;
-    return null; // Unresolvable → deny by default
-  }
-
-  allowed.add(ownerId);
-
-  // For non-home groups, include shared members
-  if (!group.is_home) {
-    const members = getGroupMembers(group.folder);
-    for (const m of members) {
-      allowed.add(m.user_id);
-    }
-  }
-
-  return allowed;
-}
-
-/** Check if a chatJid belongs to a host-mode group (for broadcast filtering) */
-function isHostGroupJid(chatJid: string): boolean {
-  const group = getRegisteredGroup(chatJid);
-  return !!group && isHostExecutionGroup(group);
-}
-
-/**
- * Normalize chatJid for WebSocket broadcasts.
- * IM groups (Feishu/Telegram) that share a folder with an is_home group are mapped
- * to that home group's web JID so the frontend can match all home-session events.
- */
-function normalizeHomeJid(chatJid: string): string {
-  if (chatJid.startsWith('web:')) return chatJid;
-  const group = getRegisteredGroup(chatJid);
-  if (!group) return chatJid;
-
-  // Find the web: JID that shares this folder (typically the is_home group)
-  const jids = getJidsByFolder(group.folder);
-  for (const jid of jids) {
-    if (jid.startsWith('web:')) {
-      return jid;
-    }
-  }
-  return chatJid;
-}
-
-export function broadcastToWebClients(chatJid: string, text: string): void {
-  const timestamp = new Date().toISOString();
-  const jid = normalizeHomeJid(chatJid);
-  const allowedUserIds = getGroupAllowedUserIds(chatJid);
-  safeBroadcast(
-    { type: 'agent_reply', chatJid: jid, text, timestamp },
-    isHostGroupJid(chatJid),
-    allowedUserIds,
-  );
-}
-
-export function broadcastNewMessage(
-  chatJid: string,
-  msg: NewMessage & { is_from_me?: boolean },
-  agentId?: string,
-  source?: string,
-): void {
-  // For virtual JIDs like "web:xxx#agent:yyy", extract base JID and agentId
-  let baseChatJid = chatJid;
-  let effectiveAgentId = agentId;
-  if (chatJid.includes('#agent:')) {
-    const parts = chatJid.split('#agent:');
-    baseChatJid = parts[0];
-    if (!effectiveAgentId) effectiveAgentId = parts[1];
-  }
-  const jid = normalizeHomeJid(baseChatJid);
-  const allowedUserIds = getGroupAllowedUserIds(baseChatJid);
-  const wsMsg: WsMessageOut = {
-    type: 'new_message',
-    chatJid: jid,
-    message: { ...msg, is_from_me: msg.is_from_me ?? false },
-    ...(effectiveAgentId ? { agentId: effectiveAgentId } : {}),
-    ...(source ? { source } : {}),
-  };
-  safeBroadcast(wsMsg, isHostGroupJid(baseChatJid), allowedUserIds);
-}
-
-export function broadcastTyping(chatJid: string, isTyping: boolean): void {
-  const jid = normalizeHomeJid(chatJid);
-  const allowedUserIds = getGroupAllowedUserIds(chatJid);
-  safeBroadcast(
-    { type: 'typing', chatJid: jid, isTyping },
-    isHostGroupJid(chatJid),
-    allowedUserIds,
-  );
-}
-
-// ─── Streaming Snapshot Accumulation ─────────────────────────────────
-// Tracks current streaming state per group so WS reconnects can recover.
-
-interface StreamingSnapshotEntry {
-  partialText: string;
-  activeTools: Array<{
-    toolName: string;
-    toolUseId: string;
-    startTime: number;
-    toolInputSummary?: string;
-    toolInput?: Record<string, unknown>;
-    parentToolUseId?: string | null;
-  }>;
-  recentEvents: Array<{
-    id: string;
-    timestamp: number;
-    text: string;
-    kind: 'tool' | 'skill' | 'hook' | 'status';
-  }>;
-  todos?: Array<{ id: string; content: string; status: string }>;
-  systemStatus: string | null;
-  turnId?: string;
-  updatedAt: number;
-}
-
-const streamingSnapshots = new Map<string, StreamingSnapshotEntry>();
-/** Accumulates full (non-truncated) text per group for shutdown persistence & disk buffer. */
-const streamingFullTexts = new Map<string, string>();
-const MAX_SNAPSHOT_TEXT = 4000;
-const MAX_SNAPSHOT_EVENTS = 20;
-
-/** Push a recent event entry and truncate to MAX_SNAPSHOT_EVENTS. */
-function pushRecentEvent(
-  snap: StreamingSnapshotEntry,
-  event: {
-    id: string;
-    timestamp: number;
-    text: string;
-    kind: 'tool' | 'skill' | 'hook' | 'status';
-  },
-): void {
-  snap.recentEvents.push(event);
-  if (snap.recentEvents.length > MAX_SNAPSHOT_EVENTS) {
-    snap.recentEvents = snap.recentEvents.slice(-MAX_SNAPSHOT_EVENTS);
-  }
-}
-
-function updateStreamingSnapshot(
-  normalizedJid: string,
-  event: StreamEvent,
-): void {
-  let snap = streamingSnapshots.get(normalizedJid);
-
-  // Reset on new turn
-  if (snap?.turnId && event.turnId && snap.turnId !== event.turnId) {
-    snap = undefined;
-    streamingFullTexts.delete(normalizedJid);
-  }
-
-  if (!snap) {
-    snap = {
-      partialText: '',
-      activeTools: [],
-      recentEvents: [],
-      systemStatus: null,
-      turnId: event.turnId,
-      updatedAt: Date.now(),
-    };
-  }
-
-  snap.updatedAt = Date.now();
-  if (event.turnId) snap.turnId = event.turnId;
-
-  switch (event.eventType) {
-    case 'text_delta':
-      if (event.text) {
-        snap.partialText += event.text;
-        if (snap.partialText.length > MAX_SNAPSHOT_TEXT) {
-          snap.partialText = snap.partialText.slice(-MAX_SNAPSHOT_TEXT);
-        }
-        // Accumulate full (non-truncated) text for shutdown persistence
-        streamingFullTexts.set(
-          normalizedJid,
-          (streamingFullTexts.get(normalizedJid) || '') + event.text,
-        );
-      }
-      break;
-
-    case 'tool_use_start':
-      if (event.toolUseId && event.toolName) {
-        snap.activeTools.push({
-          toolName: event.toolName,
-          toolUseId: event.toolUseId,
-          startTime: Date.now(),
-          toolInputSummary: event.toolInputSummary,
-          toolInput: event.toolInput,
-          parentToolUseId: event.parentToolUseId,
-        });
-        pushRecentEvent(snap, {
-          id: event.toolUseId,
-          timestamp: Date.now(),
-          text: event.skillName || event.toolName,
-          kind: event.skillName ? 'skill' : 'tool',
-        });
-      }
-      break;
-
-    case 'tool_use_end':
-      if (event.toolUseId) {
-        snap.activeTools = snap.activeTools.filter(
-          (t) => t.toolUseId !== event.toolUseId,
-        );
-      }
-      break;
-
-    case 'tool_progress':
-      if (event.toolUseId) {
-        const tool = snap.activeTools.find(
-          (t) => t.toolUseId === event.toolUseId,
-        );
-        if (tool) {
-          if (event.toolInputSummary)
-            tool.toolInputSummary = event.toolInputSummary;
-          if (event.toolInput) tool.toolInput = event.toolInput;
-        }
-      }
-      break;
-
-    case 'status':
-      snap.systemStatus = event.statusText || null;
-      if (event.statusText) {
-        pushRecentEvent(snap, {
-          id: `status-${Date.now()}`,
-          timestamp: Date.now(),
-          text: event.statusText,
-          kind: 'status',
-        });
-      }
-      break;
-
-    case 'hook_started':
-      if (event.hookName) {
-        pushRecentEvent(snap, {
-          id: `hook-${Date.now()}`,
-          timestamp: Date.now(),
-          text: `${event.hookName} (${event.hookEvent || ''})`,
-          kind: 'hook',
-        });
-      }
-      break;
-
-    case 'todo_update':
-      if (event.todos) {
-        snap.todos = event.todos.map((t) => ({
-          id: t.id,
-          content: t.content,
-          status: t.status,
-        }));
-      }
-      break;
-  }
-
-  streamingSnapshots.set(normalizedJid, snap);
-}
-
-export function clearStreamingSnapshot(chatJid: string): void {
-  const jid = normalizeHomeJid(chatJid);
-  streamingSnapshots.delete(jid);
-  streamingFullTexts.delete(jid);
-}
-
-/**
- * Return all active streaming texts with non-empty content.
- * Uses the full (non-truncated) text accumulator for shutdown persistence & disk buffer.
- */
-export function getActiveStreamingTexts(): Map<string, string> {
-  const result = new Map<string, string>();
-  for (const [jid, fullText] of streamingFullTexts) {
-    const text = fullText.trim();
-    if (text) {
-      result.set(jid, text);
-    }
-  }
-  return result;
-}
-
-export function broadcastStreamEvent(
-  chatJid: string,
-  event: StreamEvent,
-  agentId?: string,
-): void {
-  const jid = normalizeHomeJid(chatJid);
-  const allowedUserIds = getGroupAllowedUserIds(chatJid);
-  const msg: WsMessageOut = agentId
-    ? { type: 'stream_event', chatJid: jid, event, agentId }
-    : { type: 'stream_event', chatJid: jid, event };
-  safeBroadcast(msg, isHostGroupJid(chatJid), allowedUserIds);
-
-  // Accumulate snapshot for both main and agent streams.
-  // Agent streams use virtual JID format (jid#agent:agentId) as the key.
-  const snapshotJid = agentId ? `${jid}#agent:${agentId}` : jid;
-  updateStreamingSnapshot(snapshotJid, event);
-}
-
-export function broadcastBillingUpdate(
-  userId: string,
-  usage: import('./types.js').BillingAccessResult,
-): void {
-  const msg: WsMessageOut = {
-    type: 'billing_update',
-    userId,
-    usage,
-  };
-  // Send only to the specific user
-  const allowedUserIds = new Set([userId]);
-  safeBroadcast(msg, false, allowedUserIds);
-}
-
-export function broadcastAgentStatus(
-  chatJid: string,
-  agentId: string,
-  status: import('./types.js').AgentStatus,
-  name: string,
-  prompt: string,
-  resultSummary?: string,
-  kind?: import('./types.js').AgentKind,
-): void {
-  const jid = normalizeHomeJid(chatJid);
-  const allowedUserIds = getGroupAllowedUserIds(chatJid);
-  // Resolve kind from DB if not provided
-  const resolvedKind = kind || getAgent(agentId)?.kind;
-  const msg: WsMessageOut = {
-    type: 'agent_status',
-    chatJid: jid,
-    agentId,
-    status,
-    kind: resolvedKind,
-    name,
-    prompt,
-    resultSummary,
-  };
-  safeBroadcast(msg, isHostGroupJid(chatJid), allowedUserIds);
-}
-
-export function broadcastRunnerState(
-  chatJid: string,
-  state: 'idle' | 'running',
-): void {
-  const jid = normalizeHomeJid(chatJid);
-  const allowedUserIds = getGroupAllowedUserIds(chatJid);
-  const msg: WsMessageOut = {
-    type: 'runner_state',
-    chatJid: jid,
-    state,
-  };
-  safeBroadcast(msg, isHostGroupJid(chatJid), allowedUserIds);
-
-  // Clear streaming snapshots when runner goes idle (main + all agent snapshots)
-  if (state === 'idle') {
-    streamingSnapshots.delete(jid);
-    streamingFullTexts.delete(jid);
-    // Collect keys first, then delete (avoid mutating Map during iteration)
-    const agentPrefix = jid + '#agent:';
-    const snapshotKeysToDelete = [...streamingSnapshots.keys()].filter((k) =>
-      k.startsWith(agentPrefix),
-    );
-    const fullTextKeysToDelete = [...streamingFullTexts.keys()].filter((k) =>
-      k.startsWith(agentPrefix),
-    );
-    for (const key of snapshotKeysToDelete) streamingSnapshots.delete(key);
-    for (const key of fullTextKeysToDelete) streamingFullTexts.delete(key);
-  }
-}
-
-export function broadcastDockerBuildLog(line: string): void {
-  safeBroadcast({ type: 'docker_build_log', line }, true);
-}
-
-export function broadcastDockerBuildComplete(
-  success: boolean,
-  error?: string,
-): void {
-  safeBroadcast({ type: 'docker_build_complete', success, error }, true);
-}
-
 function broadcastStatus(): void {
   if (!deps) return;
 
   const queueStatus = deps.queue.getStatus();
-  // Broadcast aggregate system metrics only to admin users.
-  // Non-admin users get per-user filtered metrics via REST /api/status.
-  safeBroadcast(
-    {
-      type: 'status_update',
-      activeContainers: queueStatus.activeContainerCount,
-      activeHostProcesses: queueStatus.activeHostProcessCount,
-      activeTotal: queueStatus.activeCount,
-      queueLength: queueStatus.waitingCount,
-    },
-    /* adminOnly */ true,
-  );
+  broadcastStatusUpdate({
+    activeContainers: queueStatus.activeContainerCount,
+    activeHostProcesses: queueStatus.activeHostProcessCount,
+    activeTotal: queueStatus.activeCount,
+    queueLength: queueStatus.waitingCount,
+  });
 }
 
 // --- Server Startup ---
@@ -1735,4 +956,17 @@ export async function shutdownWebServer(): Promise<void> {
   }
 }
 
-export type { WebDeps } from './web-context.js';
+export {
+  broadcastAgentStatus,
+  broadcastBillingUpdate,
+  broadcastNewMessage,
+  broadcastRunnerState,
+  broadcastStreamEvent,
+  broadcastToWebClients,
+  broadcastTyping,
+  clearStreamingSnapshot,
+  getActiveStreamingTexts,
+  invalidateAllowedUserCache,
+};
+
+export type { WebDeps } from './app/web/context.js';

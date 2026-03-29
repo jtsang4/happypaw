@@ -5,8 +5,8 @@
  */
 
 // Streaming event types (canonical source: shared/stream-event.ts)
-export type { StreamEventType, StreamEvent } from './stream-event.types.js';
-import type { StreamEvent } from './stream-event.types.js';
+export type { StreamEventType, StreamEvent } from './shared/stream-event.types.js';
+import type { StreamEvent } from './shared/stream-event.types.js';
 
 export interface ContainerInput {
   prompt: string;

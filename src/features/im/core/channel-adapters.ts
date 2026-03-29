@@ -7,7 +7,7 @@ import {
   StreamingCardController,
   type StreamingCardOptions,
 } from '../channels/feishu/streaming-card/index.js';
-import { logger } from '../../../logger.js';
+import { logger } from '../../../app/logger.js';
 import {
   createQQConnection,
   type QQConnection,

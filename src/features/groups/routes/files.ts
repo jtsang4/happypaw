@@ -1,15 +1,15 @@
 import { Hono } from 'hono';
-import type { Variables } from '../../../web-context.js';
+import type { Variables } from '../../../app/web/context.js';
 import { authMiddleware } from '../../../middleware/auth.js';
 import {
   isHostExecutionGroup,
   hasHostExecutionPermission,
   canAccessGroup,
-} from '../../../web-context.js';
-import type { AuthUser } from '../../../types.js';
-import type { RegisteredGroup } from '../../../types.js';
+} from '../../../app/web/context.js';
+import type { AuthUser } from '../../../shared/types.js';
+import type { RegisteredGroup } from '../../../shared/types.js';
 import { getRegisteredGroup } from '../../../db.js';
-import { logger } from '../../../logger.js';
+import { logger } from '../../../app/logger.js';
 import {
   listFiles,
   validateAndResolvePath,

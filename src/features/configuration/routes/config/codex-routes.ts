@@ -2,8 +2,11 @@ import {
   authMiddleware,
   systemConfigMiddleware,
 } from '../../../../middleware/auth.js';
-import { logger } from '../../../../logger.js';
-import { CodexConfigSchema, CodexSecretsSchema } from '../../../../schemas.js';
+import { logger } from '../../../../app/logger.js';
+import {
+  CodexConfigSchema,
+  CodexSecretsSchema,
+} from '../../../../app/web/schemas.js';
 import {
   getCodexProviderConfigWithSource,
   saveCodexProviderConfig,

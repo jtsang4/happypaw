@@ -4,7 +4,7 @@ import type {
   RuntimeSessionRecord,
   ScheduledTask,
   TaskRunLog,
-} from '../types.js';
+} from '../shared/types.js';
 
 import { db, getNewMessagesStmt, stmts } from './shared.js';
 

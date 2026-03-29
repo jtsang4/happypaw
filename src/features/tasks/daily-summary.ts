@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import type { Logger } from 'pino';
 
-import { TIMEZONE } from '../../config.js';
+import { TIMEZONE } from '../../app/config.js';
 import {
   getGroupsByOwner,
   getMessagesByTimeRange,

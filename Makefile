@@ -56,7 +56,7 @@ start: ## 一键启动生产环境
 	@$(MAKE) _ensure-docker-image
 ifeq ($(HAS_BUN),1)
 	@NEED_SYNC=0; \
-	for target in src/stream-event.types.ts web/src/stream-event.types.ts container/agent-runner/src/stream-event.types.ts src/image-detector.ts container/agent-runner/src/image-detector.ts src/channel-prefixes.ts container/agent-runner/src/channel-prefixes.ts; do \
+	for target in src/shared/stream-event.types.ts web/src/shared/stream-event.types.ts container/agent-runner/src/shared/stream-event.types.ts src/shared/media/image-detector.ts container/agent-runner/src/shared/media/image-detector.ts src/shared/im/channel-prefixes.ts container/agent-runner/src/shared/im/channel-prefixes.ts; do \
 	  if [ ! -f "$$target" ] || [ -n "$$(find shared/ -newer "$$target" -name '*.ts' 2>/dev/null | head -1)" ]; then NEED_SYNC=1; break; fi; \
 	done; \
 	if [ "$$NEED_SYNC" = "1" ]; then echo "🔄 检测到 shared/ 类型变更，同步类型..."; $(MAKE) sync-types; fi
@@ -82,7 +82,7 @@ ifeq ($(HAS_BUN),1)
 	bun src/index.ts
 else
 	@NEED_SYNC=0; \
-	for target in src/stream-event.types.ts web/src/stream-event.types.ts container/agent-runner/src/stream-event.types.ts src/image-detector.ts container/agent-runner/src/image-detector.ts src/channel-prefixes.ts container/agent-runner/src/channel-prefixes.ts; do \
+	for target in src/shared/stream-event.types.ts web/src/shared/stream-event.types.ts container/agent-runner/src/shared/stream-event.types.ts src/shared/media/image-detector.ts container/agent-runner/src/shared/media/image-detector.ts src/shared/im/channel-prefixes.ts container/agent-runner/src/shared/im/channel-prefixes.ts; do \
 	  if [ ! -f "$$target" ] || [ -n "$$(find shared/ -newer "$$target" -name '*.ts' 2>/dev/null | head -1)" ]; then NEED_SYNC=1; break; fi; \
 	done; \
 	if [ "$$NEED_SYNC" = "1" ]; then echo "🔄 检测到 shared/ 类型变更，同步类型..."; $(MAKE) sync-types; fi

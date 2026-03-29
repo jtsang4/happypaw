@@ -6,7 +6,7 @@ import {
   DATA_DIR,
   STORE_DIR,
   MAIN_GROUP_FOLDER,
-} from '../../config.js';
+} from '../../app/config.js';
 import { AvailableGroup } from '../execution/container-runner.js';
 import {
   deleteSession,
@@ -23,7 +23,7 @@ import {
   setRouterState,
 } from '../../db.js';
 import { imManager } from '../im/im-manager.js';
-import { logger } from '../../logger.js';
+import { logger } from '../../app/logger.js';
 import {
   getFeishuProviderConfigWithSource,
   getTelegramProviderConfigWithSource,
@@ -36,7 +36,7 @@ import type {
   MessageCursor,
   RegisteredGroup,
   RuntimeSessionRecord,
-} from '../../types.js';
+} from '../../shared/types.js';
 import { normalizeCursor } from './recovery.js';
 
 export const GROUP_SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000;

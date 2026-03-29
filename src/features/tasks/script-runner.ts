@@ -1,8 +1,8 @@
 import { exec } from 'child_process';
 import path from 'path';
 
-import { GROUPS_DIR } from '../../config.js';
-import { logger } from '../../logger.js';
+import { GROUPS_DIR } from '../../app/config.js';
+import { logger } from '../../app/logger.js';
 import { getSystemSettings } from '../../runtime-config.js';
 
 export interface ScriptRunResult {

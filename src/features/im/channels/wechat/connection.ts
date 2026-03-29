@@ -19,12 +19,12 @@ import {
 } from '../../../../db.js';
 import { notifyNewImMessage } from '../../messaging/notifier.js';
 import { broadcastNewMessage } from '../../../../web.js';
-import { logger } from '../../../../logger.js';
+import { logger } from '../../../../app/logger.js';
 import {
   saveDownloadedFile,
   MAX_FILE_SIZE,
 } from '../../messaging/downloader.js';
-import { detectImageMimeType } from '../../../../image-detector.js';
+import { detectImageMimeType } from '../../../../shared/media/image-detector.js';
 import { downloadAndDecryptMedia } from './crypto.js';
 
 // ─── Constants ──────────────────────────────────────────────────

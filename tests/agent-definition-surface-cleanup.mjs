@@ -27,12 +27,12 @@ const [
   configModule,
 ] = await Promise.all([
   import('hono'),
-  import(path.join(repoRoot, 'dist', 'routes', 'agent-definitions.js')),
+  import(path.join(repoRoot, 'dist', 'features', 'agents', 'routes', 'agent-definitions.js')),
   import(path.join(repoRoot, 'dist', 'db', 'core.js')),
   import(path.join(repoRoot, 'dist', 'db', 'shared.js')),
   import(path.join(repoRoot, 'dist', 'db', 'users-auth.js')),
-  import(path.join(repoRoot, 'dist', 'auth.js')),
-  import(path.join(repoRoot, 'dist', 'config.js')),
+  import(path.join(repoRoot, 'dist', 'features', 'auth', 'auth.js')),
+  import(path.join(repoRoot, 'dist', 'app', 'config.js')),
 ]);
 
 const routes = routeModule.default;

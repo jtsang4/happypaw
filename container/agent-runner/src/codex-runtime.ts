@@ -7,7 +7,7 @@ import {
   type CodexJsonRpcNotification,
   type CodexJsonRpcRequest,
 } from './codex-client.js';
-import { getChannelFromJid } from './channel-prefixes.js';
+import { getChannelFromJid } from './shared/im/channel-prefixes.js';
 import { INTERNAL_MCP_BRIDGE_ID } from './product.js';
 import { summarizeToolInput } from './utils.js';
 

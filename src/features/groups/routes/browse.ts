@@ -1,17 +1,17 @@
 import { Hono } from 'hono';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { Variables } from '../../../web-context.js';
-import { hasHostExecutionPermission } from '../../../web-context.js';
+import type { Variables } from '../../../app/web/context.js';
+import { hasHostExecutionPermission } from '../../../app/web/context.js';
 import { authMiddleware } from '../../../middleware/auth.js';
-import type { AuthUser } from '../../../types.js';
-import { logger } from '../../../logger.js';
+import type { AuthUser } from '../../../shared/types.js';
+import { logger } from '../../../app/logger.js';
 import {
   loadMountAllowlist,
   expandPath,
   findAllowedRoot,
   matchesBlockedPattern,
-} from '../../../mount-security.js';
+} from '../../../app/security/mount-security.js';
 
 const MAX_ENTRIES = 200;
 

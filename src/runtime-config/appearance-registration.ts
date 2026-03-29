@@ -1,6 +1,6 @@
 import fs from 'fs';
 
-import { logger } from '../logger.js';
+import { logger } from '../app/logger.js';
 import type { AppearanceConfig, RegistrationConfig } from './types.js';
 import {
   APPEARANCE_CONFIG_FILE,

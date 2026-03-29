@@ -2,10 +2,10 @@ import { Hono } from 'hono';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import type { Variables } from '../../../web-context.js';
-import { getWebDeps } from '../../../web-context.js';
+import type { Variables } from '../../../app/web/context.js';
+import { getWebDeps } from '../../../app/web/context.js';
 import { authMiddleware } from '../../../middleware/auth.js';
-import { canAccessGroup } from '../../../web-context.js';
+import { canAccessGroup } from '../../../app/web/context.js';
 import {
   getRegisteredGroup,
   getAllRegisteredGroups,
@@ -23,11 +23,11 @@ import {
   updateAgentInfo,
   updateChatName,
 } from '../../../db.js';
-import { DATA_DIR } from '../../../config.js';
-import type { RegisteredGroup, SubAgent } from '../../../types.js';
-import { logger } from '../../../logger.js';
+import { DATA_DIR } from '../../../app/config.js';
+import type { RegisteredGroup, SubAgent } from '../../../shared/types.js';
+import { logger } from '../../../app/logger.js';
 import { getChannelType, extractChatId } from '../../im/im-channel.js';
-import { ensureAgentDirectories } from '../../../utils.js';
+import { ensureAgentDirectories } from '../agent-directories.js';
 
 const router = new Hono<{ Variables: Variables }>();
 
@@ -182,7 +182,7 @@ router.patch('/:jid/agents/:agentId', authMiddleware, async (c) => {
   broadcastAgentStatus(
     jid,
     agentId,
-    agent.status as import('../../../types.js').AgentStatus,
+    agent.status as import('../../../shared/types.js').AgentStatus,
     name,
     agent.prompt,
   );

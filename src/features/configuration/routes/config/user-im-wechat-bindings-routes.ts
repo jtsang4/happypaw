@@ -1,7 +1,7 @@
 import QRCode from 'qrcode';
 
-import { getChannelFromJid } from '../../../../channel-prefixes.js';
-import { updateWeChatNoProxy } from '../../../../config.js';
+import { getChannelFromJid } from '../../../../shared/im/channel-prefixes.js';
+import { updateWeChatNoProxy } from '../../../../app/config.js';
 import {
   deleteChatHistory,
   deleteRegisteredGroup,
@@ -9,14 +9,14 @@ import {
   getRegisteredGroup,
 } from '../../../../db.js';
 import { authMiddleware } from '../../../../middleware/auth.js';
-import { logger } from '../../../../logger.js';
-import { WeChatConfigSchema } from '../../../../schemas.js';
+import { logger } from '../../../../app/logger.js';
+import { WeChatConfigSchema } from '../../../../app/web/schemas.js';
 import {
   getUserWeChatConfig,
   saveUserWeChatConfig,
 } from '../../../../runtime-config.js';
-import type { AuthUser, RegisteredGroup } from '../../../../types.js';
-import { canAccessGroup } from '../../../../web-context.js';
+import type { AuthUser, RegisteredGroup } from '../../../../shared/types.js';
+import { canAccessGroup } from '../../../../app/web/context.js';
 import {
   checkImChannelLimit,
   isBillingEnabled,

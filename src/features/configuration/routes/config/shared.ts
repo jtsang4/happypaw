@@ -10,12 +10,12 @@ import {
   getUserTelegramConfig,
   getUserWeChatConfig,
 } from '../../../../runtime-config.js';
-import type { RegisteredGroup } from '../../../../types.js';
+import type { RegisteredGroup } from '../../../../shared/types.js';
 import {
   getWebDeps,
   type Variables,
   type WebDeps,
-} from '../../../../web-context.js';
+} from '../../../../app/web/context.js';
 
 export type ConfigRoutesApp = Hono<{ Variables: Variables }>;
 

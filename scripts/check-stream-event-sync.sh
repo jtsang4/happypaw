@@ -26,19 +26,19 @@ check_sync() {
 
 # StreamEvent types
 check_sync "$ROOT/shared/stream-event.ts" \
-  "$ROOT/container/agent-runner/src/stream-event.types.ts" \
-  "$ROOT/src/stream-event.types.ts" \
-  "$ROOT/web/src/stream-event.types.ts"
+  "$ROOT/container/agent-runner/src/shared/stream-event.types.ts" \
+  "$ROOT/src/shared/stream-event.types.ts" \
+  "$ROOT/web/src/shared/stream-event.types.ts"
 
 # Image detector
 check_sync "$ROOT/shared/image-detector.ts" \
-  "$ROOT/src/image-detector.ts" \
-  "$ROOT/container/agent-runner/src/image-detector.ts"
+  "$ROOT/src/shared/media/image-detector.ts" \
+  "$ROOT/container/agent-runner/src/shared/media/image-detector.ts"
 
 # Channel prefixes
 check_sync "$ROOT/shared/channel-prefixes.ts" \
-  "$ROOT/src/channel-prefixes.ts" \
-  "$ROOT/container/agent-runner/src/channel-prefixes.ts"
+  "$ROOT/src/shared/im/channel-prefixes.ts" \
+  "$ROOT/container/agent-runner/src/shared/im/channel-prefixes.ts"
 
 if [ "$FAIL" -eq 0 ]; then
   echo "All shared type copies are in sync."

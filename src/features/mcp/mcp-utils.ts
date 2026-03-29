@@ -5,7 +5,7 @@
 import fs from 'fs';
 import path from 'path';
 
-import { DATA_DIR } from '../../config.js';
+import { DATA_DIR } from '../../app/config.js';
 
 /**
  * Load enabled MCP server configs from a servers.json file.

@@ -12,7 +12,7 @@ import {
   writeGroupsSnapshot,
   writeTasksSnapshot,
 } from '../execution/container-runner.js';
-import { MAIN_GROUP_FOLDER } from '../../config.js';
+import { MAIN_GROUP_FOLDER } from '../../app/config.js';
 import {
   deleteSession,
   ensureChatExists,
@@ -40,7 +40,7 @@ import {
   buildInterruptedReply,
   buildOverflowPartialReply,
 } from './recovery.js';
-import { logger } from '../../logger.js';
+import { logger } from '../../app/logger.js';
 import { getSystemSettings } from '../../runtime-config.js';
 import { clearSessionRuntimeFiles } from './runtime-state-cleanup.js';
 import type {
@@ -48,11 +48,11 @@ import type {
   MessageCursor,
   RegisteredGroup,
   RuntimeType,
-} from '../../types.js';
+} from '../../shared/types.js';
 import {
   isSystemMaintenanceNoise,
   stripAgentInternalTags,
-} from '../../utils.js';
+} from '../../shared/agent-output.js';
 
 interface AgentConversationRuntimeDeps {
   assistantName: string;

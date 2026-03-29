@@ -5,16 +5,16 @@ import { readFile } from 'fs/promises';
 import path from 'path';
 import crypto from 'crypto';
 import { Hono } from 'hono';
-import type { Variables } from '../../../web-context.js';
+import type { Variables } from '../../../app/web/context.js';
 import { authMiddleware } from '../../../middleware/auth.js';
-import { getClientIp } from '../../../utils.js';
-import { DATA_DIR } from '../../../config.js';
+import { getClientIp } from '../../../shared/http/client-ip.js';
+import { DATA_DIR } from '../../../app/config.js';
 import {
   LoginSchema,
   RegisterSchema,
   ProfileUpdateSchema,
   ChangePasswordSchema,
-} from '../../../schemas.js';
+} from '../../../app/web/schemas.js';
 import {
   getUserByUsername,
   getUserById,
@@ -48,18 +48,18 @@ import {
   validatePassword,
   generateUserId,
 } from '../auth.js';
-import type { AuthUser, User, UserPublic } from '../../../types.js';
-import { logger } from '../../../logger.js';
+import type { AuthUser, User, UserPublic } from '../../../shared/types.js';
+import { logger } from '../../../app/logger.js';
 import {
   lastActiveCache,
   invalidateSessionCache,
   invalidateUserSessions,
-} from '../../../web-context.js';
+} from '../../../app/web/context.js';
 import {
   SESSION_COOKIE_NAME_SECURE,
   SESSION_COOKIE_NAME_PLAIN,
   TRUST_PROXY,
-} from '../../../config.js';
+} from '../../../app/config.js';
 import { getSystemSettings } from '../../../runtime-config.js';
 
 const authRoutes = new Hono<{ Variables: Variables }>();

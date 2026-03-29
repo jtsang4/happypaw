@@ -30,16 +30,18 @@ const [
   configModule,
 ] = await Promise.all([
   import('hono'),
-  import(path.join(repoRoot, 'dist', 'routes', 'config.js')),
-  import(path.join(repoRoot, 'dist', 'routes', 'config', 'codex-routes.js')),
+  import(path.join(repoRoot, 'dist', 'features', 'configuration', 'index.js')),
+  import(path.join(repoRoot, 'dist', 'features', 'configuration', 'routes', 'config', 'codex-routes.js')),
   import(
-    path.join(repoRoot, 'dist', 'routes', 'config', 'system-routes.js')
+    path.join(repoRoot, 'dist', 'features', 'configuration', 'routes', 'config', 'system-routes.js')
   ),
-  import(path.join(repoRoot, 'dist', 'routes', 'config', 'user-im-routes.js')),
+  import(path.join(repoRoot, 'dist', 'features', 'configuration', 'routes', 'config', 'user-im-routes.js')),
   import(
     path.join(
       repoRoot,
       'dist',
+      'features',
+      'configuration',
       'routes',
       'config',
       'user-im-wechat-bindings-routes.js',
@@ -50,8 +52,8 @@ const [
   import(path.join(repoRoot, 'dist', 'db', 'core.js')),
   import(path.join(repoRoot, 'dist', 'db', 'shared.js')),
   import(path.join(repoRoot, 'dist', 'db', 'users-auth.js')),
-  import(path.join(repoRoot, 'dist', 'auth.js')),
-  import(path.join(repoRoot, 'dist', 'config.js')),
+  import(path.join(repoRoot, 'dist', 'features', 'auth', 'auth.js')),
+  import(path.join(repoRoot, 'dist', 'app', 'config.js')),
 ]);
 
 assert.ok(
@@ -60,7 +62,7 @@ assert.ok(
 );
 await import(path.join(repoRoot, 'dist', 'web.js'));
 const groupRoutes = (
-  await import(path.join(repoRoot, 'dist', 'routes', 'groups.js'))
+  await import(path.join(repoRoot, 'dist', 'features', 'groups', 'routes', 'groups.js'))
 ).default;
 const { registerCodexRoutes } = codexRoutesModule;
 const { registerSystemRoutes } = systemRoutesModule;

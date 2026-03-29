@@ -54,10 +54,14 @@ import {
   BatchAssignPlanSchema,
   RedeemCodeCreateSchema,
   RedeemCodeSchema,
-} from '../../../schemas.js';
+} from '../../../app/web/schemas.js';
 import { getSystemSettings } from '../../../runtime-config.js';
-import type { Variables } from '../../../web-context.js';
-import type { AuthUser, BillingPlan, RedeemCode } from '../../../types.js';
+import type { Variables } from '../../../app/web/context.js';
+import type {
+  AuthUser,
+  BillingPlan,
+  RedeemCode,
+} from '../../../shared/types.js';
 
 const billingRoutes = new Hono<{ Variables: Variables }>();
 const billingManageMiddleware = requirePermission('manage_billing');

@@ -1,6 +1,6 @@
 import type { StoreApi } from 'zustand';
 import type { GroupInfo, AgentInfo, AvailableImGroup } from '../../types.ts';
-import type { StreamEventType, StreamEvent } from '../../stream-event.types';
+import type { StreamEventType, StreamEvent } from '../../shared/stream-event.types';
 
 export type { GroupInfo, AgentInfo, AvailableImGroup, StreamEventType, StreamEvent };
 

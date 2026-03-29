@@ -5,10 +5,10 @@ import path from 'path';
 import { CronExpressionParser } from 'cron-parser';
 
 import type { AvailableGroup } from '../execution/container-runner.js';
-import type { RegisteredGroup, ScheduledTask } from '../../types.js';
+import type { RegisteredGroup, ScheduledTask } from '../../shared/types.js';
 import { getAgent } from '../../db.js';
 import { readActiveImReplyRouteForIpcDir } from './im-reply-route-snapshot.js';
-import { logger } from '../../logger.js';
+import { logger } from '../../app/logger.js';
 
 const SAFE_REQUEST_ID_RE = /^[A-Za-z0-9_-]+$/;
 

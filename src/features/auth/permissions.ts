@@ -1,4 +1,8 @@
-import { Permission, PermissionTemplateKey, UserRole } from './types.js';
+import {
+  Permission,
+  PermissionTemplateKey,
+  UserRole,
+} from '../../shared/types.js';
 
 export const ALL_PERMISSIONS: Permission[] = [
   'manage_system_config',

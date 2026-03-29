@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-import { DATA_DIR } from '../../config.js';
+import { DATA_DIR } from '../../app/config.js';
 
 export const ACTIVE_IM_REPLY_ROUTE_FILE = 'active_im_reply_route.json';
 

@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-import { GROUPS_DIR } from '../../config.js';
+import { GROUPS_DIR } from '../../app/config.js';
 import {
   getAgent,
   getJidsByFolder,
@@ -18,9 +18,9 @@ import type {
   WeChatConnectConfig,
 } from '../im/im-manager.js';
 import { imManager } from '../im/im-manager.js';
-import { logger } from '../../logger.js';
+import { logger } from '../../app/logger.js';
 import type { GroupQueue } from './group-queue.js';
-import type { MessageCursor, RegisteredGroup } from '../../types.js';
+import type { MessageCursor, RegisteredGroup } from '../../shared/types.js';
 import { getStreamingSession } from '../im/channels/feishu/streaming-card/index.js';
 import type { ConnectFeishuOptions } from '../im/im-manager.js';
 import { verifyPairingCode } from '../im/channels/telegram/pairing.js';

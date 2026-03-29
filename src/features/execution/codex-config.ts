@@ -4,7 +4,7 @@ import path from 'path';
 import {
   INTERNAL_MCP_BRIDGE_ID,
   isReservedMcpServerId,
-} from '../../product.js';
+} from '../../app/product.js';
 import type { CodexProviderConfig } from '../../runtime-config.js';
 
 export interface CodexMcpServerConfig {

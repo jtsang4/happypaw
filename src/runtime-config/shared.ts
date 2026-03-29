@@ -1,8 +1,8 @@
 import path from 'path';
 
-import { ASSISTANT_NAME, DATA_DIR } from '../config.js';
+import { ASSISTANT_NAME, DATA_DIR } from '../app/config.js';
 import { HAPPYPAW_CODEX_EXECUTABLE_ENV } from '../features/execution/codex-binary.js';
-import type { RuntimeType } from '../types.js';
+import type { RuntimeType } from '../shared/types.js';
 
 const MAX_FIELD_LENGTH = 2000;
 export const CONFIG_DIR = path.join(DATA_DIR, 'config');

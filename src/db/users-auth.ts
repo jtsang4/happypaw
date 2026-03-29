@@ -1,4 +1,7 @@
-import { getDefaultPermissions, normalizePermissions } from '../permissions.js';
+import {
+  getDefaultPermissions,
+  normalizePermissions,
+} from '../features/auth/permissions.js';
 import type {
   AuthAuditLog,
   AuthEventType,
@@ -12,7 +15,7 @@ import type {
   UserSession,
   UserSessionWithUser,
   UserStatus,
-} from '../types.js';
+} from '../shared/types.js';
 
 import { getDefaultBillingPlan } from './billing.js';
 import { db, stmts } from './shared.js';

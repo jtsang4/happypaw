@@ -1,7 +1,7 @@
 import path from 'path';
 import fs from 'fs';
-import { GROUPS_DIR } from '../../config.js';
-import { logger } from '../../logger.js';
+import { GROUPS_DIR } from '../../app/config.js';
+import { logger } from '../../app/logger.js';
 
 // --- Storage usage cache (5 minute TTL) ---
 const _storageCache = new Map<string, { bytes: number; expires: number }>();

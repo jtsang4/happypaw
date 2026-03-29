@@ -1,4 +1,4 @@
-import type { AgentKind, AgentStatus, SubAgent } from '../types.js';
+import type { AgentKind, AgentStatus, SubAgent } from '../shared/types.js';
 
 import { db } from './shared.js';
 

@@ -3,18 +3,18 @@
 import { Hono } from 'hono';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { Variables } from '../../../web-context.js';
+import type { Variables } from '../../../app/web/context.js';
 import { authMiddleware } from '../../../middleware/auth.js';
 import {
   MemoryFileSchema,
   type MemorySource,
   type MemoryFilePayload,
   type MemorySearchHit,
-} from '../../../schemas.js';
+} from '../../../app/web/schemas.js';
 import { getAllRegisteredGroups, getUserById } from '../../../db.js';
-import { logger } from '../../../logger.js';
-import { GROUPS_DIR, DATA_DIR } from '../../../config.js';
-import type { AuthUser } from '../../../types.js';
+import { logger } from '../../../app/logger.js';
+import { GROUPS_DIR, DATA_DIR } from '../../../app/config.js';
+import type { AuthUser } from '../../../shared/types.js';
 
 const memoryRoutes = new Hono<{ Variables: Variables }>();
 

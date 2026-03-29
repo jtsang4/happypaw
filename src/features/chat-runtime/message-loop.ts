@@ -10,13 +10,13 @@ import {
   checkBillingAccessFresh,
   formatBillingAccessDeniedMessage,
 } from '../billing/billing.js';
-import { logger } from '../../logger.js';
+import { logger } from '../../app/logger.js';
 import type { GroupQueue } from './group-queue.js';
 import type {
   MessageCursor,
   NewMessage,
   RegisteredGroup,
-} from '../../types.js';
+} from '../../shared/types.js';
 
 export function createMessageLoop(deps: {
   queue: GroupQueue;

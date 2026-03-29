@@ -1,6 +1,6 @@
 import * as lark from '@larksuiteoapi/node-sdk';
 import { createHash } from 'crypto';
-import { logger } from '../../../../../logger.js';
+import { logger } from '../../../../../app/logger.js';
 import type { AuxiliaryState } from './helpers.js';
 import {
   CARD_MD_LIMIT,

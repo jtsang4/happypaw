@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { Hono } from 'hono';
-import type { Variables } from '../../../web-context.js';
+import type { Variables } from '../../../app/web/context.js';
 import {
   authMiddleware,
   usersManageMiddleware,
@@ -12,17 +12,17 @@ import {
   AdminCreateUserSchema,
   AdminPatchUserSchema,
   InviteCreateSchema,
-} from '../../../schemas.js';
+} from '../../../app/web/schemas.js';
 import { isUsernameConflictError, toUserPublic } from './auth.js';
 import type {
   AuthUser,
   PermissionTemplateKey,
   AuthEventType,
-} from '../../../types.js';
+} from '../../../shared/types.js';
 import {
   lastActiveCache,
   invalidateUserSessions,
-} from '../../../web-context.js';
+} from '../../../app/web/context.js';
 import {
   listUsers,
   getUserById,
@@ -53,10 +53,10 @@ import {
   PERMISSION_TEMPLATES,
   resolveTemplate,
   hasPermission,
-} from '../../../permissions.js';
-import { getClientIp } from '../../../utils.js';
-import { DATA_DIR } from '../../../config.js';
-import { logger } from '../../../logger.js';
+} from '../permissions.js';
+import { getClientIp } from '../../../shared/http/client-ip.js';
+import { DATA_DIR } from '../../../app/config.js';
+import { logger } from '../../../app/logger.js';
 
 const adminRoutes = new Hono<{ Variables: Variables }>();
 

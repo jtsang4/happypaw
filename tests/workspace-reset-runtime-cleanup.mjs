@@ -13,10 +13,10 @@ const tempRoot = fs.mkdtempSync(
 process.chdir(tempRoot);
 
 const { clearWorkspaceRuntimeState } = await import(
-  path.join(repoRoot, 'dist', 'runtime-state-cleanup.js')
+  path.join(repoRoot, 'dist', 'features', 'chat-runtime', 'runtime-state-cleanup.js')
 );
 const { resolveRuntimeScopePaths } = await import(
-  path.join(repoRoot, 'dist', 'container-runner.js')
+  path.join(repoRoot, 'dist', 'features', 'execution', 'container-runner.js')
 );
 const { initDatabase, closeDatabase, setSession, getRuntimeSession } = await import(
   path.join(repoRoot, 'dist', 'db.js')

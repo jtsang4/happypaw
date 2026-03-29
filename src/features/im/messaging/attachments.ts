@@ -1,4 +1,4 @@
-import { detectImageMimeTypeFromBase64Strict } from '../../../image-detector.js';
+import { detectImageMimeTypeFromBase64Strict } from '../../../shared/media/image-detector.js';
 
 export interface ImageAttachmentInput {
   type?: unknown;

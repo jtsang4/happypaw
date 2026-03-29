@@ -1,8 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 
-import { GROUPS_DIR } from '../config.js';
-import type { GroupMember, RegisteredGroup } from '../types.js';
+import { GROUPS_DIR } from '../app/config.js';
+import type { GroupMember, RegisteredGroup } from '../shared/types.js';
 
 import { ensureChatExists } from './chats-messages.js';
 import { db } from './shared.js';

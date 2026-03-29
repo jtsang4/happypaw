@@ -2,12 +2,12 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { CONTAINER_IMAGE, DATA_DIR, GROUPS_DIR } from '../../config.js';
+import { CONTAINER_IMAGE, DATA_DIR, GROUPS_DIR } from '../../app/config.js';
 import { resolveRuntimeScopePaths } from '../execution/container-runner.js';
 import { deleteAllSessionsForFolder, deleteSession } from '../../db.js';
-import { logger } from '../../logger.js';
+import { logger } from '../../app/logger.js';
 import { deleteContainerEnvConfig } from '../../runtime-config.js';
-import type { RuntimeSessionRecord } from '../../types.js';
+import type { RuntimeSessionRecord } from '../../shared/types.js';
 
 export function clearSessionRuntimeFiles(
   folder: string,

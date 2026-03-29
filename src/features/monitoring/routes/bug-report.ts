@@ -6,20 +6,20 @@ import { promisify } from 'util';
 
 import { Hono } from 'hono';
 
-import { DATA_DIR } from '../../../config.js';
+import { DATA_DIR } from '../../../app/config.js';
 import {
   CodexHelperError,
   requestCodexHelperJson,
 } from '../../execution/codex-helper-client.js';
 import { getUserHomeGroup } from '../../../db.js';
-import { logger } from '../../../logger.js';
+import { logger } from '../../../app/logger.js';
 import { authMiddleware } from '../../../middleware/auth.js';
 import {
   BugReportGenerateSchema,
   BugReportSubmitSchema,
-} from '../../../schemas.js';
-import type { AuthUser } from '../../../types.js';
-import { type Variables, getWebDeps } from '../../../web-context.js';
+} from '../../../app/web/schemas.js';
+import type { AuthUser } from '../../../shared/types.js';
+import { type Variables, getWebDeps } from '../../../app/web/context.js';
 
 const execFileAsync = promisify(execFile);
 

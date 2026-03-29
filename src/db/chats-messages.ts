@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 
-import { logger } from '../logger.js';
-import type { MessageCursor, NewMessage, TaskRunLog } from '../types.js';
+import { logger } from '../app/logger.js';
+import type { MessageCursor, NewMessage, TaskRunLog } from '../shared/types.js';
 
 import { db, stmts, type StoredMessageMeta } from './shared.js';
 

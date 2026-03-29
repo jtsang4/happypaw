@@ -13,10 +13,10 @@ const tempRoot = fs.mkdtempSync(
 process.chdir(tempRoot);
 
 const { executeSessionReset } = await import(
-  path.join(repoRoot, 'dist', 'commands.js')
+  path.join(repoRoot, 'dist', 'features', 'chat-runtime', 'commands.js')
 );
 const { resolveRuntimeScopePaths } = await import(
-  path.join(repoRoot, 'dist', 'container-runner.js')
+  path.join(repoRoot, 'dist', 'features', 'execution', 'container-runner.js')
 );
 const {
   initDatabase,

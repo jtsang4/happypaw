@@ -1,20 +1,24 @@
 import { Hono } from 'hono';
-import type { Variables } from '../../../web-context.js';
+import type { Variables } from '../../../app/web/context.js';
 import { authMiddleware } from '../../../middleware/auth.js';
 import {
   GroupCreateSchema,
   GroupPatchSchema,
   GroupMemberAddSchema,
   ContainerEnvSchema,
-} from '../../../schemas.js';
+} from '../../../app/web/schemas.js';
 import type {
   AuthUser,
   RegisteredGroup,
   ExecutionMode,
   RuntimeType,
-} from '../../../types.js';
+} from '../../../shared/types.js';
 import { checkGroupLimit } from '../../billing/billing.js';
-import { DATA_DIR, GROUPS_DIR, isDockerAvailable } from '../../../config.js';
+import {
+  DATA_DIR,
+  GROUPS_DIR,
+  isDockerAvailable,
+} from '../../../app/config.js';
 import {
   isHostExecutionGroup,
   hasHostExecutionPermission,
@@ -24,7 +28,7 @@ import {
   canManageGroupMembers,
   MAX_GROUP_NAME_LEN,
   getWebDeps,
-} from '../../../web-context.js';
+} from '../../../app/web/context.js';
 import {
   getRegisteredGroup,
   setRegisteredGroup,
@@ -59,7 +63,7 @@ import {
   unpinGroup,
 } from '../../../db.js';
 import { getSystemSettings } from '../../../runtime-config.js';
-import { logger } from '../../../logger.js';
+import { logger } from '../../../app/logger.js';
 import {
   getContainerEnvConfig,
   saveContainerEnvConfig,
@@ -70,7 +74,7 @@ import {
   loadMountAllowlist,
   findAllowedRoot,
   matchesBlockedPattern,
-} from '../../../mount-security.js';
+} from '../../../app/security/mount-security.js';
 import crypto from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';

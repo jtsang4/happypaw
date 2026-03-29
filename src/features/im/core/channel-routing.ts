@@ -1,4 +1,4 @@
-import { CHANNEL_PREFIXES } from '../../../channel-prefixes.js';
+import { CHANNEL_PREFIXES } from '../../../shared/im/channel-prefixes.js';
 
 export const CHANNEL_REGISTRY: Record<string, { prefix: string }> =
   Object.fromEntries(

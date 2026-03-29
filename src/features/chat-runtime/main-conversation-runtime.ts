@@ -1,4 +1,4 @@
-import { MAIN_GROUP_FOLDER } from '../../config.js';
+import { MAIN_GROUP_FOLDER } from '../../app/config.js';
 import type { ContainerOutput } from '../execution/container-runner.js';
 import {
   createAgent,
@@ -26,7 +26,7 @@ import {
 } from '../im/channels/feishu/streaming-card/index.js';
 import { getChannelType, extractChatId } from '../im/im-channel.js';
 import { imManager } from '../im/im-manager.js';
-import { logger } from '../../logger.js';
+import { logger } from '../../app/logger.js';
 import { normalizeImageAttachments } from '../im/messaging/attachments.js';
 import {
   buildInterruptedReply,
@@ -42,11 +42,11 @@ import type {
   RuntimeSessionRecord,
   RuntimeType,
   StreamEvent,
-} from '../../types.js';
+} from '../../shared/types.js';
 import {
   isSystemMaintenanceNoise,
   stripAgentInternalTags,
-} from '../../utils.js';
+} from '../../shared/agent-output.js';
 import {
   broadcastAgentStatus,
   broadcastBillingUpdate,

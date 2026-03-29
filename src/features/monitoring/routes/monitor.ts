@@ -5,18 +5,18 @@ import readline from 'readline';
 import { promisify } from 'util';
 
 import { Hono } from 'hono';
-import type { Variables } from '../../../web-context.js';
+import type { Variables } from '../../../app/web/context.js';
 import {
   authMiddleware,
   systemConfigMiddleware,
 } from '../../../middleware/auth.js';
-import type { AuthUser } from '../../../types.js';
+import type { AuthUser } from '../../../shared/types.js';
 import {
   isHostExecutionGroup,
   hasHostExecutionPermission,
   canAccessGroup,
   getWebDeps,
-} from '../../../web-context.js';
+} from '../../../app/web/context.js';
 import { getRegisteredGroup, getRouterState } from '../../../db.js';
 import {
   getPinnedCodexBinaryConfig,
@@ -24,12 +24,12 @@ import {
   getPinnedCodexRepoCacheRoot,
   resolvePinnedCodexHostBinary,
 } from '../../execution/codex-binary.js';
-import { CONTAINER_IMAGE } from '../../../config.js';
+import { CONTAINER_IMAGE } from '../../../app/config.js';
 import {
   getCodexProviderConfigWithSource,
   getSystemSettings,
 } from '../../../runtime-config.js';
-import { logger } from '../../../logger.js';
+import { logger } from '../../../app/logger.js';
 
 const execFileAsync = promisify(execFile);
 

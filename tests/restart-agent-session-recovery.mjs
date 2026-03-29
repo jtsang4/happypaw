@@ -17,9 +17,9 @@ const { initDatabase, closeDatabase, setSession, getRuntimeSession } = await imp
 );
 const {
   clearPersistedRuntimeStateForRecovery,
-} = await import(path.join(repoRoot, 'dist', 'runtime-state-cleanup.js'));
+} = await import(path.join(repoRoot, 'dist', 'features', 'chat-runtime', 'runtime-state-cleanup.js'));
 const { resolveRuntimeScopePaths } = await import(
-  path.join(repoRoot, 'dist', 'container-runner.js')
+  path.join(repoRoot, 'dist', 'features', 'execution', 'container-runner.js')
 );
 
 initDatabase();

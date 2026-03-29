@@ -9,9 +9,13 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-import { MOUNT_ALLOWLIST_PATH } from './config.js';
-import { logger } from './logger.js';
-import { AdditionalMount, AllowedRoot, MountAllowlist } from './types.js';
+import { MOUNT_ALLOWLIST_PATH } from '../config.js';
+import { logger } from '../logger.js';
+import {
+  AdditionalMount,
+  AllowedRoot,
+  MountAllowlist,
+} from '../../shared/types.js';
 
 // Cache the allowlist in memory - only reloads on process restart
 let cachedAllowlist: MountAllowlist | null = null;

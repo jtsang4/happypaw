@@ -3,10 +3,10 @@
 import { Hono } from 'hono';
 import * as crypto from 'node:crypto';
 import { CronExpressionParser } from 'cron-parser';
-import type { Variables } from '../../../web-context.js';
+import type { Variables } from '../../../app/web/context.js';
 import { authMiddleware } from '../../../middleware/auth.js';
-import { TaskCreateSchema, TaskPatchSchema } from '../../../schemas.js';
-import { logger } from '../../../logger.js';
+import { TaskCreateSchema, TaskPatchSchema } from '../../../app/web/schemas.js';
+import { logger } from '../../../app/logger.js';
 import {
   CodexHelperError,
   requestCodexHelperJson,
@@ -21,14 +21,14 @@ import {
   getRegisteredGroup,
   getAllRegisteredGroups,
 } from '../../../db.js';
-import type { AuthUser } from '../../../types.js';
-import { TIMEZONE } from '../../../config.js';
+import type { AuthUser } from '../../../shared/types.js';
+import { TIMEZONE } from '../../../app/config.js';
 import {
   isHostExecutionGroup,
   hasHostExecutionPermission,
   canAccessGroup,
   getWebDeps,
-} from '../../../web-context.js';
+} from '../../../app/web/context.js';
 import { getRunningTaskIds } from '../task-scheduler.js';
 
 const tasksRoutes = new Hono<{ Variables: Variables }>();

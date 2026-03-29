@@ -12,7 +12,7 @@ import type {
   NewMessage,
   RegisteredGroup,
   RuntimeSessionRecord,
-} from '../../types.js';
+} from '../../shared/types.js';
 
 export const EMPTY_CURSOR: MessageCursor = { timestamp: '', id: '' };
 

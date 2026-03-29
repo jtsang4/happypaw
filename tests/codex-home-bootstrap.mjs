@@ -18,7 +18,7 @@ const runtimeConfigModule = await import(
   path.join(repoRoot, 'dist', 'runtime-config.js')
 );
 const codexConfigModule = await import(
-  path.join(repoRoot, 'dist', 'codex-config.js')
+  path.join(repoRoot, 'dist', 'features', 'execution', 'codex-config.js')
 );
 const dbModule = await import(path.join(repoRoot, 'dist', 'db.js'));
 
@@ -32,7 +32,7 @@ const {
 const {
   INTERNAL_MCP_BRIDGE_ID,
   CURRENT_PRODUCT_ID,
-} = await import(path.join(repoRoot, 'dist', 'product.js'));
+} = await import(path.join(repoRoot, 'dist', 'app', 'product.js'));
 const {
   prepareCodexHome,
   readCodexMcpServersFromSettings,
@@ -43,7 +43,7 @@ const {
   getPinnedCodexContainerExecutablePath,
   getPinnedCodexRepoCacheRoot,
   HAPPYPAW_CODEX_EXECUTABLE_ENV,
-} = await import(path.join(repoRoot, 'dist', 'codex-binary.js'));
+} = await import(path.join(repoRoot, 'dist', 'features', 'execution', 'codex-binary.js'));
 const {
   initDatabase,
   closeDatabase,

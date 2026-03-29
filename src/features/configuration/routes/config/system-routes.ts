@@ -2,14 +2,14 @@ import {
   authMiddleware,
   systemConfigMiddleware,
 } from '../../../../middleware/auth.js';
-import { logger } from '../../../../logger.js';
+import { logger } from '../../../../app/logger.js';
 import {
   AppearanceConfigSchema,
   FeishuConfigSchema,
   RegistrationConfigSchema,
   SystemSettingsSchema,
   TelegramConfigSchema,
-} from '../../../../schemas.js';
+} from '../../../../app/web/schemas.js';
 import {
   getAppearanceConfig,
   getFeishuProviderConfig,

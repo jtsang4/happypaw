@@ -11,7 +11,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
 
 async function main() {
-  const schemasPath = path.join(repoRoot, 'src', 'schemas.ts');
+  const schemasPath = path.join(repoRoot, 'src', 'app', 'web', 'schemas.ts');
   const groupsRoutePath = path.join(
     repoRoot,
     'src',
@@ -74,7 +74,7 @@ async function main() {
     'groups',
     'GroupDetail.tsx',
   );
-  const sqliteCompatPath = path.join(repoRoot, 'dist', 'sqlite-compat.js');
+  const sqliteCompatPath = path.join(repoRoot, 'dist', 'shared', 'db', 'sqlite-compat.js');
   const dbModulePath = path.join(repoRoot, 'dist', 'db.js');
 
   const [

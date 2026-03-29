@@ -3,11 +3,11 @@
  * Unit tests for Issue #275 fix:
  * auto_continue system-maintenance noise suppression
  *
- * Tests the isSystemMaintenanceNoise() function from src/utils.ts
- * (compiled to dist/utils.js).
+ * Tests the isSystemMaintenanceNoise() function from src/shared/agent-output.ts
+ * (compiled to dist/shared/agent-output.js).
  */
 
-import { isSystemMaintenanceNoise } from '../dist/utils.js';
+import { isSystemMaintenanceNoise } from '../dist/shared/agent-output.js';
 
 let passed = 0;
 let failed = 0;

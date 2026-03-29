@@ -1,4 +1,4 @@
-import type { ExecutionMode, RegisteredGroup } from '../types.js';
+import type { ExecutionMode, RegisteredGroup } from '../shared/types.js';
 
 function parseExecutionMode(
   raw: string | null,

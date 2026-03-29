@@ -4,7 +4,7 @@ import {
   ASSISTANT_NAME,
   MAIN_GROUP_FOLDER,
   isDockerAvailable,
-} from '../../config.js';
+} from '../../app/config.js';
 import {
   addGroupMember,
   createAgent,
@@ -29,8 +29,9 @@ import {
   resolveLocationInfo,
   type WorkspaceInfo,
 } from '../im/commands/im-command-utils.js';
-import { logger } from '../../logger.js';
-import { ensureAgentDirectories, stripVirtualJidSuffix } from '../../utils.js';
+import { logger } from '../../app/logger.js';
+import { ensureAgentDirectories } from '../agents/agent-directories.js';
+import { stripVirtualJidSuffix } from '../../shared/im/virtual-jid.js';
 import { broadcastAgentStatus, broadcastNewMessage } from '../../web.js';
 import { getSystemSettings } from '../../runtime-config.js';
 import { executeSessionReset } from './commands.js';
@@ -39,7 +40,7 @@ import type {
   RegisteredGroup,
   RuntimeSessionRecord,
   SubAgent,
-} from '../../types.js';
+} from '../../shared/types.js';
 import type { GroupQueue } from './group-queue.js';
 
 const DEFAULT_MAIN_JID = 'web:main';

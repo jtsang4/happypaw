@@ -7,12 +7,12 @@ import { Hono } from 'hono';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import type { Variables } from '../../../web-context.js';
+import type { Variables } from '../../../app/web/context.js';
 import {
   authMiddleware,
   systemConfigMiddleware,
 } from '../../../middleware/auth.js';
-import { logger } from '../../../logger.js';
+import { logger } from '../../../app/logger.js';
 
 const agentDefinitionsRoutes = new Hono<{ Variables: Variables }>();
 

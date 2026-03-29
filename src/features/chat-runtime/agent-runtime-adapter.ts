@@ -6,15 +6,15 @@ import type {
   ContainerInput,
   ContainerOutput,
 } from '../execution/container-runner.js';
-import { MAIN_GROUP_FOLDER } from '../../config.js';
+import { MAIN_GROUP_FOLDER } from '../../app/config.js';
 import type { GroupQueue } from './group-queue.js';
-import { logger as defaultLogger } from '../../logger.js';
+import { logger as defaultLogger } from '../../app/logger.js';
 import type {
   RegisteredGroup,
   RuntimeSessionRecord,
   RuntimeType,
-} from '../../types.js';
-import { stripAgentInternalTags } from '../../utils.js';
+} from '../../shared/types.js';
+import { stripAgentInternalTags } from '../../shared/agent-output.js';
 
 export interface SendMessageOptions {
   /** Whether to forward the reply to the IM channel (Feishu/Telegram). Defaults to true for IM JIDs. */

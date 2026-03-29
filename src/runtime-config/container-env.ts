@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-import { logger } from '../logger.js';
+import { logger } from '../app/logger.js';
 import { getCodexProviderConfig } from './im-config.js';
 import type {
   CodexProviderConfig,

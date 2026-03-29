@@ -12,7 +12,7 @@ import type {
   RedeemCode,
   UserBalance,
   UserSubscription,
-} from '../types.js';
+} from '../shared/types.js';
 
 import { db } from './shared.js';
 

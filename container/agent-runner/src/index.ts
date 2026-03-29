@@ -14,7 +14,7 @@ import fs from 'fs';
 import path from 'path';
 
 import { runCodexRuntime } from './codex-runtime.js';
-import { detectImageMimeTypeFromBase64Strict } from './image-detector.js';
+import { detectImageMimeTypeFromBase64Strict } from './shared/media/image-detector.js';
 import type { ContainerInput, ContainerOutput } from './types.js';
 
 export type { StreamEventType, StreamEvent } from './types.js';

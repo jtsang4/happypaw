@@ -2,9 +2,9 @@
  * Canonical StreamEvent type definitions.
  *
  * This is the single source of truth. Build step copies this file to:
- *   - container/agent-runner/src/stream-event.types.ts
- *   - src/stream-event.types.ts
- *   - web/src/stream-event.types.ts
+ *   - container/agent-runner/src/shared/stream-event.types.ts
+ *   - src/shared/stream-event.types.ts
+ *   - web/src/shared/stream-event.types.ts
  *
  * DO NOT edit the copies directly -- edit this file and run `make build`.
  */

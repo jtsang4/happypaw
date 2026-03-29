@@ -7,7 +7,7 @@ import {
   MAIN_GROUP_FOLDER,
   isDockerAvailable,
   updateWeChatNoProxy,
-} from '../../config.js';
+} from '../../app/config.js';
 import {
   checkAndExpireSubscriptions,
   getUserConcurrentContainerLimit,
@@ -43,7 +43,7 @@ import {
   IM_HEALTH_CHECK_FAIL_THRESHOLD,
   type ReplyRouteUpdater,
 } from './im-routing.js';
-import { logger } from '../../logger.js';
+import { logger } from '../../app/logger.js';
 import {
   getSystemSettings,
   getTelegramProviderConfig,
@@ -60,15 +60,15 @@ import type {
   MessageCursor,
   RegisteredGroup,
   RuntimeSessionRecord,
-} from '../../types.js';
-import { stripVirtualJidSuffix } from '../../utils.js';
+} from '../../shared/types.js';
+import { stripVirtualJidSuffix } from '../../shared/im/virtual-jid.js';
 import { abortAllStreamingSessions } from '../im/channels/feishu/streaming-card/index.js';
 import {
   shutdownTerminals,
   shutdownWebServer,
   startWebServer,
 } from '../../web.js';
-import { getWebDeps, invalidateSessionCache } from '../../web-context.js';
+import { getWebDeps, invalidateSessionCache } from '../../app/web/context.js';
 import type { GroupQueue } from './group-queue.js';
 
 const execFileAsync = promisify(execFile);

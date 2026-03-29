@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { logger } from '../../logger.js';
+import { logger } from '../../app/logger.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

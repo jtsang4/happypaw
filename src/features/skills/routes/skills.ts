@@ -4,10 +4,10 @@ import { Hono } from 'hono';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import type { Variables } from '../../../web-context.js';
-import type { AuthUser } from '../../../types.js';
+import type { Variables } from '../../../app/web/context.js';
+import type { AuthUser } from '../../../shared/types.js';
 import { authMiddleware } from '../../../middleware/auth.js';
-import { DATA_DIR } from '../../../config.js';
+import { DATA_DIR } from '../../../app/config.js';
 import {
   getSystemSettings,
   saveSystemSettings,

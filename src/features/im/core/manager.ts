@@ -7,7 +7,7 @@ import {
 import { extractChatId, getChannelType } from './channel-routing.js';
 import type { IMChannel, IMChannelConnectOpts } from './channel-types.js';
 import type { StreamingCardController } from '../channels/feishu/streaming-card/index.js';
-import { logger } from '../../../logger.js';
+import { logger } from '../../../app/logger.js';
 import { IMConnectionPool } from './connection-pool.js';
 import { findChannelForJid } from './routing-helpers.js';
 import type {

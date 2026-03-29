@@ -10,7 +10,7 @@ import {
   MAIN_GROUP_FOLDER,
   SCHEDULER_POLL_INTERVAL,
   TIMEZONE,
-} from '../../config.js';
+} from '../../app/config.js';
 import { DailySummaryDeps, runDailySummaryIfNeeded } from './daily-summary.js';
 import { getSystemSettings } from '../../runtime-config.js';
 import {
@@ -30,13 +30,13 @@ import {
   updateTaskAfterRun,
 } from '../../db.js';
 import { GroupQueue } from '../chat-runtime/group-queue.js';
-import { logger } from '../../logger.js';
+import { logger } from '../../app/logger.js';
 import { hasScriptCapacity, runScript } from './script-runner.js';
 import {
   RegisteredGroup,
   RuntimeSessionRecord,
   ScheduledTask,
-} from '../../types.js';
+} from '../../shared/types.js';
 import {
   checkBillingAccessFresh,
   isBillingEnabled,

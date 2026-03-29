@@ -7,7 +7,7 @@ import path from 'path';
 import type { Readable } from 'stream';
 
 import { getSystemSettings } from '../../runtime-config.js';
-import { logger } from '../../logger.js';
+import { logger } from '../../app/logger.js';
 import type { ContainerOutput } from './container-runner.js';
 
 // Sentinel markers for robust output parsing (must match agent-runner)

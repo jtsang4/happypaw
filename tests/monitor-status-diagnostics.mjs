@@ -55,14 +55,14 @@ const [
   runtimeConfigModule,
 ] = await Promise.all([
   import('hono'),
-  import(path.join(repoRoot, 'dist', 'routes', 'monitor.js')),
+  import(path.join(repoRoot, 'dist', 'features', 'monitoring', 'routes', 'monitor.js')),
   import(path.join(repoRoot, 'dist', 'features', 'auth', 'routes', 'auth.js')),
   import(path.join(repoRoot, 'dist', 'db', 'core.js')),
   import(path.join(repoRoot, 'dist', 'db', 'shared.js')),
   import(path.join(repoRoot, 'dist', 'db', 'users-auth.js')),
-  import(path.join(repoRoot, 'dist', 'auth.js')),
-  import(path.join(repoRoot, 'dist', 'config.js')),
-  import(path.join(repoRoot, 'dist', 'web-context.js')),
+  import(path.join(repoRoot, 'dist', 'features', 'auth', 'auth.js')),
+  import(path.join(repoRoot, 'dist', 'app', 'config.js')),
+  import(path.join(repoRoot, 'dist', 'app', 'web', 'context.js')),
   import(path.join(repoRoot, 'dist', 'runtime-config.js')),
 ]);
 

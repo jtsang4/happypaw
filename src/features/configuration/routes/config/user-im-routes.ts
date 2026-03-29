@@ -1,10 +1,10 @@
 import { authMiddleware } from '../../../../middleware/auth.js';
-import { logger } from '../../../../logger.js';
+import { logger } from '../../../../app/logger.js';
 import {
   FeishuConfigSchema,
   QQConfigSchema,
   TelegramConfigSchema,
-} from '../../../../schemas.js';
+} from '../../../../app/web/schemas.js';
 import {
   getTelegramProviderConfig,
   getUserFeishuConfig,
@@ -16,7 +16,7 @@ import {
   toPublicFeishuProviderConfig,
   toPublicTelegramProviderConfig,
 } from '../../../../runtime-config.js';
-import type { AuthUser } from '../../../../types.js';
+import type { AuthUser } from '../../../../shared/types.js';
 import {
   checkImChannelLimit,
   isBillingEnabled,

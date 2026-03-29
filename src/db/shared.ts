@@ -1,5 +1,8 @@
-import Database from '../sqlite-compat.js';
-import type { MessageFinalizationReason, MessageSourceKind } from '../types.js';
+import Database from '../shared/db/sqlite-compat.js';
+import type {
+  MessageFinalizationReason,
+  MessageSourceKind,
+} from '../shared/types.js';
 
 type DatabaseInstance = InstanceType<typeof Database>;
 

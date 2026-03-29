@@ -7,7 +7,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-import { CONTAINER_IMAGE, DATA_DIR, GROUPS_DIR } from '../../config.js';
+import { CONTAINER_IMAGE, DATA_DIR, GROUPS_DIR } from '../../app/config.js';
 import {
   ensurePinnedCodexHostBinary,
   HAPPYPAW_CODEX_EXECUTABLE_ENV,
@@ -17,13 +17,16 @@ import {
   prepareCodexHome,
   type PrepareCodexHomeOptions,
 } from './codex-config.js';
-import { CURRENT_PRODUCT_ID, INTERNAL_MCP_BRIDGE_ID } from '../../product.js';
+import {
+  CURRENT_PRODUCT_ID,
+  INTERNAL_MCP_BRIDGE_ID,
+} from '../../app/product.js';
 import { persistActiveImReplyRouteForIpcDir } from '../chat-runtime/im-reply-route-snapshot.js';
-import { logger } from '../../logger.js';
+import { logger } from '../../app/logger.js';
 import {
   loadMountAllowlist,
   validateAdditionalMounts,
-} from '../../mount-security.js';
+} from '../../app/security/mount-security.js';
 import {
   buildContainerEnvLines,
   getContainerEnvConfig,
@@ -35,7 +38,11 @@ import {
   getWorkspaceMcpConfigPathFromRoot,
   getWorkspaceSkillsDirFromRoot,
 } from '../groups/workspace-config-storage.js';
-import { RegisteredGroup, RuntimeType, StreamEvent } from '../../types.js';
+import {
+  RegisteredGroup,
+  RuntimeType,
+  StreamEvent,
+} from '../../shared/types.js';
 import {
   attachStderrHandler,
   attachStdoutHandler,

@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import type { Variables } from '../../../web-context.js';
+import type { Variables } from '../../../app/web/context.js';
 import { authMiddleware } from '../../../middleware/auth.js';
 import {
   getUsageDailyStats,
@@ -7,7 +7,7 @@ import {
   getUsageModels,
   getUsageUsers,
 } from '../../../db.js';
-import type { AuthUser } from '../../../types.js';
+import type { AuthUser } from '../../../shared/types.js';
 
 const usage = new Hono<{ Variables: Variables }>();
 

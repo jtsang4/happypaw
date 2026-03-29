@@ -7,15 +7,15 @@ import {
   getCachedSessionWithUser,
   invalidateSessionCache,
   type Variables,
-} from '../web-context.js';
+} from '../app/web/context.js';
 import { updateSessionLastActive, deleteUserSession } from '../db.js';
 import { isSessionExpired } from '../features/auth/auth.js';
-import type { AuthUser, Permission } from '../types.js';
-import { hasPermission } from '../permissions.js';
+import type { AuthUser, Permission } from '../shared/types.js';
+import { hasPermission } from '../features/auth/permissions.js';
 import {
   SESSION_COOKIE_NAME_SECURE,
   SESSION_COOKIE_NAME_PLAIN,
-} from '../config.js';
+} from '../app/config.js';
 
 export const authMiddleware = async (c: any, next: any) => {
   const cookies = parseCookie(c.req.header('cookie'));

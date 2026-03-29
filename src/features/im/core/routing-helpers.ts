@@ -1,5 +1,5 @@
 import { getJidsByFolder, getRegisteredGroup } from '../../../db.js';
-import { logger } from '../../../logger.js';
+import { logger } from '../../../app/logger.js';
 import type { IMChannel, UserIMConnection } from './channel-types.js';
 
 export function findChannelForJid(

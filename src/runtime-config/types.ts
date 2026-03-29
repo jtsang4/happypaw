@@ -1,4 +1,4 @@
-import type { RuntimeType } from '../types.js';
+import type { RuntimeType } from '../shared/types.js';
 
 export interface FeishuProviderConfig {
   appId: string;

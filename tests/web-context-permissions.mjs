@@ -20,7 +20,7 @@ const {
   canModifyGroup,
   canManageGroupMembers,
   canDeleteGroup,
-} = await import(path.join(repoRoot, 'dist', 'web-context.js'));
+} = await import(path.join(repoRoot, 'dist', 'app', 'web', 'context.js'));
 
 initDatabase();
 

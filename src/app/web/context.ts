@@ -1,15 +1,19 @@
 // Shared state and utilities for web server
 
 import { WebSocket } from 'ws';
-import { RegisteredGroup, RuntimeSessionRecord, UserRole } from './types.js';
-import { GroupQueue } from './features/chat-runtime/group-queue.js';
+import {
+  RegisteredGroup,
+  RuntimeSessionRecord,
+  UserRole,
+} from '../../shared/types.js';
+import { GroupQueue } from '../../features/chat-runtime/group-queue.js';
 import type {
   AuthUser,
   NewMessage,
   MessageCursor,
   UserSessionWithUser,
-} from './types.js';
-import { getGroupMemberRole, getSessionWithUser } from './db.js';
+} from '../../shared/types.js';
+import { getGroupMemberRole, getSessionWithUser } from '../../db.js';
 
 export interface WsClientInfo {
   sessionId: string;

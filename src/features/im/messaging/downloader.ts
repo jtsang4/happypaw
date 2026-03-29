@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { GROUPS_DIR } from '../../../config.js';
+import { GROUPS_DIR } from '../../../app/config.js';
 
 export const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
 

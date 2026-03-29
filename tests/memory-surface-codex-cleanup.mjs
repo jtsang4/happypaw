@@ -12,7 +12,7 @@ function read(relativePath) {
   return fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
 }
 
-const schemasSource = read('src/schemas.ts');
+const schemasSource = read('src/app/web/schemas.ts');
 assert.match(
   schemasSource,
   /kind:\s*'primary' \| 'note' \| 'session'/u,
@@ -76,7 +76,7 @@ assert.doesNotMatch(
   'Memory routes should no longer expose the deprecated /global API surface',
 );
 assert.doesNotMatch(
-  read('src/schemas.ts'),
+  read('src/app/web/schemas.ts'),
   /MemoryGlobalSchema/u,
   'Deprecated global-memory schema should be removed once /global is dropped',
 );
@@ -200,8 +200,8 @@ const [
   import(path.join(repoRoot, 'dist', 'db', 'shared.js')),
   import(path.join(repoRoot, 'dist', 'db', 'groups.js')),
   import(path.join(repoRoot, 'dist', 'db', 'users-auth.js')),
-  import(path.join(repoRoot, 'dist', 'auth.js')),
-  import(path.join(repoRoot, 'dist', 'config.js')),
+  import(path.join(repoRoot, 'dist', 'features', 'auth', 'auth.js')),
+  import(path.join(repoRoot, 'dist', 'app', 'config.js')),
 ]);
 
 const { STORE_DIR } = configModule;

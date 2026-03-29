@@ -1,9 +1,9 @@
 // Zod schemas and validation types for API requests
 
 import { z } from 'zod';
-import { ALL_PERMISSIONS } from './permissions.js';
-import type { Permission } from './types.js';
-import { MAX_GROUP_NAME_LEN } from './web-context.js';
+import { ALL_PERMISSIONS } from '../../features/auth/permissions.js';
+import type { Permission } from '../../shared/types.js';
+import { MAX_GROUP_NAME_LEN } from './context.js';
 
 export const TaskPatchSchema = z.object({
   prompt: z.string().optional(),

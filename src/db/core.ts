@@ -1,11 +1,11 @@
 import fs from 'fs';
 import path from 'path';
 
-import Database from '../sqlite-compat.js';
+import Database from '../shared/db/sqlite-compat.js';
 
-import { STORE_DIR } from '../config.js';
-import { logger } from '../logger.js';
-import type { UserRole } from '../types.js';
+import { STORE_DIR } from '../app/config.js';
+import { logger } from '../app/logger.js';
+import type { UserRole } from '../shared/types.js';
 
 import {
   assertSchema,

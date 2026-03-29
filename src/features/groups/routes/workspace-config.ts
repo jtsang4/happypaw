@@ -7,13 +7,16 @@
 import { Hono, type Context } from 'hono';
 import fs from 'fs';
 import path from 'path';
-import type { Variables } from '../../../web-context.js';
-import type { AuthUser, RegisteredGroup } from '../../../types.js';
+import type { Variables } from '../../../app/web/context.js';
+import type { AuthUser, RegisteredGroup } from '../../../shared/types.js';
 import { authMiddleware } from '../../../middleware/auth.js';
-import { GROUPS_DIR } from '../../../config.js';
-import { canAccessGroup } from '../../../web-context.js';
+import { GROUPS_DIR } from '../../../app/config.js';
+import { canAccessGroup } from '../../../app/web/context.js';
 import { getRegisteredGroup } from '../../../db.js';
-import { CURRENT_PRODUCT_ID, isReservedMcpServerId } from '../../../product.js';
+import {
+  CURRENT_PRODUCT_ID,
+  isReservedMcpServerId,
+} from '../../../app/product.js';
 import { installSkillPackageToDirectory } from '../../skills/skill-installer.js';
 import {
   parseFrontmatter,

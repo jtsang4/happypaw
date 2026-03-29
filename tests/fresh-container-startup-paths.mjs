@@ -35,7 +35,7 @@ process.env.FAKE_DOCKER_ARGS_FILE = fakeDockerArgsPath;
 process.env.FAKE_DOCKER_STDIN_FILE = fakeDockerStdinPath;
 
 const { runContainerAgent } = await import(
-  path.join(repoRoot, 'dist', 'container-runner.js')
+  path.join(repoRoot, 'dist', 'features', 'execution', 'container-runner.js')
 );
 
 function makeGroup(folder) {

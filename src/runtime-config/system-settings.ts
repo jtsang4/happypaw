@@ -1,6 +1,6 @@
 import fs from 'fs';
 
-import { logger } from '../logger.js';
+import { logger } from '../app/logger.js';
 import type { SystemSettings } from './types.js';
 import {
   CONFIG_DIR,
