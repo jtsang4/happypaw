@@ -45,6 +45,9 @@ const OUTPUT_START_MARKER = '---HAPPYPAW_OUTPUT_START---';
 const OUTPUT_END_MARKER = '---HAPPYPAW_OUTPUT_END---';
 
 let latestSessionId: string | undefined;
+let persistentCodexClient:
+  | import('./codex-client.js').CodexAppServerClient
+  | undefined;
 
 interface IpcDrainResult {
   messages: Array<{ text: string; images?: Array<{ data: string; mimeType?: string }> }>;
@@ -419,12 +422,18 @@ async function runQuery(
       buildChannelGuidelines,
       truncateWithHeadTail,
       generateTurnId,
+      getPersistentClient: () => persistentCodexClient,
+      setPersistentClient: (client) => {
+        persistentCodexClient = client;
+      },
     },
   });
 }
 
 function forceExitWithSafetyNet(code: number): never {
   log(`Exiting with code ${code}, SIGKILL safety net in 5s`);
+  persistentCodexClient?.terminate();
+  persistentCodexClient = undefined;
   setTimeout(() => {
     console.error(
       '[agent-runner] process.exit() did not terminate, forcing SIGKILL',
@@ -627,6 +636,8 @@ async function main(): Promise<void> {
 
 process.on('SIGTERM', () => {
   log('Received SIGTERM, exiting gracefully');
+  persistentCodexClient?.terminate();
+  persistentCodexClient = undefined;
   if (latestSessionId) {
     try {
       writeOutput({ status: 'success', result: null, newSessionId: latestSessionId });
@@ -639,6 +650,8 @@ process.on('SIGTERM', () => {
 
 process.on('SIGINT', () => {
   log('Received SIGINT, exiting gracefully');
+  persistentCodexClient?.terminate();
+  persistentCodexClient = undefined;
   forceExitWithSafetyNet(0);
 });
 

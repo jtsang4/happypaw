@@ -47,6 +47,7 @@ type StreamResult = {
     text: string;
     images?: Array<{ data: string; mimeType?: string }>;
   };
+  clientDiedUnexpectedly?: boolean;
 };
 
 type CodexTodo = {
@@ -114,6 +115,8 @@ interface RuntimeDeps {
   buildChannelGuidelines: (channel: string) => string;
   truncateWithHeadTail: (content: string, maxChars: number) => string;
   generateTurnId: () => string;
+  getPersistentClient?: () => CodexAppServerClient | undefined;
+  setPersistentClient?: (client: CodexAppServerClient | undefined) => void;
 }
 
 function resolveImageMimeType(
@@ -1002,17 +1005,28 @@ export async function runCodexRuntime(options: {
 
   const userInput = initialInput.input;
 
-  const client = new CodexAppServerClient({
-    env: {
-      ...process.env,
-      CODEX_HOME: process.env.CODEX_HOME,
-    },
-    log: deps.log,
-    onNotification: () => {},
-    onRequest: () => {
-      throw new Error('Unexpected JSON-RPC request before Codex runtime initialized');
-    },
-  });
+  let clientDiedUnexpectedly = false;
+  const createClient = (): CodexAppServerClient =>
+    new CodexAppServerClient({
+      env: {
+        ...process.env,
+        CODEX_HOME: process.env.CODEX_HOME,
+      },
+      log: deps.log,
+      onNotification: () => {},
+      onRequest: () => {
+        throw new Error('Unexpected JSON-RPC request before Codex runtime initialized');
+      },
+    });
+  let client =
+    deps.getPersistentClient?.() &&
+    !deps.getPersistentClient?.()?.isClosed()
+      ? deps.getPersistentClient?.()
+      : undefined;
+  if (!client) {
+    client = createClient();
+    deps.setPersistentClient?.(client);
+  }
 
   let threadId = currentSessionId;
   let turnId: string | undefined;
@@ -1055,6 +1069,7 @@ export async function runCodexRuntime(options: {
       }
     | undefined;
   const startupWarnings: string[] = [];
+  let clientExitMessage: string | undefined;
 
   const emitThinkingDelta = (
     text: string,
@@ -1198,6 +1213,18 @@ export async function runCodexRuntime(options: {
   };
 
   try {
+    client.setExitHandler((error) => {
+      clientExitMessage = error.message;
+      turnComplete = {
+        status: 'failed',
+        turn: {
+          error: {
+            message: error.message,
+          },
+        },
+      };
+    });
+
     const notificationHandler = (notification: CodexJsonRpcNotification): void => {
       const params =
         notification.params && typeof notification.params === 'object'
@@ -1595,7 +1622,17 @@ export async function runCodexRuntime(options: {
       return responsePayload;
     });
 
-    await client.initialize();
+    if (client.isClosed()) {
+      throw new Error('codex app-server is not running');
+    }
+
+    if (client !== deps.getPersistentClient?.()) {
+      deps.setPersistentClient?.(client);
+    }
+
+    if (!client.isInitialized()) {
+      await client.initialize();
+    }
 
     if (deps.shouldInterrupt()) {
       return {
@@ -1736,6 +1773,7 @@ export async function runCodexRuntime(options: {
         interruptedDuringQuery: false,
         newSessionId: currentSessionId,
         followUpInput: combineQueuedMessages(deferredFollowUps),
+        clientDiedUnexpectedly,
       };
     }
     if (monitorResult.state === 'interrupted') {
@@ -1744,6 +1782,7 @@ export async function runCodexRuntime(options: {
         interruptedDuringQuery: true,
         newSessionId: currentSessionId,
         followUpInput: combineQueuedMessages(deferredFollowUps),
+        clientDiedUnexpectedly,
       };
     }
     if (!turnComplete) {
@@ -1755,10 +1794,12 @@ export async function runCodexRuntime(options: {
         interruptedDuringQuery: true,
         newSessionId: currentSessionId,
         followUpInput: combineQueuedMessages(deferredFollowUps),
+        clientDiedUnexpectedly,
       };
     }
     if (turnComplete.status === 'failed') {
       const message =
+        clientExitMessage ||
         latestErrorMessage ||
         ((turnComplete.turn?.error as { message?: string } | undefined)
           ?.message) ||
@@ -1795,12 +1836,19 @@ export async function runCodexRuntime(options: {
         ? `${OUTPUT_MARKER_TURN_ID_PREFIX}${turnId}`
         : undefined,
       followUpInput: combineQueuedMessages(deferredFollowUps),
+      clientDiedUnexpectedly,
     };
+  } catch (error) {
+    if (client.isClosed()) {
+      clientDiedUnexpectedly = true;
+      deps.setPersistentClient?.(undefined);
+    }
+    throw error;
   } finally {
+    client.setExitHandler(null);
     for (const cleanup of stagedImageCleanupFns.splice(0)) {
       cleanup();
     }
-    await client.close();
   }
 }
 

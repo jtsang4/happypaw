@@ -25,6 +25,8 @@ interface PendingRequest {
   resolve: (value: unknown) => void;
 }
 
+type ExitHandler = (reason: Error) => void;
+
 function createRpcError(method: string, error: CodexJsonRpcError): Error {
   const detail =
     error.data === undefined ? '' : ` (${JSON.stringify(error.data)})`;
@@ -60,6 +62,10 @@ export class CodexAppServerClient {
 
   private closed = false;
 
+  private initialized = false;
+
+  private onExit: ExitHandler | null = null;
+
   constructor(options: {
     env?: NodeJS.ProcessEnv;
     log: (message: string) => void;
@@ -93,6 +99,7 @@ export class CodexAppServerClient {
         pending.reject(new Error(`${pending.method}: ${reason}`));
       }
       this.pending.clear();
+      this.onExit?.(new Error(reason));
     });
     this.proc.on('error', (error) => {
       this.closed = true;
@@ -100,6 +107,7 @@ export class CodexAppServerClient {
         pending.reject(error);
       }
       this.pending.clear();
+      this.onExit?.(error);
     });
   }
 
@@ -115,6 +123,7 @@ export class CodexAppServerClient {
       },
     });
     this.notify('initialized');
+    this.initialized = true;
     return result;
   }
 
@@ -167,6 +176,33 @@ export class CodexAppServerClient {
         resolve();
       });
     });
+  }
+
+  isClosed(): boolean {
+    return this.closed;
+  }
+
+  isInitialized(): boolean {
+    return this.initialized;
+  }
+
+  setExitHandler(handler: ExitHandler | null): void {
+    this.onExit = handler;
+  }
+
+  terminate(): void {
+    if (this.closed) return;
+    this.closed = true;
+    try {
+      this.proc.stdin.end();
+    } catch {
+      /* ignore */
+    }
+    try {
+      this.proc.kill('SIGTERM');
+    } catch {
+      /* ignore */
+    }
   }
 
   private writeMessage(message: Record<string, unknown>): void {
