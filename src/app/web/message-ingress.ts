@@ -33,6 +33,11 @@ interface MessageIngressDeps {
         message: string,
         images?: Array<{ data: string; mimeType: string }>,
         onSent?: () => void,
+        context?: {
+          sessionId?: string;
+          chatJid?: string;
+          replyRouteJid?: string | null;
+        },
       ) => 'sent' | 'no_active';
       enqueueMessageCheck: (chatJid: string) => void;
       markIpcInjectedMessage: (chatJid: string) => void;
@@ -214,6 +219,10 @@ export function createMessageIngress({
       () => {
         deps.updateReplyRoute?.(group.folder, null);
       },
+      {
+        chatJid,
+        replyRouteJid: null,
+      },
     );
     if (sendResult === 'sent') {
       pipedToActive = true;
@@ -310,6 +319,10 @@ export function createMessageIngress({
       virtualChatJid,
       formatted,
       toAgentImages(normalizedAttachments),
+      undefined,
+      {
+        chatJid,
+      },
     );
     if (agentSendResult === 'no_active') {
       deps.queue.closeStdin(virtualChatJid);

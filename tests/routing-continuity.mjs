@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawn } from 'node:child_process';
 
 const repoRoot = '/Users/jtsang/Documents/workspace/github/jtsang4/happypaw';
 const tempRoot = fs.mkdtempSync(
@@ -9,6 +10,18 @@ const tempRoot = fs.mkdtempSync(
 );
 const realTempRoot = fs.realpathSync(tempRoot);
 process.chdir(realTempRoot);
+
+async function waitFor(predicate, timeoutMs, description) {
+  const startedAt = Date.now();
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    if (predicate()) return;
+    if (Date.now() - startedAt > timeoutMs) {
+      throw new Error(`Timed out waiting for ${description}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
 
 const { initDatabase, closeDatabase, setRegisteredGroup, createAgent, updateAgentLastImJid } =
   await import(path.join(repoRoot, 'dist', 'db.js'));
@@ -354,5 +367,356 @@ assert.deepEqual(
 );
 
 console.log('✅ routing continuity checks passed');
+
+async function verifyRunnerReuseQueuedRouteContinuity() {
+  const harnessRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'happypaw-routing-runner-reuse-'),
+  );
+  const binDir = path.join(harnessRoot, 'bin');
+  const groupDir = path.join(harnessRoot, 'group');
+  const globalDir = path.join(harnessRoot, 'global');
+  const memoryDir = path.join(harnessRoot, 'memory');
+  const ipcDir = path.join(harnessRoot, 'ipc');
+  const ipcInputDir = path.join(ipcDir, 'input');
+  const homeDir = path.join(harnessRoot, 'home');
+  const codexHome = path.join(harnessRoot, '.codex');
+  const requestLogPath = path.join(harnessRoot, 'requests.log');
+  const childLogPath = path.join(harnessRoot, 'children.log');
+  const fakeCodexPath = path.join(binDir, 'codex');
+
+  fs.mkdirSync(binDir, { recursive: true });
+  fs.mkdirSync(groupDir, { recursive: true });
+  fs.mkdirSync(globalDir, { recursive: true });
+  fs.mkdirSync(memoryDir, { recursive: true });
+  fs.mkdirSync(ipcInputDir, { recursive: true });
+  fs.mkdirSync(path.join(homeDir, '.codex'), { recursive: true });
+  fs.mkdirSync(codexHome, { recursive: true });
+  fs.writeFileSync(requestLogPath, '', 'utf8');
+  fs.writeFileSync(childLogPath, '', 'utf8');
+
+  const fakeCodexScript = `#!/usr/bin/env node
+const fs = require('node:fs');
+const path = require('node:path');
+
+const requestLogPath = ${JSON.stringify(requestLogPath)};
+const childLogPath = ${JSON.stringify(childLogPath)};
+const workspaceIpc = process.env.HAPPYPAW_WORKSPACE_IPC || '';
+let buffer = '';
+let activeTurn = null;
+
+function append(filePath, line) {
+  fs.appendFileSync(filePath, line + '\\n');
+}
+function logRequest(line) {
+  append(requestLogPath, line);
+}
+function logChild(line) {
+  append(childLogPath, line);
+}
+function send(message) {
+  logRequest('notify ' + JSON.stringify(message));
+  process.stdout.write(JSON.stringify(message) + '\\n');
+}
+function writeInputMessage(fileName, payload) {
+  const inputDir = path.join(workspaceIpc, 'input');
+  fs.mkdirSync(inputDir, { recursive: true });
+  const filePath = path.join(inputDir, fileName);
+  const tempPath = filePath + '.tmp';
+  fs.writeFileSync(tempPath, JSON.stringify(payload), 'utf8');
+  fs.renameSync(tempPath, filePath);
+}
+function completeTurn(turn, text) {
+  if (!turn || !activeTurn || activeTurn.turnId !== turn.turnId) return;
+  send({
+    method: 'item/agentMessage/delta',
+    params: {
+      threadId: turn.threadId,
+      turnId: turn.turnId,
+      itemId: 'item_msg',
+      delta: text,
+    },
+  });
+  send({
+    method: 'turn/completed',
+    params: {
+      threadId: turn.threadId,
+      turn: {
+        id: turn.turnId,
+        status: 'completed',
+        items: [
+          {
+            type: 'agentMessage',
+            id: 'item_msg',
+            text,
+            phase: 'final_answer',
+            memoryCitation: null,
+          },
+        ],
+        error: null,
+      },
+    },
+  });
+  activeTurn = null;
+}
+
+logChild('spawn ' + process.pid);
+process.on('exit', () => logChild('exit ' + process.pid));
+process.on('SIGTERM', () => process.exit(0));
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', (chunk) => {
+  buffer += chunk;
+  let idx;
+  while ((idx = buffer.indexOf('\\n')) !== -1) {
+    const line = buffer.slice(0, idx).trim();
+    buffer = buffer.slice(idx + 1);
+    if (!line) continue;
+    const msg = JSON.parse(line);
+    logRequest(
+      msg.method
+        ? msg.method + ' ' + JSON.stringify(msg)
+        : 'response ' + JSON.stringify(msg),
+    );
+    if (msg.method === 'initialize') {
+      send({
+        id: msg.id,
+        result: {
+          userAgent: 'fake-codex',
+          platformFamily: 'unix',
+          platformOs: 'linux',
+        },
+      });
+      continue;
+    }
+    if (msg.method === 'initialized') continue;
+    if (msg.method === 'mcpServerStatus/list') {
+      send({
+        id: msg.id,
+        result: {
+          data: [
+            {
+              name: 'happypaw',
+              authStatus: 'bearerToken',
+              tools: {
+                send_message: { name: 'send_message', inputSchema: {} },
+                get_context: { name: 'get_context', inputSchema: {} },
+                list_tasks: { name: 'list_tasks', inputSchema: {} },
+                memory_append: { name: 'memory_append', inputSchema: {} },
+                memory_get: { name: 'memory_get', inputSchema: {} },
+                memory_search: { name: 'memory_search', inputSchema: {} },
+                pause_task: { name: 'pause_task', inputSchema: {} },
+                resume_task: { name: 'resume_task', inputSchema: {} },
+                cancel_task: { name: 'cancel_task', inputSchema: {} },
+                schedule_task: { name: 'schedule_task', inputSchema: {} },
+                send_file: { name: 'send_file', inputSchema: {} },
+                send_image: { name: 'send_image', inputSchema: {} },
+              },
+              resources: [],
+              resourceTemplates: [],
+            },
+          ],
+          nextCursor: null,
+        },
+      });
+      continue;
+    }
+    if (msg.method === 'thread/resume') {
+      send({ id: msg.id, result: { thread: { id: msg.params.threadId } } });
+      continue;
+    }
+    if (msg.method === 'thread/start') {
+      send({ id: msg.id, result: { thread: { id: 'thread-default' } } });
+      continue;
+    }
+    if (msg.method === 'turn/start') {
+      const textInput = Array.isArray(msg.params.input)
+        ? msg.params.input
+            .filter((entry) => entry.type === 'text')
+            .map((entry) => entry.text)
+            .join('\\n')
+        : '';
+      const turnId = 'turn_' + Date.now();
+      activeTurn = { threadId: msg.params.threadId, turnId, textInput };
+      send({ id: msg.id, result: { turn: { id: turnId } } });
+      setTimeout(() => {
+        if (!activeTurn || activeTurn.turnId !== turnId) return;
+        send({
+          method: 'turn/started',
+          params: { threadId: msg.params.threadId, turn: { id: turnId } },
+        });
+        if (textInput === '初始消息') {
+          writeInputMessage('001-stale-context.json', {
+            type: 'message',
+            text: '旧会话排队消息',
+            sessionId: 'thread-a',
+            chatJid: 'web:workspace-a',
+            replyRouteJid: 'qq:route-a',
+          });
+          writeInputMessage('002-latest-context.json', {
+            type: 'message',
+            text: '切换到会话B',
+            sessionId: 'thread-b',
+            chatJid: 'web:workspace-b',
+            replyRouteJid: 'telegram:route-b',
+          });
+          completeTurn(activeTurn, '初始消息回复');
+          return;
+        }
+        completeTurn(activeTurn, '排队消息已处理');
+      }, 0);
+      continue;
+    }
+    if (msg.method === 'turn/interrupt' || msg.method === 'turn/steer') {
+      send({ id: msg.id, result: {} });
+      continue;
+    }
+  }
+});
+`;
+
+  fs.writeFileSync(fakeCodexPath, fakeCodexScript, 'utf8');
+  fs.chmodSync(fakeCodexPath, 0o755);
+
+  const child = spawn(
+    'npx',
+    ['tsx', path.join(repoRoot, 'container/agent-runner/src/index.ts')],
+    {
+      cwd: repoRoot,
+      env: {
+        ...process.env,
+        PATH: `${binDir}:${process.env.PATH}`,
+        HOME: homeDir,
+        CODEX_HOME: codexHome,
+        HAPPYPAW_CODEX_EXECUTABLE: fakeCodexPath,
+        HAPPYPAW_WORKSPACE_GROUP: groupDir,
+        HAPPYPAW_WORKSPACE_GLOBAL: globalDir,
+        HAPPYPAW_WORKSPACE_MEMORY: memoryDir,
+        HAPPYPAW_WORKSPACE_IPC: ipcDir,
+      },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    },
+  );
+
+  const outputs = [];
+  let stdoutBuffer = '';
+  let stderrBuffer = '';
+  let markerOpen = false;
+  let markerJson = '';
+
+  child.stdout.setEncoding('utf8');
+  child.stdout.on('data', (chunk) => {
+    stdoutBuffer += chunk;
+    let newlineIndex;
+    while ((newlineIndex = stdoutBuffer.indexOf('\n')) !== -1) {
+      const rawLine = stdoutBuffer.slice(0, newlineIndex);
+      stdoutBuffer = stdoutBuffer.slice(newlineIndex + 1);
+      const line = rawLine.replace(/\r$/, '');
+      if (line === '---HAPPYPAW_OUTPUT_START---') {
+        markerOpen = true;
+        markerJson = '';
+        continue;
+      }
+      if (line === '---HAPPYPAW_OUTPUT_END---') {
+        if (markerOpen) outputs.push(JSON.parse(markerJson));
+        markerOpen = false;
+        markerJson = '';
+        continue;
+      }
+      if (markerOpen) markerJson += line;
+    }
+  });
+  child.stderr.setEncoding('utf8');
+  child.stderr.on('data', (chunk) => {
+    stderrBuffer += chunk;
+  });
+
+  child.stdin.end(
+    JSON.stringify({
+      prompt: '初始消息',
+      sessionId: 'thread-a',
+      runtime: 'codex_app_server',
+      groupFolder: 'home-1',
+      chatJid: 'web:workspace-a',
+      replyRouteJid: 'telegram:route-a',
+      turnId: 'route-turn-1',
+      isHome: true,
+      isAdminHome: false,
+    }),
+  );
+
+  try {
+    await waitFor(
+      () =>
+        outputs.some(
+          (entry) =>
+            entry.status === 'success' && entry.result === '初始消息回复',
+        ),
+      10_000,
+      'initial runner-reuse route response',
+    );
+    await waitFor(
+      () =>
+        outputs.some(
+          (entry) =>
+            entry.status === 'success' && entry.result === '排队消息已处理',
+        ),
+      10_000,
+      'runner-reuse queued route response',
+    );
+
+    fs.writeFileSync(path.join(ipcInputDir, '_close'), '');
+    const exitCode = await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        child.kill('SIGKILL');
+        reject(
+          new Error(
+            `route continuity runner harness timeout\\nSTDERR:\\n${stderrBuffer}`,
+          ),
+        );
+      }, 10_000);
+      child.once('exit', (code, signal) => {
+        clearTimeout(timer);
+        if (signal) {
+          reject(
+            new Error(
+              `route continuity runner harness exited via signal ${signal}\\nSTDERR:\\n${stderrBuffer}`,
+            ),
+          );
+          return;
+        }
+        resolve(code);
+      });
+    });
+    assert.equal(exitCode, 0, stderrBuffer);
+
+    const requestLog = fs.readFileSync(requestLogPath, 'utf8');
+    const threadResumeRequests = requestLog
+      .split('\n')
+      .filter((line) => line.startsWith('thread/resume '))
+      .map((line) => JSON.parse(line.slice('thread/resume '.length)));
+    const secondResumeRequest = threadResumeRequests.at(-1);
+    assert.equal(
+      secondResumeRequest?.params?.threadId,
+      'thread-b',
+      'runner reuse should resume the latest queued conversation session',
+    );
+    assert.match(
+      secondResumeRequest?.params?.baseInstructions ?? '',
+      /## Telegram 消息格式/,
+      'runner reuse should rebuild channel routing guidance from the latest queued reply route',
+    );
+    assert.doesNotMatch(
+      secondResumeRequest?.params?.baseInstructions ?? '',
+      /## QQ 消息格式/,
+      'stale queued route metadata must not leak into the reused runner follow-up turn',
+    );
+  } finally {
+    if (child.exitCode === null && !child.killed) {
+      child.kill('SIGKILL');
+      await new Promise((resolve) => child.once('exit', resolve));
+    }
+  }
+}
+
+await verifyRunnerReuseQueuedRouteContinuity();
 closeDatabase();
 process.exit(0);

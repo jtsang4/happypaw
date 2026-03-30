@@ -578,6 +578,9 @@ export function createImRoutingHelpers(deps: {
               formatted,
               imagesForAgent,
               undefined,
+              {
+                chatJid: homeChatJid,
+              },
             )
           : 'no_active';
         if (sendResult === 'no_active') {

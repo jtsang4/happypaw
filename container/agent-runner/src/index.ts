@@ -50,7 +50,13 @@ let persistentCodexClient:
   | undefined;
 
 interface IpcDrainResult {
-  messages: Array<{ text: string; images?: Array<{ data: string; mimeType?: string }> }>;
+  messages: Array<{
+    text: string;
+    images?: Array<{ data: string; mimeType?: string }>;
+    sessionId?: string;
+    chatJid?: string;
+    replyRouteJid?: string;
+  }>;
 }
 
 interface QueryResult {
@@ -64,6 +70,9 @@ interface QueryResult {
   followUpInput?: {
     text: string;
     images?: Array<{ data: string; mimeType?: string }>;
+    sessionId?: string;
+    chatJid?: string;
+    replyRouteJid?: string;
   };
 }
 
@@ -202,10 +211,29 @@ function drainIpcInput(): IpcDrainResult {
           type?: string;
           text?: string;
           images?: Array<{ data: string; mimeType?: string }>;
+          sessionId?: string;
+          chatJid?: string;
+          replyRouteJid?: string;
         };
         fs.unlinkSync(filePath);
         if (data.type === 'message' && data.text) {
-          result.messages.push({ text: data.text, images: data.images });
+          result.messages.push({
+            text: data.text,
+            images: data.images,
+            sessionId:
+              typeof data.sessionId === 'string' && data.sessionId.trim()
+                ? data.sessionId
+                : undefined,
+            chatJid:
+              typeof data.chatJid === 'string' && data.chatJid.trim()
+                ? data.chatJid
+                : undefined,
+            replyRouteJid:
+              typeof data.replyRouteJid === 'string' &&
+              data.replyRouteJid.trim()
+                ? data.replyRouteJid
+                : undefined,
+          });
         }
       } catch (err) {
         log(
@@ -291,6 +319,9 @@ function createIpcWatcher(onFileDetected: () => void): { close: () => void } {
 function waitForIpcMessage(): Promise<{
   text: string;
   images?: Array<{ data: string; mimeType?: string }>;
+  sessionId?: string;
+  chatJid?: string;
+  replyRouteJid?: string;
 } | null> {
   return new Promise((resolve) => {
     let resolved = false;
@@ -312,11 +343,21 @@ function waitForIpcMessage(): Promise<{
       const { messages } = drainIpcInput();
       if (messages.length === 0) return;
 
-      const text = messages.map((message) => message.text).join('\n');
+      const [firstMessage, ...remainingMessages] = messages;
+      const text = [firstMessage, ...remainingMessages]
+        .map((message) => message.text)
+        .join('\n');
       const images = messages.flatMap((message) => message.images || []);
+      const latestMessage = messages[messages.length - 1];
       resolved = true;
       watcher.close();
-      resolve({ text, images: images.length > 0 ? images : undefined });
+      resolve({
+        text,
+        images: images.length > 0 ? images : undefined,
+        sessionId: latestMessage?.sessionId,
+        chatJid: latestMessage?.chatJid,
+        replyRouteJid: latestMessage?.replyRouteJid,
+      });
     };
 
     const watcher = createIpcWatcher(tryDrain);
@@ -492,6 +533,18 @@ async function main(): Promise<void> {
     if (pendingImages.length > 0) {
       promptImages = [...(promptImages || []), ...pendingImages];
     }
+    const latestPendingMessage =
+      pendingDrain.messages[pendingDrain.messages.length - 1];
+    if (latestPendingMessage?.sessionId) {
+      sessionId = latestPendingMessage.sessionId;
+      latestSessionId = latestPendingMessage.sessionId;
+    }
+    if (latestPendingMessage?.chatJid) {
+      containerInput.chatJid = latestPendingMessage.chatJid;
+    }
+    if (latestPendingMessage?.replyRouteJid) {
+      containerInput.replyRouteJid = latestPendingMessage.replyRouteJid;
+    }
   }
 
   try {
@@ -570,6 +623,17 @@ async function main(): Promise<void> {
           );
           prompt = queryResult.followUpInput.text;
           promptImages = queryResult.followUpInput.images;
+          if (queryResult.followUpInput.sessionId) {
+            sessionId = queryResult.followUpInput.sessionId;
+            latestSessionId = queryResult.followUpInput.sessionId;
+          }
+          if (queryResult.followUpInput.chatJid) {
+            containerInput.chatJid = queryResult.followUpInput.chatJid;
+          }
+          if (queryResult.followUpInput.replyRouteJid) {
+            containerInput.replyRouteJid =
+              queryResult.followUpInput.replyRouteJid;
+          }
           containerInput.turnId = generateTurnId();
           continue;
         }
@@ -587,6 +651,16 @@ async function main(): Promise<void> {
 
         prompt = nextMessage.text;
         promptImages = nextMessage.images;
+        if (nextMessage.sessionId) {
+          sessionId = nextMessage.sessionId;
+          latestSessionId = nextMessage.sessionId;
+        }
+        if (nextMessage.chatJid) {
+          containerInput.chatJid = nextMessage.chatJid;
+        }
+        if (nextMessage.replyRouteJid) {
+          containerInput.replyRouteJid = nextMessage.replyRouteJid;
+        }
         containerInput.turnId = generateTurnId();
         continue;
       }
@@ -599,6 +673,16 @@ async function main(): Promise<void> {
         );
         prompt = queryResult.followUpInput.text;
         promptImages = queryResult.followUpInput.images;
+        if (queryResult.followUpInput.sessionId) {
+          sessionId = queryResult.followUpInput.sessionId;
+          latestSessionId = queryResult.followUpInput.sessionId;
+        }
+        if (queryResult.followUpInput.chatJid) {
+          containerInput.chatJid = queryResult.followUpInput.chatJid;
+        }
+        if (queryResult.followUpInput.replyRouteJid) {
+          containerInput.replyRouteJid = queryResult.followUpInput.replyRouteJid;
+        }
         containerInput.turnId = generateTurnId();
         continue;
       }
@@ -615,6 +699,16 @@ async function main(): Promise<void> {
       );
       prompt = nextMessage.text;
       promptImages = nextMessage.images;
+      if (nextMessage.sessionId) {
+        sessionId = nextMessage.sessionId;
+        latestSessionId = nextMessage.sessionId;
+      }
+      if (nextMessage.chatJid) {
+        containerInput.chatJid = nextMessage.chatJid;
+      }
+      if (nextMessage.replyRouteJid) {
+        containerInput.replyRouteJid = nextMessage.replyRouteJid;
+      }
       containerInput.turnId = generateTurnId();
     }
   } catch (err) {

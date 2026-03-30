@@ -47,6 +47,9 @@ type StreamResult = {
   followUpInput?: {
     text: string;
     images?: Array<{ data: string; mimeType?: string }>;
+    sessionId?: string;
+    chatJid?: string;
+    replyRouteJid?: string;
   };
   clientDiedUnexpectedly?: boolean;
 };
@@ -116,6 +119,9 @@ interface RuntimeDeps {
     messages: Array<{
       text: string;
       images?: Array<{ data: string; mimeType?: string }>;
+      sessionId?: string;
+      chatJid?: string;
+      replyRouteJid?: string;
     }>;
   };
   normalizeHomeFlags: (
@@ -466,16 +472,34 @@ function buildRequestUserInputAnswer(
 }
 
 function combineQueuedMessages(
-  messages: Array<{ text: string; images?: Array<{ data: string; mimeType?: string }> }>,
-): { text: string; images?: Array<{ data: string; mimeType?: string }> } | undefined {
+  messages: Array<{
+    text: string;
+    images?: Array<{ data: string; mimeType?: string }>;
+    sessionId?: string;
+    chatJid?: string;
+    replyRouteJid?: string;
+  }>,
+):
+  | {
+      text: string;
+      images?: Array<{ data: string; mimeType?: string }>;
+      sessionId?: string;
+      chatJid?: string;
+      replyRouteJid?: string;
+    }
+  | undefined {
   if (messages.length === 0) return undefined;
 
   const text = messages.map((message) => message.text).join('\n');
   const images = messages.flatMap((message) => message.images ?? []);
+  const latestMessage = messages[messages.length - 1];
 
   return {
     text,
     images: images.length > 0 ? images : undefined,
+    sessionId: latestMessage?.sessionId,
+    chatJid: latestMessage?.chatJid,
+    replyRouteJid: latestMessage?.replyRouteJid,
   };
 }
 
@@ -1022,6 +1046,7 @@ export async function runCodexRuntime(options: {
     !deps.getPersistentClient?.()?.isClosed()
       ? deps.getPersistentClient?.()
       : undefined;
+  const ownsEphemeralClient = !client;
   if (!client) {
     client = createClient();
     deps.setPersistentClient?.(client);
@@ -1058,6 +1083,9 @@ export async function runCodexRuntime(options: {
   const deferredFollowUps: Array<{
     text: string;
     images?: Array<{ data: string; mimeType?: string }>;
+    sessionId?: string;
+    chatJid?: string;
+    replyRouteJid?: string;
   }> = [];
   const stagedImageCleanupFns: Array<() => void> = [stagedImages.cleanup];
   let activeUserInputRequest:
@@ -1840,6 +1868,9 @@ export async function runCodexRuntime(options: {
     }
     throw error;
   } finally {
+    if (ownsEphemeralClient && !deps.getPersistentClient && !client.isClosed()) {
+      await client.close();
+    }
     client.setExitHandler(null);
     for (const cleanup of stagedImageCleanupFns.splice(0)) {
       cleanup();
@@ -1856,6 +1887,9 @@ async function waitForTurnCompletion(
       messages: Array<{
         text: string;
         images?: Array<{ data: string; mimeType?: string }>;
+        sessionId?: string;
+        chatJid?: string;
+        replyRouteJid?: string;
       }>;
     };
     canSteer?: () => boolean;
@@ -1864,6 +1898,9 @@ async function waitForTurnCompletion(
     onSteer?: (message: {
       text: string;
       images?: Array<{ data: string; mimeType?: string }>;
+      sessionId?: string;
+      chatJid?: string;
+      replyRouteJid?: string;
     }) => Promise<void>;
     log?: (message: string) => void;
   },
@@ -1873,6 +1910,9 @@ async function waitForTurnCompletion(
   deferredFollowUp?: {
     text: string;
     images?: Array<{ data: string; mimeType?: string }>;
+    sessionId?: string;
+    chatJid?: string;
+    replyRouteJid?: string;
   };
 }> {
   let closeRequested = false;
@@ -1882,6 +1922,9 @@ async function waitForTurnCompletion(
   const deferredMessages: Array<{
     text: string;
     images?: Array<{ data: string; mimeType?: string }>;
+    sessionId?: string;
+    chatJid?: string;
+    replyRouteJid?: string;
   }> = [];
 
   // eslint-disable-next-line no-constant-condition

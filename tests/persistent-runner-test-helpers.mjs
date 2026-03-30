@@ -211,6 +211,26 @@ process.stdin.on('data', (chunk) => {
     }
     if (msg.method === 'turn/steer') {
       send({ id: msg.id, result: {} });
+      const textInput = Array.isArray(msg.params.input)
+        ? msg.params.input
+            .filter((entry) => entry.type === 'text')
+            .map((entry) => entry.text)
+            .join('\\n')
+        : '';
+      if (activeTurn && msg.params.expectedTurnId === activeTurn.turnId) {
+        const replyText = Object.prototype.hasOwnProperty.call(repliesByText, textInput)
+          ? repliesByText[textInput]
+          : defaultReplyPrefix + textInput;
+        send({
+          method: 'item/agentMessage/delta',
+          params: {
+            threadId: activeTurn.threadId,
+            turnId: activeTurn.turnId,
+            itemId: 'item_msg',
+            delta: '\\n[steered] ' + replyText,
+          },
+        });
+      }
       continue;
     }
     if (msg.method === 'turn/interrupt') {
@@ -349,7 +369,7 @@ export async function startPersistentRunnerHarness(options = {}) {
       sessionId: options.sessionId,
       runtime: 'codex_app_server',
       groupFolder: 'demo',
-      chatJid: 'web:demo',
+      chatJid: options.initialChatJid ?? 'web:demo',
       turnId: 'host-turn-1',
       isHome: false,
       isAdminHome: false,

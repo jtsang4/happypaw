@@ -445,6 +445,11 @@ export class GroupQueue {
     text: string,
     images?: Array<{ data: string; mimeType?: string }>,
     onInjected?: () => void,
+    context?: {
+      sessionId?: string;
+      chatJid?: string;
+      replyRouteJid?: string | null;
+    },
   ): SendMessageResult {
     const state = this.resolveActiveState(groupJid);
     if (!state) return 'no_active';
@@ -482,7 +487,14 @@ export class GroupQueue {
       const tempPath = `${filepath}.tmp`;
       fs.writeFileSync(
         tempPath,
-        JSON.stringify({ type: 'message', text, images }),
+        JSON.stringify({
+          type: 'message',
+          text,
+          images,
+          sessionId: context?.sessionId,
+          chatJid: context?.chatJid,
+          replyRouteJid: context?.replyRouteJid,
+        }),
       );
       fs.renameSync(tempPath, filepath);
       state.queryInFlight = true;

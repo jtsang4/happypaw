@@ -164,6 +164,10 @@ export function createMessageLoop(deps: {
                   lastSourceJidForRoute,
                 );
               },
+              {
+                chatJid,
+                replyRouteJid: lastSourceJidForRoute,
+              },
             );
             if (sendResult === 'sent') {
               logger.debug(
