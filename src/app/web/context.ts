@@ -13,6 +13,7 @@ import type {
   MessageCursor,
   UserSessionWithUser,
 } from '../../shared/types.js';
+import type { RuntimeSessionScope } from '../../db.js';
 import { getGroupMemberRole, getSessionWithUser } from '../../db.js';
 
 export interface WsClientInfo {
@@ -25,6 +26,10 @@ export interface WebDeps {
   queue: GroupQueue;
   getRegisteredGroups: () => Record<string, RegisteredGroup>;
   getSessions: () => Record<string, RuntimeSessionRecord>;
+  getRuntimeSession?: (
+    groupFolder: string,
+    scope?: string | RuntimeSessionScope | null,
+  ) => RuntimeSessionRecord | undefined;
   processGroupMessages: (chatJid: string) => Promise<boolean>;
   ensureTerminalContainerStarted: (chatJid: string) => boolean;
   formatMessages: (messages: NewMessage[], isShared?: boolean) => string;

@@ -18,6 +18,8 @@ import {
   normalizeImageAttachments,
   toAgentImages,
 } from '../../features/im/messaging/attachments.js';
+import { buildConversationActivationContext } from '../../features/chat-runtime/session-scope.js';
+import type { RuntimeSessionScope } from '../../db.js';
 
 type ImageAttachment = {
   type: 'image';
@@ -37,6 +39,7 @@ interface MessageIngressDeps {
           sessionId?: string;
           chatJid?: string;
           replyRouteJid?: string | null;
+          sessionScope?: RuntimeSessionScope;
         },
       ) => 'sent' | 'no_active';
       enqueueMessageCheck: (chatJid: string) => void;
@@ -52,6 +55,10 @@ interface MessageIngressDeps {
       string,
       { created_by?: string; is_home?: boolean; folder: string }
     >;
+    getRuntimeSession?: (
+      groupFolder: string,
+      scope?: string | RuntimeSessionScope | null,
+    ) => { sessionId: string } | undefined;
     formatMessages: (
       messages: Array<{
         id: string;
@@ -212,6 +219,13 @@ export function createMessageIngress({
 
     let pipedToActive = false;
     const images = toAgentImages(normalizedAttachments);
+    const activationContext = buildConversationActivationContext(
+      group.folder,
+      chatJid,
+      chatJid,
+      null,
+      deps.getRuntimeSession,
+    );
     const sendResult = deps.queue.sendMessage(
       chatJid,
       formatted,
@@ -220,8 +234,10 @@ export function createMessageIngress({
         deps.updateReplyRoute?.(group.folder, null);
       },
       {
+        sessionId: activationContext.sessionId,
         chatJid,
         replyRouteJid: null,
+        sessionScope: activationContext.sessionScope,
       },
     );
     if (sendResult === 'sent') {

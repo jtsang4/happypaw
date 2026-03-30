@@ -33,6 +33,7 @@ import {
   buildOverflowPartialReply,
   EMPTY_CURSOR,
 } from './recovery.js';
+import { getConversationSessionScope } from './session-scope.js';
 import { getSystemSettings } from '../../runtime-config.js';
 import { clearSessionRuntimeFiles } from './runtime-state-cleanup.js';
 import type {
@@ -43,6 +44,7 @@ import type {
   RuntimeType,
   StreamEvent,
 } from '../../shared/types.js';
+import type { RuntimeSessionScope } from '../../db.js';
 import {
   isSystemMaintenanceNoise,
   stripAgentInternalTags,
@@ -269,6 +271,7 @@ interface MainConversationRuntimeDeps {
     onOutput?: (output: ContainerOutput) => Promise<void>,
     images?: Array<{ data: string; mimeType?: string }>,
     replyRouteJid?: string,
+    sessionScope?: RuntimeSessionScope,
   ) => Promise<{ status: 'success' | 'error' | 'closed'; error?: string }>;
   getEffectiveRuntime: (group: RegisteredGroup) => RuntimeType;
   sendBillingDeniedMessage: (jid: string, content: string) => string;
@@ -539,6 +542,7 @@ export function createMainConversationRuntime(
       | undefined;
     const activeMainSession = getRuntimeSession(effectiveGroup.folder);
     let activeSessionId = activeMainSession?.sessionId;
+    const sessionScope = getConversationSessionScope(chatJid);
     const replyRouteJid = deps.getAgentReplyRouteJid(
       effectiveGroup.folder,
       chatJid,
@@ -1025,6 +1029,7 @@ export function createMainConversationRuntime(
         },
         imagesForAgent,
         replyRouteJid,
+        sessionScope,
       );
     } finally {
       await deps.setTyping(chatJid, false);

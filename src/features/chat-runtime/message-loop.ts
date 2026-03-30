@@ -12,11 +12,13 @@ import {
 } from '../billing/billing.js';
 import { logger } from '../../app/logger.js';
 import type { GroupQueue } from './group-queue.js';
+import { buildConversationActivationContext } from './session-scope.js';
 import type {
   MessageCursor,
   NewMessage,
   RegisteredGroup,
 } from '../../shared/types.js';
+import type { RuntimeSessionScope } from '../../db.js';
 
 export function createMessageLoop(deps: {
   queue: GroupQueue;
@@ -45,6 +47,10 @@ export function createMessageLoop(deps: {
   imManager: {
     sendMessage: (jid: string, text: string) => Promise<void>;
   };
+  getRuntimeSession?: (
+    groupFolder: string,
+    scope?: string | RuntimeSessionScope | null,
+  ) => { sessionId: string } | undefined;
   activeRouteUpdaters: Map<string, (newSourceJid: string | null) => void>;
 }): {
   startMessageLoop: () => Promise<void>;
@@ -154,6 +160,13 @@ export function createMessageLoop(deps: {
             const imagesForAgent = images.length > 0 ? images : undefined;
             const lastSourceJidForRoute =
               messagesToSend[messagesToSend.length - 1]?.source_jid || chatJid;
+            const activationContext = buildConversationActivationContext(
+              group.folder,
+              chatJid,
+              chatJid,
+              lastSourceJidForRoute,
+              deps.getRuntimeSession,
+            );
 
             const sendResult = deps.queue.sendMessage(
               chatJid,
@@ -165,8 +178,10 @@ export function createMessageLoop(deps: {
                 );
               },
               {
+                sessionId: activationContext.sessionId,
                 chatJid,
                 replyRouteJid: lastSourceJidForRoute,
+                sessionScope: activationContext.sessionScope,
               },
             );
             if (sendResult === 'sent') {

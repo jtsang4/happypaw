@@ -5,6 +5,7 @@ import path from 'path';
 import { DATA_DIR } from '../../app/config.js';
 import { killProcessTree } from '../execution/container-runner.js';
 import { getTaskById } from '../../db.js';
+import type { RuntimeSessionScope } from '../../db.js';
 import { getSystemSettings } from '../../runtime-config.js';
 import { logger } from '../../app/logger.js';
 export type SendMessageResult = 'sent' | 'no_active';
@@ -449,6 +450,7 @@ export class GroupQueue {
       sessionId?: string;
       chatJid?: string;
       replyRouteJid?: string | null;
+      sessionScope?: RuntimeSessionScope;
     },
   ): SendMessageResult {
     const state = this.resolveActiveState(groupJid);

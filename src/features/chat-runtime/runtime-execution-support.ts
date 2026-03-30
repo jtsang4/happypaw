@@ -182,6 +182,7 @@ export function createRuntimeExecutionSupport(
     isGroupShared: deps.isGroupShared,
     sendBillingDeniedMessage,
     imManager: deps.imManager,
+    getRuntimeSession: deps.getRuntimeSession,
     activeRouteUpdaters: deps.activeRouteUpdaters,
   });
 
