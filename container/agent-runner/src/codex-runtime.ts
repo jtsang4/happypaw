@@ -503,6 +503,28 @@ function combineQueuedMessages(
   };
 }
 
+function shouldTreatFollowUpAsRebindBoundary(
+  message: {
+    sessionId?: string;
+    chatJid?: string;
+    replyRouteJid?: string;
+  },
+  activeTurn: {
+    sessionId?: string;
+    chatJid?: string;
+    replyRouteJid?: string;
+  },
+): boolean {
+  return (
+    (typeof message.sessionId === 'string' &&
+      message.sessionId !== activeTurn.sessionId) ||
+    (typeof message.chatJid === 'string' &&
+      message.chatJid !== activeTurn.chatJid) ||
+    (typeof message.replyRouteJid === 'string' &&
+      message.replyRouteJid !== activeTurn.replyRouteJid)
+  );
+}
+
 function buildRuntimePromptContext(
   deps: RuntimeDeps,
   containerInput: ContainerInput,
@@ -1751,6 +1773,19 @@ export async function runCodexRuntime(options: {
       },
       onSteer: async (message) => {
         if (!threadId || !turnId) {
+          deferredFollowUps.push(message);
+          return;
+        }
+        if (
+          shouldTreatFollowUpAsRebindBoundary(message, {
+            sessionId: currentSessionId,
+            chatJid: containerInput.chatJid,
+            replyRouteJid: containerInput.replyRouteJid,
+          })
+        ) {
+          deps.log(
+            'Deferring active-turn follow-up to next turn because session/chat/reply-route metadata changed',
+          );
           deferredFollowUps.push(message);
           return;
         }

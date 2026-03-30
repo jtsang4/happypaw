@@ -381,3 +381,88 @@ try {
 } finally {
   await queuedContextHarness.forceKillIfRunning();
 }
+
+const activeTurnBoundaryHarness = await startPersistentRunnerHarness({
+  initialPrompt: '活跃会话A',
+  initialChatJid: 'web:workspace-a',
+  sessionId: 'thread-a',
+  codexOptions: {
+    completionDelayMs: 600,
+    repliesByText: {
+      活跃会话A: '活跃会话A回复',
+      切换到会话B: '切换到会话B回复',
+    },
+  },
+});
+
+try {
+  await activeTurnBoundaryHarness.waitForRequest('turn/start');
+
+  activeTurnBoundaryHarness.sendIpcMessage('020-active-turn-conversation-b.json', {
+    text: '切换到会话B',
+    sessionId: 'thread-b',
+    chatJid: 'web:workspace-b',
+    replyRouteJid: 'telegram:route-b',
+  });
+
+  try {
+    await activeTurnBoundaryHarness.waitForOutput(
+      (entry) =>
+        entry.status === 'success' && entry.result === '活跃会话A回复',
+      'active turn conversation-a response',
+    );
+    await activeTurnBoundaryHarness.waitForOutput(
+      (entry) =>
+        entry.status === 'success' && entry.result === '切换到会话B回复',
+      'active turn conversation-b response',
+    );
+  } catch (error) {
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)}\nOutputs:\n${JSON.stringify(
+        activeTurnBoundaryHarness.outputs,
+        null,
+        2,
+      )}\nSTDERR:\n${activeTurnBoundaryHarness.getStderr()}\nRequest log:\n${activeTurnBoundaryHarness.readRequestLog()}`,
+    );
+  }
+
+  activeTurnBoundaryHarness.sendSentinel('_close');
+  const activeTurnExitCode = await activeTurnBoundaryHarness.waitForExit();
+  assert.equal(
+    activeTurnExitCode,
+    0,
+    activeTurnBoundaryHarness.getStderr(),
+  );
+
+  const activeTurnRequestLog = activeTurnBoundaryHarness.readRequestLog();
+  const activeTurnRequestLines = activeTurnRequestLog
+    .split('\n')
+    .filter(Boolean);
+  const activeTurnResumeRequests = activeTurnRequestLines
+    .filter((line) => line.startsWith('thread/resume '))
+    .map((line) => JSON.parse(line.slice('thread/resume '.length)));
+  const activeTurnSteerRequests = activeTurnRequestLines
+    .filter((line) => line.startsWith('turn/steer '))
+    .map((line) => JSON.parse(line.slice('turn/steer '.length)));
+  const activeTurnStartRequests = activeTurnRequestLines.filter((line) =>
+    line.startsWith('turn/start '),
+  );
+
+  assert.equal(
+    activeTurnStartRequests.length,
+    2,
+    `metadata-changing follow-up must start a second turn after the active turn finishes\n${activeTurnRequestLog}`,
+  );
+  assert.equal(
+    activeTurnResumeRequests.at(-1)?.params?.threadId,
+    'thread-b',
+    'the follow-up queued during an active turn must resume conversation B on the next turn',
+  );
+  assert.equal(
+    activeTurnSteerRequests.length,
+    0,
+    `metadata-changing follow-up must not be sent through turn/steer while conversation A is still active\n${activeTurnRequestLog}`,
+  );
+} finally {
+  await activeTurnBoundaryHarness.forceKillIfRunning();
+}
