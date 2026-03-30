@@ -65,6 +65,7 @@ export interface ContainerInput {
   groupFolder: string;
   chatJid: string;
   replyRouteJid?: string;
+  conversationId?: string;
   turnId?: string;
   isHome?: boolean;
   isAdminHome?: boolean;
@@ -98,6 +99,7 @@ export interface ContainerOutput {
 
 interface RuntimeScopePathOptions {
   agentId?: string;
+  conversationId?: string;
   taskRunId?: string;
 }
 
@@ -127,6 +129,21 @@ export function resolveRuntimeScopePaths(
         options.agentId,
       ),
       codexHomeDir: path.join(agentRoot, '.codex'),
+    };
+  }
+
+  if (options.conversationId) {
+    const conversationKey = encodeURIComponent(options.conversationId);
+    const conversationRoot = path.join(
+      DATA_DIR,
+      'sessions',
+      groupFolder,
+      'conversations',
+      conversationKey,
+    );
+    return {
+      ipcDir: path.join(DATA_DIR, 'ipc', groupFolder),
+      codexHomeDir: path.join(conversationRoot, '.codex'),
     };
   }
 
@@ -288,12 +305,14 @@ function buildVolumeMounts(
   taskRunId?: string,
   currentChatJid?: string,
   currentReplyRouteJid?: string,
+  conversationId?: string,
 ): VolumeMount[] {
   const mounts: VolumeMount[] = [];
   const projectRoot = process.cwd();
   const ownerId = group.created_by;
   const runtimeScopePaths = resolveRuntimeScopePaths(group.folder, {
     agentId,
+    conversationId,
     taskRunId,
   });
   const workspaceHostDir = path.join(GROUPS_DIR, group.folder);
@@ -541,6 +560,7 @@ export async function runContainerAgent(
     input.taskRunId,
     input.chatJid,
     input.replyRouteJid,
+    input.conversationId,
   );
   const safeName = group.folder.replace(/[^a-zA-Z0-9-]/g, '-');
   const agentSuffix = input.agentId
@@ -900,6 +920,7 @@ export async function runHostAgent(
   // Isolated tasks get their own IPC subdirectory under tasks-run/{taskRunId}/
   const runtimeScopePaths = resolveRuntimeScopePaths(group.folder, {
     agentId: input.agentId,
+    conversationId: input.conversationId,
     taskRunId: input.taskRunId,
   });
   const groupIpcDir = runtimeScopePaths.ipcDir;

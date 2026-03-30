@@ -10,6 +10,7 @@ import {
   ensureChatExists,
 } from '../../db.js';
 import { logger } from '../../app/logger.js';
+import { getConversationSessionScope } from './session-scope.js';
 import type {
   NewMessage,
   MessageCursor,
@@ -26,19 +27,6 @@ export interface CommandDeps {
   setLastAgentTimestamp: (jid: string, cursor: MessageCursor) => void;
 }
 
-// ─── Session file cleanup (mirrors groups.ts clearSessionJsonlFiles) ────
-
-function clearSessionFiles(folder: string, agentId?: string): void {
-  try {
-    clearSessionRuntimeFiles(folder, agentId);
-  } catch (err) {
-    logger.warn(
-      { folder, agentId, err },
-      'Failed to clear session runtime files',
-    );
-  }
-}
-
 // ─── Core reset ─────────────────────────────────────────────────
 
 export async function executeSessionReset(
@@ -47,10 +35,22 @@ export async function executeSessionReset(
   deps: CommandDeps,
   agentId?: string,
 ): Promise<void> {
+  const sessionScope = agentId
+    ? agentId
+    : getConversationSessionScope(chatJid) || undefined;
+  const isSecondaryConversation = !!(
+    !agentId &&
+    sessionScope &&
+    typeof sessionScope !== 'string' &&
+    sessionScope.conversationId
+  );
+
   if (agentId) {
     // Agent-specific reset: only stop the agent's virtual JID process
     const virtualJid = `${chatJid}#agent:${agentId}`;
     await deps.queue.stopGroup(virtualJid, { force: true });
+  } else if (isSecondaryConversation) {
+    await deps.queue.stopGroup(chatJid, { force: true });
   } else {
     // Main session reset: stop all processes for this folder
     const siblingJids = getJidsByFolder(folder);
@@ -60,11 +60,18 @@ export async function executeSessionReset(
   }
 
   // 2. Clear .codex/ session files (preserve settings.json)
-  clearSessionFiles(folder, agentId);
+  try {
+    clearSessionRuntimeFiles(folder, sessionScope);
+  } catch (err) {
+    logger.warn(
+      { folder, chatJid, agentId, sessionScope, err },
+      'Failed to clear session runtime files',
+    );
+  }
 
   // 3. Delete session from DB (+ in-memory cache for main session)
-  deleteSession(folder, agentId);
-  if (!agentId) {
+  deleteSession(folder, sessionScope);
+  if (!sessionScope) {
     delete deps.sessions[folder];
   }
 
@@ -98,6 +105,11 @@ export async function executeSessionReset(
   if (agentId) {
     const virtualJid = `${chatJid}#agent:${agentId}`;
     deps.setLastAgentTimestamp(virtualJid, { timestamp, id: dividerMessageId });
+  } else if (isSecondaryConversation) {
+    deps.setLastAgentTimestamp(chatJid, {
+      timestamp,
+      id: dividerMessageId,
+    });
   } else {
     const siblingJids = getJidsByFolder(folder);
     for (const siblingJid of siblingJids) {

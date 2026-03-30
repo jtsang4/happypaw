@@ -540,9 +540,12 @@ export function createMainConversationRuntime(
     let output:
       | { status: 'success' | 'error' | 'closed'; error?: string }
       | undefined;
-    const activeMainSession = getRuntimeSession(effectiveGroup.folder);
-    let activeSessionId = activeMainSession?.sessionId;
     const sessionScope = getConversationSessionScope(chatJid);
+    const activeSessionRecord = getRuntimeSession(
+      effectiveGroup.folder,
+      sessionScope,
+    );
+    let activeSessionId = activeSessionRecord?.sessionId;
     const replyRouteJid = deps.getAgentReplyRouteJid(
       effectiveGroup.folder,
       chatJid,
@@ -1132,11 +1135,13 @@ export function createMainConversationRuntime(
         'Unrecoverable transcript error, auto-resetting session',
       );
 
-      await clearSessionRuntimeFiles(group.folder);
+      await clearSessionRuntimeFiles(group.folder, sessionScope);
 
       try {
-        deleteSession(group.folder);
-        delete deps.sessions[group.folder];
+        deleteSession(group.folder, sessionScope);
+        if (!sessionScope) {
+          delete deps.sessions[group.folder];
+        }
       } catch (err) {
         logger.error(
           { folder: group.folder, err },
@@ -1270,7 +1275,7 @@ export function createMainConversationRuntime(
           deleteRouterState(`oom_exits:${folder}`);
 
           try {
-            await clearSessionRuntimeFiles(folder);
+            await clearSessionRuntimeFiles(folder, sessionScope);
           } catch (err) {
             logger.error(
               { folder, err },
@@ -1278,8 +1283,10 @@ export function createMainConversationRuntime(
             );
           }
           try {
-            deleteSession(folder);
-            delete deps.sessions[folder];
+            deleteSession(folder, sessionScope);
+            if (!sessionScope) {
+              delete deps.sessions[folder];
+            }
           } catch (err) {
             logger.error(
               { folder, err },

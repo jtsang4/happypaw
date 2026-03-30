@@ -92,6 +92,7 @@ import {
   clearSessionRuntimeFiles,
   clearWorkspaceRuntimeState,
 } from '../../chat-runtime/runtime-state-cleanup.js';
+import { getConversationSessionScope } from '../../chat-runtime/session-scope.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -985,6 +986,15 @@ groupRoutes.post('/:jid/reset-session', authMiddleware, async (c) => {
   } catch {
     /* no body or invalid JSON — treat as main session reset */
   }
+  const sessionScope = agentId
+    ? agentId
+    : getConversationSessionScope(jid) || undefined;
+  const isSecondaryConversation = !!(
+    !agentId &&
+    sessionScope &&
+    typeof sessionScope !== 'string' &&
+    sessionScope.conversationId
+  );
 
   // Validate agentId belongs to this group
   if (agentId) {
@@ -1000,6 +1010,8 @@ groupRoutes.post('/:jid/reset-session', authMiddleware, async (c) => {
       // Agent-specific: only stop the agent's virtual JID process
       const virtualJid = `${jid}#agent:${agentId}`;
       await deps.queue.stopGroup(virtualJid, { force: true });
+    } else if (isSecondaryConversation) {
+      await deps.queue.stopGroup(jid, { force: true });
     } else {
       // Main session: stop ALL processes for this folder
       const siblingJids = getJidsByFolder(group.folder);
@@ -1020,7 +1032,7 @@ groupRoutes.post('/:jid/reset-session', authMiddleware, async (c) => {
 
   // 2. Delete session JSONL files so the next Codex turn starts fresh.
   try {
-    clearSessionRuntimeFiles(group.folder, agentId);
+    clearSessionRuntimeFiles(group.folder, sessionScope);
   } catch (err) {
     logger.error(
       { jid, folder: group.folder, agentId, err },
@@ -1034,8 +1046,8 @@ groupRoutes.post('/:jid/reset-session', authMiddleware, async (c) => {
 
   // 3. Delete session from DB (and in-memory cache for main session).
   try {
-    deleteSession(group.folder, agentId);
-    if (!agentId) {
+    deleteSession(group.folder, sessionScope);
+    if (!sessionScope) {
       delete deps.getSessions()[group.folder];
     }
   } catch (err) {
@@ -1086,6 +1098,8 @@ groupRoutes.post('/:jid/reset-session', authMiddleware, async (c) => {
   if (agentId) {
     const virtualJid = `${jid}#agent:${agentId}`;
     deps.setLastAgentTimestamp(virtualJid, { timestamp, id: dividerMessageId });
+  } else if (isSecondaryConversation) {
+    deps.setLastAgentTimestamp(jid, { timestamp, id: dividerMessageId });
   } else {
     // Main session: advance cursor for ALL sibling JIDs sharing this folder.
     const siblingJids = getJidsByFolder(group.folder);

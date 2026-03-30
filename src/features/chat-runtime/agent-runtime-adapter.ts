@@ -498,6 +498,7 @@ export function createAgentRuntimeAdapter(deps: AgentRuntimeAdapterDeps): {
       ? deps.sessions[group.folder]
       : deps.getRuntimeSession?.(group.folder, sessionScope);
     const sessionId = sessionRecord?.sessionId;
+    const conversationId = sessionScope?.conversationId || undefined;
 
     const tasks = deps.getAllTasks();
     deps.writeTasksSnapshot(
@@ -573,6 +574,7 @@ export function createAgentRuntimeAdapter(deps: AgentRuntimeAdapterDeps): {
                 groupFolder: group.folder,
                 chatJid,
                 replyRouteJid,
+                conversationId,
                 isHome,
                 isAdminHome,
                 images,
@@ -591,6 +593,7 @@ export function createAgentRuntimeAdapter(deps: AgentRuntimeAdapterDeps): {
                 groupFolder: group.folder,
                 chatJid,
                 replyRouteJid,
+                conversationId,
                 isHome,
                 isAdminHome,
                 images,

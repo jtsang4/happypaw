@@ -11,10 +11,17 @@ import type { RuntimeSessionRecord } from '../../shared/types.js';
 
 export function clearSessionRuntimeFiles(
   folder: string,
-  agentId?: string,
+  scope?: string | { agentId?: string | null; conversationId?: string | null },
   taskRunId?: string,
 ): void {
-  const runtimeScope = resolveRuntimeScopePaths(folder, { agentId, taskRunId });
+  const runtimeScope =
+    typeof scope === 'string'
+      ? resolveRuntimeScopePaths(folder, { agentId: scope, taskRunId })
+      : resolveRuntimeScopePaths(folder, {
+          agentId: scope?.agentId || undefined,
+          conversationId: scope?.conversationId || undefined,
+          taskRunId,
+        });
   const targets: Array<{ dir: string; keep: Set<string> }> = [
     { dir: runtimeScope.codexHomeDir, keep: new Set(['config.toml']) },
   ];
@@ -33,7 +40,7 @@ export function clearSessionRuntimeFiles(
     } catch {
       cleared = false;
       logger.info(
-        { folder, agentId, dir: target.dir },
+        { folder, scope, dir: target.dir },
         'Direct session cleanup failed for runtime dir, trying Docker fallback',
       );
     }
@@ -65,21 +72,24 @@ export function clearSessionRuntimeFiles(
       { stdio: 'pipe', timeout: 15_000 },
     );
   } catch (err) {
-    logger.error({ folder, agentId, err }, 'Docker fallback cleanup failed');
+    logger.error({ folder, scope, err }, 'Docker fallback cleanup failed');
   }
 }
 
 export function clearPersistedRuntimeStateForRecovery(
   sessions: Record<string, RuntimeSessionRecord>,
   folder: string,
-  agentId?: string,
+  scope?: string | { agentId?: string | null; conversationId?: string | null },
   taskRunId?: string,
 ): void {
-  clearSessionRuntimeFiles(folder, agentId, taskRunId);
+  clearSessionRuntimeFiles(folder, scope, taskRunId);
   if (!taskRunId) {
-    deleteSession(folder, agentId);
+    deleteSession(folder, scope);
   }
-  if (!agentId && !taskRunId) {
+  const hasDefaultScope =
+    !scope ||
+    (typeof scope !== 'string' && !scope.agentId && !scope.conversationId);
+  if (hasDefaultScope && !taskRunId) {
     delete sessions[folder];
   }
 }

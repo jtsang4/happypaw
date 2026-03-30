@@ -135,6 +135,8 @@ interface AgentConversationRuntimeDeps {
     ) => StreamingCardController | undefined;
   };
   getChannelType: (jid: string) => string | null;
+  runHostAgent?: typeof runHostAgent;
+  runContainerAgent?: typeof runContainerAgent;
 }
 
 export function createAgentConversationRuntime(
@@ -142,6 +144,9 @@ export function createAgentConversationRuntime(
 ): {
   processAgentConversation: (chatJid: string, agentId: string) => Promise<void>;
 } {
+  const executeHostAgent = deps.runHostAgent ?? runHostAgent;
+  const executeContainerAgent = deps.runContainerAgent ?? runContainerAgent;
+
   async function processAgentConversation(
     chatJid: string,
     agentId: string,
@@ -304,7 +309,11 @@ export function createAgentConversationRuntime(
     };
 
     const runtime = deps.getEffectiveRuntime(effectiveGroup);
-    const sessionRecord = getRuntimeSession(effectiveGroup.folder, agentId);
+    const agentSessionScope = { agentId };
+    const sessionRecord = getRuntimeSession(
+      effectiveGroup.folder,
+      agentSessionScope,
+    );
     const sessionId = sessionRecord?.sessionId;
     let currentAgentSessionId = sessionId;
     const replyRouteJid = deps.getAgentReplyRouteJid(
@@ -316,7 +325,11 @@ export function createAgentConversationRuntime(
     const wrappedOnOutput = async (output: ContainerOutput) => {
       // Track session
       if (output.newSessionId && output.status !== 'error') {
-        setSession(effectiveGroup.folder, output.newSessionId, agentId);
+        setSession(
+          effectiveGroup.folder,
+          output.newSessionId,
+          agentSessionScope,
+        );
         currentAgentSessionId = output.newSessionId;
       }
 
@@ -738,7 +751,7 @@ export function createAgentConversationRuntime(
       const ownerHomeFolder = deps.resolveOwnerHomeFolder(effectiveGroup);
 
       if (executionMode === 'host') {
-        output = await runHostAgent(
+        output = await executeHostAgent(
           effectiveGroup,
           containerInput,
           onProcessCb,
@@ -746,7 +759,7 @@ export function createAgentConversationRuntime(
           ownerHomeFolder,
         );
       } else {
-        output = await runContainerAgent(
+        output = await executeContainerAgent(
           effectiveGroup,
           containerInput,
           onProcessCb,
@@ -757,7 +770,11 @@ export function createAgentConversationRuntime(
 
       // Finalize session
       if (output.newSessionId && output.status !== 'error') {
-        setSession(effectiveGroup.folder, output.newSessionId, agentId);
+        setSession(
+          effectiveGroup.folder,
+          output.newSessionId,
+          agentSessionScope,
+        );
       }
 
       // 不可恢复的转录错误（如超大图片/MIME 错配被固化在会话历史中）
@@ -775,9 +792,12 @@ export function createAgentConversationRuntime(
           'Unrecoverable transcript error in conversation agent, auto-resetting session',
         );
 
-        await clearSessionRuntimeFiles(effectiveGroup.folder, agentId);
+        await clearSessionRuntimeFiles(
+          effectiveGroup.folder,
+          agentSessionScope,
+        );
         try {
-          deleteSession(effectiveGroup.folder, agentId);
+          deleteSession(effectiveGroup.folder, agentSessionScope);
         } catch (err) {
           logger.error(
             { chatJid, agentId, folder: effectiveGroup.folder, err },
