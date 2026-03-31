@@ -18,6 +18,7 @@ import {
   FileTooLargeError,
 } from '../../messaging/downloader.js';
 import { detectImageMimeType } from '../../../../shared/media/image-detector.js';
+import { registerTelegramBotCommands } from './bot-commands.js';
 // ─── TelegramConnection Interface ──────────────────────────────
 
 export interface TelegramConnectionConfig {
@@ -398,6 +399,11 @@ export function createTelegramConnection(
           },
         },
       });
+      try {
+        await registerTelegramBotCommands(bot.api);
+      } catch (err) {
+        logger.warn({ err }, 'Failed to register Telegram bot commands');
+      }
       stopping = false;
       readyFired = false;
       if (reconnectTimer) {
