@@ -125,10 +125,13 @@ interface RuntimeRecoveryHandlersDeps {
   getLastCommittedCursor: () => Record<string, MessageCursor>;
   getSessions: () => Record<string, RuntimeSessionRecord>;
   getMessagesSince: (...args: any[]) => any;
+  getRuntimeSession: (...args: any[]) => any;
   clearPersistedRuntimeStateForRecovery: (
     sessions: Record<string, RuntimeSessionRecord>,
     groupFolder: string,
-    agentId?: string,
+    scope?:
+      | string
+      | { agentId?: string | null; conversationId?: string | null },
   ) => void;
   assistantName: string;
   emptyCursor: MessageCursor;
@@ -136,7 +139,6 @@ interface RuntimeRecoveryHandlersDeps {
   listActiveConversationAgents: (...args: any[]) => any;
   updateAgentStatus: (...args: any[]) => any;
   broadcastAgentStatus: (...args: any[]) => void;
-  getRuntimeSession: (...args: any[]) => any;
   storeMessageDirect: (...args: any[]) => any;
   broadcastNewMessage: (...args: any[]) => void;
   processAgentConversation: (chatJid: string, agentId: string) => Promise<void>;
@@ -162,6 +164,7 @@ export function createRuntimeRecoveryHandlers(
       getLastCommittedCursor: deps.getLastCommittedCursor,
       getSessions: deps.getSessions,
       getMessagesSince: deps.getMessagesSince,
+      getRuntimeSession: deps.getRuntimeSession,
       clearPersistedRuntimeStateForRecovery:
         deps.clearPersistedRuntimeStateForRecovery,
     });

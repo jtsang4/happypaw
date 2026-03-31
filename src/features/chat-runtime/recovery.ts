@@ -13,6 +13,7 @@ import type {
   RegisteredGroup,
   RuntimeSessionRecord,
 } from '../../shared/types.js';
+import { getConversationSessionScope } from './session-scope.js';
 
 export const EMPTY_CURSOR: MessageCursor = { timestamp: '', id: '' };
 
@@ -359,10 +360,16 @@ export function recoverPendingMessages(deps: {
     chatJid: string,
     sinceCursor: MessageCursor,
   ) => Array<unknown>;
+  getRuntimeSession: (
+    groupFolder: string,
+    scope?: { agentId?: string | null; conversationId?: string | null },
+  ) => RuntimeSessionRecord | undefined;
   clearPersistedRuntimeStateForRecovery: (
     sessions: Record<string, RuntimeSessionRecord>,
     groupFolder: string,
-    agentId?: string,
+    scope?:
+      | string
+      | { agentId?: string | null; conversationId?: string | null },
   ) => void;
 }): void {
   for (const [chatJid, group] of Object.entries(deps.getRegisteredGroups())) {
@@ -372,16 +379,29 @@ export function recoverPendingMessages(deps: {
     const pending = deps.getMessagesSince(chatJid, sinceCursor);
     if (pending.length > 0) {
       const sessions = deps.getSessions();
-      if (sessions[group.folder]) {
+      const sessionScope = getConversationSessionScope(chatJid);
+      const persistedSession = sessionScope
+        ? deps.getRuntimeSession(group.folder, sessionScope)
+        : sessions[group.folder];
+      if (persistedSession) {
         deps.logger.info(
-          { group: group.name, folder: group.folder },
-          'Recovery: clearing stale session to prevent session ghost',
+          {
+            group: group.name,
+            folder: group.folder,
+            chatJid,
+            sessionScope,
+          },
+          'Recovery: clearing stale session for pending conversation before requeue',
         );
-        deps.clearPersistedRuntimeStateForRecovery(sessions, group.folder);
+        deps.clearPersistedRuntimeStateForRecovery(
+          sessions,
+          group.folder,
+          sessionScope,
+        );
       }
 
       deps.logger.info(
-        { group: group.name, pendingCount: pending.length },
+        { group: group.name, chatJid, pendingCount: pending.length },
         'Recovery: found unprocessed messages',
       );
       deps.recoveryGroups.add(chatJid);

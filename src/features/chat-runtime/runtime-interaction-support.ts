@@ -34,16 +34,18 @@ interface RuntimeInteractionSupportDeps {
   logger: LoggerLike;
   idleThresholdMs: number;
   getMessagesSince: (...args: any[]) => any;
+  getRuntimeSession: (...args: any[]) => any;
   clearPersistedRuntimeStateForRecovery: (
     sessions: Record<string, RuntimeSessionRecord>,
     groupFolder: string,
-    agentId?: string,
+    scope?:
+      | string
+      | { agentId?: string | null; conversationId?: string | null },
   ) => void;
   assistantName: string;
   listActiveConversationAgents: (...args: any[]) => any;
   updateAgentStatus: (...args: any[]) => any;
   broadcastAgentStatus: (...args: any[]) => void;
-  getRuntimeSession: (...args: any[]) => any;
   storeMessageDirect: (...args: any[]) => any;
   broadcastNewMessage: (...args: any[]) => void;
 }
