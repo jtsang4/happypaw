@@ -48,6 +48,7 @@ let latestSessionId: string | undefined;
 let persistentCodexClient:
   | import('./codex-client.js').CodexAppServerClient
   | undefined;
+let shutdownPromise: Promise<never> | null = null;
 
 interface IpcDrainResult {
   messages: Array<{
@@ -471,17 +472,47 @@ async function runQuery(
   });
 }
 
-function forceExitWithSafetyNet(code: number): never {
-  log(`Exiting with code ${code}, SIGKILL safety net in 5s`);
-  persistentCodexClient?.terminate();
+async function shutdownPersistentClient(): Promise<void> {
+  if (!persistentCodexClient) return;
+  const client = persistentCodexClient;
   persistentCodexClient = undefined;
-  setTimeout(() => {
-    console.error(
-      '[agent-runner] process.exit() did not terminate, forcing SIGKILL',
+  try {
+    await client.close();
+  } catch (error) {
+    log(
+      `Failed to close persistent Codex App Server cleanly: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
     );
-    process.kill(process.pid, 'SIGKILL');
-  }, 5000);
-  process.exit(code);
+    client.terminate();
+  }
+}
+
+function forceExitWithSafetyNet(code: number): Promise<never> {
+  if (shutdownPromise) {
+    return shutdownPromise;
+  }
+
+  shutdownPromise = (async () => {
+    log(`Exiting with code ${code}, SIGKILL safety net in 5s`);
+    const selfKillTimer = setTimeout(() => {
+      console.error(
+        '[agent-runner] process.exit() did not terminate, forcing SIGKILL',
+      );
+      process.kill(process.pid, 'SIGKILL');
+    }, 5000);
+
+    try {
+      await shutdownPersistentClient();
+    } finally {
+      clearTimeout(selfKillTimer);
+    }
+
+    process.exit(code);
+    throw new Error('process.exit returned unexpectedly');
+  })();
+
+  return shutdownPromise;
 }
 
 async function main(): Promise<void> {
@@ -722,31 +753,31 @@ async function main(): Promise<void> {
       result: null,
       error: errorMessage,
     });
-    forceExitWithSafetyNet(1);
+    await forceExitWithSafetyNet(1);
   }
 
-  forceExitWithSafetyNet(0);
+  await forceExitWithSafetyNet(0);
 }
 
 process.on('SIGTERM', () => {
-  log('Received SIGTERM, exiting gracefully');
-  persistentCodexClient?.terminate();
-  persistentCodexClient = undefined;
-  if (latestSessionId) {
-    try {
-      writeOutput({ status: 'success', result: null, newSessionId: latestSessionId });
-    } catch {
-      /* stdout may be closed */
+  void (async () => {
+    log('Received SIGTERM, exiting gracefully');
+    if (latestSessionId) {
+      try {
+        writeOutput({ status: 'success', result: null, newSessionId: latestSessionId });
+      } catch {
+        /* stdout may be closed */
+      }
     }
-  }
-  forceExitWithSafetyNet(0);
+    await forceExitWithSafetyNet(0);
+  })();
 });
 
 process.on('SIGINT', () => {
-  log('Received SIGINT, exiting gracefully');
-  persistentCodexClient?.terminate();
-  persistentCodexClient = undefined;
-  forceExitWithSafetyNet(0);
+  void (async () => {
+    log('Received SIGINT, exiting gracefully');
+    await forceExitWithSafetyNet(0);
+  })();
 });
 
 (process.stdout as NodeJS.WriteStream & NodeJS.EventEmitter).on(
@@ -771,7 +802,7 @@ process.on('uncaughtException', (err: unknown) => {
     '[agent-runner] uncaughtException:',
     err instanceof Error ? err.stack || err.message : String(err),
   );
-  forceExitWithSafetyNet(1);
+  void forceExitWithSafetyNet(1);
 });
 
 process.on('unhandledRejection', (reason: unknown) => {
@@ -783,7 +814,7 @@ process.on('unhandledRejection', (reason: unknown) => {
     '[agent-runner] unhandledRejection:',
     reason instanceof Error ? reason.stack || reason.message : String(reason),
   );
-  forceExitWithSafetyNet(1);
+  void forceExitWithSafetyNet(1);
 });
 
 main();

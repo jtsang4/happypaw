@@ -14,6 +14,8 @@ function makeFakeCodexScript(scriptPath, requestLogPath, childLogPath, options =
   const holdOpenTexts = options.holdOpenTexts ?? [];
   const crashDuringTurnTexts = options.crashDuringTurnTexts ?? [];
   const completionDelayMs = options.completionDelayMs ?? 0;
+  const ignoreSigterm = options.ignoreSigterm ?? false;
+  const sigtermExitDelayMs = options.sigtermExitDelayMs ?? 0;
 
   fs.writeFileSync(
     scriptPath,
@@ -27,6 +29,8 @@ const repliesByText = ${JSON.stringify(repliesByText)};
 const holdOpenTexts = new Set(${JSON.stringify(holdOpenTexts)});
 const crashDuringTurnTexts = new Set(${JSON.stringify(crashDuringTurnTexts)});
 const completionDelayMs = ${JSON.stringify(completionDelayMs)};
+const ignoreSigterm = ${JSON.stringify(ignoreSigterm)};
+const sigtermExitDelayMs = ${JSON.stringify(sigtermExitDelayMs)};
 const requiredBridgeTools = ${JSON.stringify([
   'cancel_task',
   'get_context',
@@ -107,6 +111,17 @@ process.on('exit', () => {
   logChild('exit ' + process.pid);
 });
 process.on('SIGTERM', () => {
+  if (ignoreSigterm) {
+    logChild('sigterm ignored ' + process.pid);
+    return;
+  }
+  if (sigtermExitDelayMs > 0) {
+    logChild('sigterm delayed ' + process.pid + ' ' + sigtermExitDelayMs);
+    setTimeout(() => {
+      process.exit(0);
+    }, sigtermExitDelayMs);
+    return;
+  }
   process.exit(0);
 });
 

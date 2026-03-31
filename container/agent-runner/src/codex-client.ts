@@ -195,11 +195,23 @@ export class CodexAppServerClient {
   async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
-    this.proc.stdin.end();
-    this.proc.kill('SIGTERM');
+    try {
+      this.proc.stdin.end();
+    } catch {
+      /* ignore */
+    }
+    try {
+      this.proc.kill('SIGTERM');
+    } catch {
+      /* ignore */
+    }
     await new Promise<void>((resolve) => {
       const timeout = setTimeout(() => {
-        this.proc.kill('SIGKILL');
+        try {
+          this.proc.kill('SIGKILL');
+        } catch {
+          /* ignore */
+        }
       }, 1000);
       this.proc.once('close', () => {
         clearTimeout(timeout);
