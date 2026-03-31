@@ -461,7 +461,8 @@ export function createImRoutingHelpers(deps: {
       onNewChat(chatJid, chatName);
       const welcome =
         `已加入「${chatName}」！当前绑定到默认工作区。\n\n` +
-        `/new <名称> — 新建工作区并绑定此群\n` +
+        `/new <名称> — 新建 container 工作区并绑定此群\n` +
+        `/new <host|container> <名称> — 指定模式创建工作区\n` +
         `/bind <工作区> — 绑定到已有工作区\n` +
         `/list — 查看所有工作区\n\n` +
         `也可以直接发消息，我会在默认工作区回复。`;

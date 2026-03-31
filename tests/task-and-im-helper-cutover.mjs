@@ -37,20 +37,21 @@ const [
   import(path.join(repoRoot, 'dist', 'db', 'shared.js')),
   import(path.join(repoRoot, 'dist', 'db', 'users-auth.js')),
   import(path.join(repoRoot, 'dist', 'features', 'auth', 'auth.js')),
-  import(
-    path.join(repoRoot, 'dist', 'features', 'auth', 'routes', 'auth.js')
-  ),
+  import(path.join(repoRoot, 'dist', 'features', 'auth', 'routes', 'auth.js')),
   import(path.join(repoRoot, 'dist', 'app', 'config.js')),
   import(path.join(repoRoot, 'dist', 'runtime-config.js')),
-  import(path.join(repoRoot, 'dist', 'features', 'im', 'commands', 'im-command-utils.js')),
   import(
     path.join(
       repoRoot,
       'dist',
       'features',
-      'chat-runtime',
-      'slash-commands.js',
+      'im',
+      'commands',
+      'im-command-utils.js',
     )
+  ),
+  import(
+    path.join(repoRoot, 'dist', 'features', 'chat-runtime', 'slash-commands.js')
   ),
 ]);
 
@@ -230,6 +231,19 @@ const workspaceList = formatWorkspaceList(
 assert.match(workspaceList, /\/status 状态/u);
 assert.doesNotMatch(workspaceList, /\/recall/u);
 
+const handlersDeps = {
+  registeredGroups: {
+    [workspaceJid]: {
+      name: 'Helper Workspace',
+      folder: 'helper-workspace',
+      added_at: new Date().toISOString(),
+      executionMode: 'container',
+      created_by: 'admin-user',
+      is_home: false,
+    },
+  },
+};
+
 const handlers = createSlashCommandHandlers({
   queue: {
     getStatus: () => ({
@@ -242,20 +256,13 @@ const handlers = createSlashCommandHandlers({
     }),
   },
   sessions: {},
-  registeredGroups: {
-    [workspaceJid]: {
-      name: 'Helper Workspace',
-      folder: 'helper-workspace',
-      added_at: new Date().toISOString(),
-      executionMode: 'container',
-      created_by: 'admin-user',
-      is_home: false,
-    },
-  },
+  registeredGroups: handlersDeps.registeredGroups,
   imSendFailCounts: new Map(),
   imHealthCheckFailCounts: new Map(),
   setCursors: () => {},
-  registerGroup: () => {},
+  registerGroup: (jid, group) => {
+    handlersDeps.registeredGroups[jid] = group;
+  },
   unbindImGroup: () => {},
   resolveEffectiveGroup: (group) => ({ effectiveGroup: group, isHome: false }),
   processAgentConversation: async () => {},
@@ -266,6 +273,44 @@ assert.equal(recallResponse, helperUnavailable);
 
 const shortRecallResponse = await handlers.handleCommand(workspaceJid, 'rc');
 assert.equal(shortRecallResponse, helperUnavailable);
+
+const defaultNewResponse = await handlers.handleCommand(
+  workspaceJid,
+  'new test-workspace',
+);
+assert.match(defaultNewResponse, /工作区「test-workspace」已创建并绑定/u);
+assert.match(defaultNewResponse, /模式: container/u);
+const defaultNewJid = Object.keys(handlersDeps.registeredGroups).find(
+  (jid) =>
+    jid !== workspaceJid &&
+    handlersDeps.registeredGroups[jid].name === 'test-workspace',
+);
+assert.ok(defaultNewJid, 'expected /new <name> to register a workspace');
+assert.equal(
+  handlersDeps.registeredGroups[defaultNewJid].executionMode,
+  'container',
+);
+
+const hostNewResponse = await handlers.handleCommand(
+  workspaceJid,
+  'new host host-workspace',
+);
+assert.match(hostNewResponse, /工作区「host-workspace」已创建并绑定/u);
+assert.match(hostNewResponse, /模式: host/u);
+const hostNewJid = Object.keys(handlersDeps.registeredGroups).find(
+  (jid) =>
+    jid !== workspaceJid &&
+    handlersDeps.registeredGroups[jid].name === 'host-workspace',
+);
+assert.ok(hostNewJid, 'expected /new host <name> to register a workspace');
+assert.equal(handlersDeps.registeredGroups[hostNewJid].executionMode, 'host');
+
+const singleTokenResponse = await handlers.handleCommand(
+  workspaceJid,
+  'new host',
+);
+assert.match(singleTokenResponse, /工作区「host」已创建并绑定/u);
+assert.match(singleTokenResponse, /模式: container/u);
 
 const { config, source } = getCodexProviderConfigWithSource();
 assert.equal(source, 'runtime');

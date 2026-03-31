@@ -1,10 +1,6 @@
 import crypto from 'crypto';
 
-import {
-  ASSISTANT_NAME,
-  MAIN_GROUP_FOLDER,
-  isDockerAvailable,
-} from '../../app/config.js';
+import { ASSISTANT_NAME, MAIN_GROUP_FOLDER } from '../../app/config.js';
 import {
   addGroupMember,
   createAgent,
@@ -356,15 +352,34 @@ export function createSlashCommandHandlers(deps: CommandDeps): {
 
   async function handleNewCommand(
     chatJid: string,
-    rawName: string,
+    rawArgs: string,
   ): Promise<string> {
     const group = deps.registeredGroups[chatJid] ?? getRegisteredGroup(chatJid);
     if (!group) return '当前 IM 未绑定工作区';
     const userId = group.created_by;
     if (!userId) return '无法确定当前聊天所属用户';
 
-    const name = rawName.trim();
-    if (!name) return '用法: /new <工作区名称>';
+    const trimmedArgs = rawArgs.trim();
+    if (!trimmedArgs) {
+      return '用法: /new <工作区名称> 或 /new <host|container> <工作区名称>';
+    }
+
+    let executionMode: 'container' | 'host' = 'container';
+    let name = trimmedArgs;
+    const [firstToken, ...restTokens] = trimmedArgs.split(/\s+/);
+    const normalizedFirstToken = firstToken?.toLowerCase();
+    if (
+      (normalizedFirstToken === 'host' ||
+        normalizedFirstToken === 'container') &&
+      restTokens.length > 0
+    ) {
+      executionMode = normalizedFirstToken;
+      name = restTokens.join(' ').trim();
+    }
+
+    if (executionMode === 'host' && getUserById(userId)?.role !== 'admin') {
+      return '只有管理员可以通过 /new host 创建宿主机模式工作区';
+    }
     if (name.length > 50) return '名称过长（最多 50 字符）';
 
     const newJid = `web:${crypto.randomUUID()}`;
@@ -375,7 +390,7 @@ export function createSlashCommandHandlers(deps: CommandDeps): {
       name,
       folder,
       added_at: now,
-      executionMode: (await isDockerAvailable()) ? 'container' : 'host',
+      executionMode,
       created_by: userId,
     };
 
@@ -395,7 +410,7 @@ export function createSlashCommandHandlers(deps: CommandDeps): {
     deps.imSendFailCounts.delete(chatJid);
     deps.imHealthCheckFailCounts.delete(chatJid);
 
-    return `工作区「${name}」已创建并绑定\n📁 ${folder}\n🔁 回复策略: source_only\n\n发送 /unbind 可解绑回默认工作区`;
+    return `工作区「${name}」已创建并绑定\n📁 ${folder}\n🖥️ 模式: ${executionMode}\n🔁 回复策略: source_only\n\n发送 /unbind 可解绑回默认工作区`;
   }
 
   function handleRequireMentionCommand(
