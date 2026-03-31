@@ -1009,9 +1009,9 @@ groupRoutes.post('/:jid/reset-session', authMiddleware, async (c) => {
     if (agentId) {
       // Agent-specific: only stop the agent's virtual JID process
       const virtualJid = `${jid}#agent:${agentId}`;
-      await deps.queue.stopGroup(virtualJid, { force: true });
+      await deps.queue.stopGroup(virtualJid, { force: true, exact: true });
     } else if (isSecondaryConversation) {
-      await deps.queue.stopGroup(jid, { force: true });
+      await deps.queue.stopGroup(jid, { force: true, exact: true });
     } else {
       // Main session: stop ALL processes for this folder
       const siblingJids = getJidsByFolder(group.folder);

@@ -701,16 +701,17 @@ export class GroupQueue {
    */
   async stopGroup(
     groupJid: string,
-    options?: { force?: boolean },
+    options?: { force?: boolean; exact?: boolean },
   ): Promise<void> {
     const force = options?.force ?? false;
+    const exact = options?.exact ?? false;
     const requestedState = this.getGroup(groupJid);
     requestedState.pendingMessages = false;
     requestedState.pendingTasks = [];
     this.clearRetryTimer(requestedState);
 
-    const activeRunner = this.findActiveRunnerFor(groupJid);
-    const targetJid = activeRunner || groupJid;
+    const activeRunner = exact ? null : this.findActiveRunnerFor(groupJid);
+    const targetJid = exact ? groupJid : activeRunner || groupJid;
     const state = this.getGroup(targetJid);
     if (targetJid !== groupJid) {
       state.pendingMessages = false;

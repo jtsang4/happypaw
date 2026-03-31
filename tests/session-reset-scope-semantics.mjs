@@ -15,6 +15,9 @@ process.chdir(tempRoot);
 const { executeSessionReset } = await import(
   path.join(repoRoot, 'dist', 'features', 'chat-runtime', 'commands.js')
 );
+const { GroupQueue } = await import(
+  path.join(repoRoot, 'dist', 'features', 'chat-runtime', 'group-queue.js')
+);
 const { resolveRuntimeScopePaths } = await import(
   path.join(repoRoot, 'dist', 'features', 'execution', 'container-runner.js')
 );
@@ -176,6 +179,29 @@ assert.equal(secondaryBroadcasts[0]?.msg.content, 'context_reset');
 assert.deepEqual(secondaryCursors.map((entry) => entry.jid), [
   'telegram:workspace-a',
 ]);
+
+const queue = new GroupQueue();
+queue.setSerializationKeyResolver((jid) =>
+  jid === 'web:workspace-a' || jid === 'telegram:workspace-a'
+    ? 'workspace-a'
+    : jid,
+);
+const queueMainState = queue.getGroup('web:workspace-a');
+queueMainState.active = true;
+queueMainState.groupFolder = 'workspace-a';
+const siblingStopTargets = [];
+queue.closeStdin = (jid) => {
+  siblingStopTargets.push(jid);
+  queueMainState.active = false;
+};
+
+await queue.stopGroup('telegram:workspace-a', { force: true, exact: true });
+
+assert.deepEqual(
+  siblingStopTargets,
+  [],
+  'targeted secondary reset must not shut down an unrelated active main runner',
+);
 
 fs.writeFileSync(path.join(agentScope.codexHomeDir, 'thread.json'), 'agent-thread');
 setSession('workspace-a', 'main-thread-3');

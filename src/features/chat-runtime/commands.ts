@@ -21,7 +21,12 @@ import { clearSessionRuntimeFiles } from './runtime-state-cleanup.js';
 // ─── Types ──────────────────────────────────────────────────────
 
 export interface CommandDeps {
-  queue: { stopGroup(jid: string, opts?: { force?: boolean }): Promise<void> };
+  queue: {
+    stopGroup(
+      jid: string,
+      opts?: { force?: boolean; exact?: boolean },
+    ): Promise<void>;
+  };
   sessions: Record<string, RuntimeSessionRecord>;
   broadcast: (jid: string, msg: NewMessage & { is_from_me: boolean }) => void;
   setLastAgentTimestamp: (jid: string, cursor: MessageCursor) => void;
@@ -48,9 +53,9 @@ export async function executeSessionReset(
   if (agentId) {
     // Agent-specific reset: only stop the agent's virtual JID process
     const virtualJid = `${chatJid}#agent:${agentId}`;
-    await deps.queue.stopGroup(virtualJid, { force: true });
+    await deps.queue.stopGroup(virtualJid, { force: true, exact: true });
   } else if (isSecondaryConversation) {
-    await deps.queue.stopGroup(chatJid, { force: true });
+    await deps.queue.stopGroup(chatJid, { force: true, exact: true });
   } else {
     // Main session reset: stop all processes for this folder
     const siblingJids = getJidsByFolder(folder);
