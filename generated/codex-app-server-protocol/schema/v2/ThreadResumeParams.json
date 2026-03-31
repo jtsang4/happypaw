@@ -53,15 +53,8 @@
         "null"
       ]
     },
-    "sandbox": {
-      "anyOf": [
-        {
-          "$ref": "#/definitions/SandboxMode"
-        },
-        {
-          "type": "null"
-        }
-      ]
+    "threadId": {
+      "type": "string"
     },
     "model": {
       "description": "Configuration overrides for the resumed thread, if any.",
@@ -76,8 +69,15 @@
         "null"
       ]
     },
-    "threadId": {
-      "type": "string"
+    "sandbox": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/SandboxMode"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "serviceTier": {
       "anyOf": [

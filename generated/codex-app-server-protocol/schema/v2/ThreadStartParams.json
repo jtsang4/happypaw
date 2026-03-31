@@ -49,16 +49,30 @@
         "null"
       ]
     },
-    "serviceName": {
-      "type": [
-        "string",
-        "null"
+    "personality": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/Personality"
+        },
+        {
+          "type": "null"
+        }
       ]
     },
     "ephemeral": {
       "type": [
         "boolean",
         "null"
+      ]
+    },
+    "sandbox": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/SandboxMode"
+        },
+        {
+          "type": "null"
+        }
       ]
     },
     "serviceTier": {
@@ -78,16 +92,6 @@
         }
       ]
     },
-    "sandbox": {
-      "anyOf": [
-        {
-          "$ref": "#/definitions/SandboxMode"
-        },
-        {
-          "type": "null"
-        }
-      ]
-    },
     "model": {
       "type": [
         "string",
@@ -100,14 +104,10 @@
         "null"
       ]
     },
-    "personality": {
-      "anyOf": [
-        {
-          "$ref": "#/definitions/Personality"
-        },
-        {
-          "type": "null"
-        }
+    "serviceName": {
+      "type": [
+        "string",
+        "null"
       ]
     }
   },
