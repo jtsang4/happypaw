@@ -4,6 +4,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import {
+  compareCodexProtocolAgentRunnerMirror,
+  targetDir as agentRunnerProtocolMirrorDir,
+} from '../scripts/codex-protocol-agent-runner-mirror.mjs';
 
 const repoRoot = '/Users/jtsang/Documents/workspace/github/jtsang4/happypaw';
 
@@ -24,6 +28,17 @@ if (result.status !== 0) {
   console.error('❌ Codex protocol artifact drift detected.');
   process.exit(result.status ?? 1);
 }
+
+const mirrorProblems = compareCodexProtocolAgentRunnerMirror();
+assert.equal(
+  mirrorProblems.length,
+  0,
+  [
+    'agent-runner mirrored Codex protocol artifacts drifted from generated/codex-app-server-protocol/ts.',
+    `Expected sync target: ${path.relative(repoRoot, agentRunnerProtocolMirrorDir)}`,
+    ...mirrorProblems.map((problem) => `- ${problem}`),
+  ].join('\n'),
+);
 
 const syncScriptSource = fs.readFileSync(
   path.join(repoRoot, 'scripts', 'sync-stream-event.sh'),
